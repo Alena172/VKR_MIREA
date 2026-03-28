@@ -140,5 +140,26 @@ class VocabularyRepository:
         )
         return db.scalar(stmt)
 
+    def list_english_lemmas(
+        self,
+        db: Session,
+        user_id: int,
+    ) -> list[str]:
+        stmt = (
+            select(VocabularyItemModel.english_lemma)
+            .where(VocabularyItemModel.user_id == user_id)
+            .order_by(VocabularyItemModel.id.desc())
+        )
+        rows = list(db.scalars(stmt))
+        result: list[str] = []
+        seen: set[str] = set()
+        for lemma in rows:
+            normalized = (lemma or "").strip().lower()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            result.append(normalized)
+        return result
+
 
 vocabulary_repository = VocabularyRepository()

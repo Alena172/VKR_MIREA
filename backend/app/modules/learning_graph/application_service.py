@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.application import application_access, application_transaction
+from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.learning_graph.repository import learning_graph_repository
 from app.modules.learning_graph.schemas import (
     InterestUpsertRequest,
@@ -120,11 +121,16 @@ class LearningGraphApplicationService:
         current_user_id: int,
     ) -> RecommendationsResponse:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
+        known_lemmas = context_memory_public_api.list_mastered_lemmas(
+            db=db,
+            user_id=current_user_id,
+        )
         items = learning_graph_repository.get_recommendations(
             db,
             user_id=current_user_id,
             mode=mode,
             limit=limit,
+            known_lemmas=known_lemmas,
         )
         return RecommendationsResponse(user_id=current_user_id, mode=mode, items=items)
 
@@ -136,11 +142,16 @@ class LearningGraphApplicationService:
         mode: str,
         limit: int,
     ):
+        known_lemmas = context_memory_public_api.list_mastered_lemmas(
+            db=db,
+            user_id=user_id,
+        )
         return learning_graph_repository.get_recommendations(
             db,
             user_id=user_id,
             mode=mode,
             limit=limit,
+            known_lemmas=known_lemmas,
         )
 
     def register_vocabulary_semantics(

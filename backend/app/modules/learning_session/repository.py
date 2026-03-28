@@ -190,5 +190,12 @@ class LearningSessionRepository:
                 words.append(word)
         return words
 
+    def get_progress_snapshot(self, db: Session, *, user_id: int) -> tuple[int, float]:
+        total_stmt = select(func.count(LearningSessionModel.id)).where(LearningSessionModel.user_id == user_id)
+        avg_stmt = select(func.avg(LearningSessionModel.accuracy)).where(LearningSessionModel.user_id == user_id)
+        total = int(db.scalar(total_stmt) or 0)
+        avg = round(float(db.scalar(avg_stmt) or 0.0), 4)
+        return total, avg
+
 
 learning_session_repository = LearningSessionRepository()

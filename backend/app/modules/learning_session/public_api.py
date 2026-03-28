@@ -9,6 +9,7 @@ __all__ = [
 
 class LearningSessionPublicApi:
     list_recent_incorrect_words = staticmethod(learning_session_repository.list_recent_incorrect_words)
+    get_progress_snapshot = staticmethod(learning_session_repository.get_progress_snapshot)
 
 
 learning_session_public_api = LearningSessionPublicApi()

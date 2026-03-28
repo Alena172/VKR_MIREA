@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 import re
 import secrets
@@ -8,9 +7,10 @@ from typing import Literal
 
 from app.core.application import application_transaction
 from fastapi import HTTPException
-from sqlalchemy import exists, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.modules.context_memory.contracts import WordProgressUpdate
 from app.modules.context_memory.models import WordProgressModel
 from app.modules.context_memory.recommendation_scoring_service import recommendation_scoring_service
 from app.modules.context_memory.repository import context_repository
@@ -31,8 +31,7 @@ from app.modules.context_memory.schemas import (
     WordProgressListResponse,
     WordProgressRead,
 )
-from app.modules.learning_session.models import LearningSessionModel
-from app.modules.vocabulary.models import VocabularyItemModel
+from app.modules.learning_session.public_api import learning_session_public_api
 from app.modules.users.public_api import users_public_api
 from app.modules.vocabulary.public_api import vocabulary_public_api
 
@@ -55,13 +54,6 @@ def _dedupe_keep_order(values: list[str]) -> list[str]:
         seen.add(key)
         result.append(key)
     return result
-
-
-@dataclass(frozen=True)
-class WordProgressUpdate:
-    word: str
-    is_correct: bool
-    mark_difficult: bool = False
 
 
 class ContextMemoryApplicationService:
@@ -417,16 +409,18 @@ class ContextMemoryApplicationService:
         min_errors: int,
     ) -> ReviewSummary:
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
-
-        vocab_exists = exists(
-            select(1).where(
-                VocabularyItemModel.user_id == user_id,
-                VocabularyItemModel.english_lemma == WordProgressModel.word,
+        vocabulary_words = vocabulary_public_api.list_english_lemmas(db, user_id=user_id)
+        if not vocabulary_words:
+            return ReviewSummary(
+                user_id=user_id,
+                total_tracked=0,
+                due_now=0,
+                mastered=0,
+                troubled=0,
             )
-        )
         base_stmt = select(WordProgressModel).where(
             WordProgressModel.user_id == user_id,
-            vocab_exists,
+            WordProgressModel.word.in_(vocabulary_words),
         )
 
         total_tracked = int(db.scalar(select(func.count()).select_from(base_stmt.subquery())) or 0)
@@ -525,10 +519,10 @@ class ContextMemoryApplicationService:
             raise HTTPException(status_code=403, detail="Forbidden")
 
         target_user_id = user_id or current_user_id
-        total_stmt = select(func.count(LearningSessionModel.id)).where(LearningSessionModel.user_id == target_user_id)
-        avg_stmt = select(func.avg(LearningSessionModel.accuracy)).where(LearningSessionModel.user_id == target_user_id)
-        total = int(db.scalar(total_stmt) or 0)
-        avg = round(float(db.scalar(avg_stmt) or 0.0), 4)
+        total, avg = learning_session_public_api.get_progress_snapshot(
+            db,
+            user_id=target_user_id,
+        )
         return target_user_id, total, avg
 
     def _build_review_queue_items(

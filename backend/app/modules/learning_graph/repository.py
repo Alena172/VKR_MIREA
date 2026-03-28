@@ -18,7 +18,6 @@ from app.modules.learning_graph.models import (
     VocabularySenseLinkModel,
     WordSenseModel,
 )
-from app.modules.context_memory.models import WordProgressModel
 from app.modules.learning_graph.recommender_strategies import (
     ClusterDeepeningStrategy,
     NeighborExpansionStrategy,
@@ -234,23 +233,6 @@ class LearningGraphRepository:
             "it": "IT & Tech",
         }
         return names.get(cluster_key, cluster_key.replace("-", " ").title())
-
-    def _get_known_lemmas(
-        self,
-        db: Session,
-        *,
-        user_id: int,
-        min_streak: int = 2,
-        max_errors: int = 1,
-    ) -> set[str]:
-        rows = db.scalars(
-            select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
-                WordProgressModel.correct_streak >= min_streak,
-                WordProgressModel.error_count <= max_errors,
-            )
-        )
-        return {row.word.strip().lower() for row in rows if row.word}
 
     def list_interests(self, db: Session, user_id: int) -> list[InterestItem]:
         stmt = (
@@ -564,6 +546,7 @@ class LearningGraphRepository:
         user_id: int,
         mode: Literal["interest", "weakness", "mixed"],
         limit: int,
+        known_lemmas: set[str] | None = None,
     ) -> list[RecommendationItem]:
         senses = list(
             db.scalars(
@@ -599,7 +582,7 @@ class LearningGraphRepository:
             )
             if row[0]
         )
-        known_lemmas = self._get_known_lemmas(db, user_id=user_id)
+        known_lemmas = known_lemmas or set()
         senses_by_id = {sense.id: sense for sense in senses}
         relations = list(
             db.scalars(select(SenseRelationModel).where(SenseRelationModel.user_id == user_id))
