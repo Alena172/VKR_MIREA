@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.core.application import AsyncTaskResponse, application_access
+from app.core.application import AsyncTaskResponse, application_access, application_transaction
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import ai_service
 from app.modules.capture.repository import capture_repository
@@ -74,7 +74,7 @@ class VocabularyApplicationService:
         normalized_sentence = source_sentence.strip() if source_sentence else None
         normalized_url = source_url.strip() if source_url else None
 
-        try:
+        with application_transaction.boundary(db=db):
             context_definition_ru = await ai_service.generate_context_definition_async(
                 english_lemma=normalized_lemma,
                 russian_translation=normalized_translation,
@@ -92,12 +92,8 @@ class VocabularyApplicationService:
                 ),
                 auto_commit=False,
             )
-            db.commit()
-            db.refresh(item)
-            return VocabularyItem.model_validate(item)
-        except Exception:
-            db.rollback()
-            raise
+        db.refresh(item)
+        return VocabularyItem.model_validate(item)
 
     def add_item_from_capture(
         self,
@@ -137,7 +133,7 @@ class VocabularyApplicationService:
         normalized_sentence = source_sentence.strip() if source_sentence else None
         normalized_url = source_url.strip() if source_url else None
 
-        try:
+        with application_transaction.boundary(db=db):
             capture = capture_repository.create(
                 db,
                 CaptureCreate(
@@ -189,21 +185,17 @@ class VocabularyApplicationService:
                 source_url=normalized_url,
                 vocabulary_item_id=vocabulary_item.id,
             )
-            db.commit()
-            db.refresh(capture)
-            if created_new:
-                db.refresh(vocabulary_item)
+        db.refresh(capture)
+        if created_new:
+            db.refresh(vocabulary_item)
 
-            return VocabularyFromCaptureResponse(
-                capture=CaptureItem.model_validate(capture),
-                vocabulary=VocabularyItem.model_validate(vocabulary_item),
-                translation_note="AI translation used (worker)",
-                created_new_vocabulary_item=created_new,
-                queued_for_review=progress is not None,
-            )
-        except Exception:
-            db.rollback()
-            raise
+        return VocabularyFromCaptureResponse(
+            capture=CaptureItem.model_validate(capture),
+            vocabulary=VocabularyItem.model_validate(vocabulary_item),
+            translation_note="AI translation used (worker)",
+            created_new_vocabulary_item=created_new,
+            queued_for_review=progress is not None,
+        )
 
     def update_item(
         self,

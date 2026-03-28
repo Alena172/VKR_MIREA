@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.application import application_access
+from app.core.application import application_access, application_transaction
 from app.modules.learning_graph.repository import learning_graph_repository
 from app.modules.learning_graph.schemas import (
     InterestUpsertRequest,
@@ -67,21 +67,21 @@ class LearningGraphApplicationService:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
 
         try:
-            result = learning_graph_repository.semantic_upsert(
-                db,
-                user_id=current_user_id,
-                english_lemma=payload.english_lemma,
-                russian_translation=payload.russian_translation,
-                context_definition_ru=payload.context_definition_ru,
-                source_sentence=payload.source_sentence,
-                source_url=payload.source_url,
-                topic_hint=payload.topic_hint,
-                vocabulary_item_id=payload.vocabulary_item_id,
-            )
+            with application_transaction.boundary(db=db):
+                result = learning_graph_repository.semantic_upsert(
+                    db,
+                    user_id=current_user_id,
+                    english_lemma=payload.english_lemma,
+                    russian_translation=payload.russian_translation,
+                    context_definition_ru=payload.context_definition_ru,
+                    source_sentence=payload.source_sentence,
+                    source_url=payload.source_url,
+                    topic_hint=payload.topic_hint,
+                    vocabulary_item_id=payload.vocabulary_item_id,
+                )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        db.commit()
         db.refresh(result.sense)
 
         cluster_read = None

@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 import re
 
+from app.core.application import application_transaction
 from sqlalchemy.orm import Session
 
 from app.modules.ai_services.contracts import ExplainErrorRequest
@@ -259,7 +260,7 @@ class LearningSessionSubmissionService:
         user_cefr_level: str | None,
         answers: list[SessionAnswer],
     ) -> SessionSubmitResponse:
-        try:
+        with application_transaction.boundary(db=db):
             evaluated_answers = await self.evaluate_answers(answers)
             incorrect_feedback, advice_feedback = self.collect_feedback(evaluated_answers)
             self.update_progress(
@@ -273,16 +274,12 @@ class LearningSessionSubmissionService:
                 user_id=user_id,
                 evaluated_answers=evaluated_answers,
             )
-            db.commit()
-            db.refresh(session_row)
-            return SessionSubmitResponse(
-                session=session_row,
-                incorrect_feedback=incorrect_feedback,
-                advice_feedback=advice_feedback,
-            )
-        except Exception:
-            db.rollback()
-            raise
+        db.refresh(session_row)
+        return SessionSubmitResponse(
+            session=session_row,
+            incorrect_feedback=incorrect_feedback,
+            advice_feedback=advice_feedback,
+        )
 
 
 learning_session_submission_service = LearningSessionSubmissionService()

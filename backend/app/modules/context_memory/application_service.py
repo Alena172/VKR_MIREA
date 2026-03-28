@@ -5,6 +5,7 @@ import re
 import secrets
 from typing import Literal
 
+from app.core.application import application_transaction
 from fastapi import HTTPException
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
@@ -129,7 +130,7 @@ class ContextMemoryApplicationService:
         if not _is_valid_review_word(normalized_word):
             raise HTTPException(status_code=400, detail="Word must be a single english token")
 
-        try:
+        with application_transaction.boundary(db=db):
             progress = context_repository.update_word_progress(
                 db,
                 user_id=user_id,
@@ -147,13 +148,8 @@ class ContextMemoryApplicationService:
                     default_cefr_level=user.cefr_level,
                     auto_commit=False,
                 )
-
-            db.commit()
-            db.refresh(progress)
-            return self._to_word_progress_read(db=db, user_id=user_id, progress=progress)
-        except Exception:
-            db.rollback()
-            raise
+        db.refresh(progress)
+        return self._to_word_progress_read(db=db, user_id=user_id, progress=progress)
 
     def submit_review_queue_bulk(
         self,
@@ -168,7 +164,7 @@ class ContextMemoryApplicationService:
         if not payload.items:
             return ReviewQueueBulkSubmitResponse(user_id=user_id, updated=[])
 
-        try:
+        with application_transaction.boundary(db=db):
             incorrect_words: list[str] = []
             updated_progress_rows: list[WordProgressModel] = []
             for item in payload.items:
@@ -196,17 +192,12 @@ class ContextMemoryApplicationService:
                     default_cefr_level=user.cefr_level,
                     auto_commit=False,
                 )
-
-            db.commit()
-            updated = self._to_word_progress_reads(
-                db=db,
-                user_id=user_id,
-                progress_rows=updated_progress_rows,
-            )
-            return ReviewQueueBulkSubmitResponse(user_id=user_id, updated=updated)
-        except Exception:
-            db.rollback()
-            raise
+        updated = self._to_word_progress_reads(
+            db=db,
+            user_id=user_id,
+            progress_rows=updated_progress_rows,
+        )
+        return ReviewQueueBulkSubmitResponse(user_id=user_id, updated=updated)
 
     def start_review_session(
         self,
@@ -338,19 +329,15 @@ class ContextMemoryApplicationService:
         word: str,
     ) -> WordProgressDeleteResponse:
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
-        try:
+        with application_transaction.boundary(db=db):
             progress_deleted = context_repository.delete_word_progress(db, user_id=user_id, word=word)
             removed_from_difficult_words = context_repository.remove_difficult_word(db, user_id=user_id, word=word)
-            db.commit()
-            return WordProgressDeleteResponse(
-                user_id=user_id,
-                word=word.strip().lower(),
-                progress_deleted=progress_deleted,
-                removed_from_difficult_words=removed_from_difficult_words,
-            )
-        except Exception:
-            db.rollback()
-            raise
+        return WordProgressDeleteResponse(
+            user_id=user_id,
+            word=word.strip().lower(),
+            progress_deleted=progress_deleted,
+            removed_from_difficult_words=removed_from_difficult_words,
+        )
 
     def get_review_plan(
         self,
@@ -395,7 +382,7 @@ class ContextMemoryApplicationService:
         current_user_id: int,
     ) -> ContextGarbageCleanupResponse:
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
-        try:
+        with application_transaction.boundary(db=db):
             vocabulary_words = {
                 item.english_lemma.strip().lower()
                 for item in vocabulary_repository.list_items(db, user_id=user_id)
@@ -406,15 +393,11 @@ class ContextMemoryApplicationService:
                 user_id=user_id,
                 vocabulary_words=vocabulary_words,
             )
-            db.commit()
-            return ContextGarbageCleanupResponse(
-                user_id=user_id,
-                removed_word_progress=removed_word_progress,
-                removed_difficult_words=removed_difficult_words,
-            )
-        except Exception:
-            db.rollback()
-            raise
+        return ContextGarbageCleanupResponse(
+            user_id=user_id,
+            removed_word_progress=removed_word_progress,
+            removed_difficult_words=removed_difficult_words,
+        )
 
     def get_review_summary(
         self,

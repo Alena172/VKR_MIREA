@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -38,3 +40,17 @@ class ApplicationAccess:
 
 
 application_access = ApplicationAccess()
+
+
+class ApplicationTransaction:
+    @contextmanager
+    def boundary(self, *, db: Session):
+        try:
+            yield
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+
+
+application_transaction = ApplicationTransaction()
