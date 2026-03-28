@@ -1,0 +1,277 @@
+from __future__ import annotations
+
+import secrets
+
+from fastapi import HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
+from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
+from app.modules.exercise_engine.prefetch_service import prefetch_service
+from app.modules.exercise_engine.schemas import ExerciseGenerateRequest, ExerciseGenerateResponse, ExerciseItem
+from app.modules.learning_graph.repository import learning_graph_repository
+from app.modules.users.repository import users_repository
+from app.modules.vocabulary.repository import vocabulary_repository
+from app.modules.context_memory.repository import context_repository
+
+
+class AsyncTaskResponse(BaseModel):
+    task_id: str
+    status: str = "PENDING"
+    message: str = "Task queued. Poll /api/v1/tasks/{task_id} for result."
+
+
+class ExerciseEngineApplicationService:
+    _PREFETCH_EXTRA = 5
+    _BATCH_SIZE = 5
+
+    def queue_generation(
+        self,
+        *,
+        db: Session,
+        payload: ExerciseGenerateRequest,
+        current_user_id: int,
+    ) -> AsyncTaskResponse:
+        target_user_id = self._resolve_target_user_id(
+            requested_user_id=payload.user_id,
+            current_user_id=current_user_id,
+        )
+        self._ensure_user_exists(db=db, user_id=target_user_id)
+
+        from app.tasks.exercise_tasks import generate_exercises_for_user
+
+        task = generate_exercises_for_user.delay(
+            user_id=target_user_id,
+            vocabulary_ids=payload.vocabulary_ids or [],
+            size=payload.size,
+            mode=payload.mode,
+        )
+        return AsyncTaskResponse(task_id=task.id)
+
+    async def generate_for_user(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        vocabulary_ids: list[int],
+        size: int,
+        mode: str,
+    ) -> ExerciseGenerateResponse:
+        user = self._get_user_or_404(db=db, user_id=user_id)
+        use_prefetch = not vocabulary_ids
+
+        prefetched: list[ExerciseItem] = []
+        if use_prefetch and prefetch_service.has_prefetch(user_id, mode):
+            prefetched = prefetch_service.get_prefetched(user_id, mode, size)
+            if len(prefetched) >= size:
+                return ExerciseGenerateResponse(
+                    exercises=prefetched[:size],
+                    note="Prefetched exercises used",
+                )
+
+        vocabulary_items = self._resolve_vocabulary_items(
+            db=db,
+            user_id=user_id,
+            vocabulary_ids=vocabulary_ids,
+            mode=mode,
+        )
+        cefr_level = self._resolve_cefr_level(db=db, user_id=user_id, fallback_cefr=user.cefr_level)
+
+        required_count = size - len(prefetched)
+        generation_target = required_count + (self._PREFETCH_EXTRA if use_prefetch else 0)
+        seeds, anchors_used_count = self._build_seeds(
+            db=db,
+            user_id=user_id,
+            vocabulary_items=vocabulary_items,
+        )
+        generated_items, provider_note = await self._generate_items(
+            seeds=seeds,
+            size=generation_target,
+            mode=mode,
+            cefr_level=cefr_level,
+        )
+
+        immediate_items = prefetched + generated_items[:required_count]
+        if use_prefetch:
+            extra_items = generated_items[required_count:]
+            if extra_items:
+                prefetch_service.store_prefetch(user_id, mode, extra_items)
+
+        note_prefix = "Prefetched + " if prefetched else ""
+        return ExerciseGenerateResponse(
+            exercises=immediate_items[:size],
+            note=f"{note_prefix}{provider_note}; graph_anchors_used={anchors_used_count}",
+        )
+
+    def _resolve_target_user_id(
+        self,
+        *,
+        requested_user_id: int | None,
+        current_user_id: int,
+    ) -> int:
+        target_user_id = requested_user_id or current_user_id
+        if requested_user_id is not None and requested_user_id != current_user_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return target_user_id
+
+    def _ensure_user_exists(self, *, db: Session, user_id: int) -> None:
+        user = users_repository.get_by_id(db, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    def _get_user_or_404(self, *, db: Session, user_id: int):
+        user = users_repository.get_by_id(db, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+
+    def _resolve_vocabulary_items(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        vocabulary_ids: list[int],
+        mode: str,
+    ):
+        vocabulary_items = vocabulary_repository.list_items(db, user_id=user_id)
+        if vocabulary_ids:
+            allowed = set(vocabulary_ids)
+            vocabulary_items = [item for item in vocabulary_items if item.id in allowed]
+        vocabulary_items = self._dedupe_vocabulary_by_lemma(vocabulary_items)
+
+        if not vocabulary_items:
+            raise ValueError("Vocabulary is empty. Add words before generating exercises.")
+
+        if mode == "word_definition_match":
+            unique_lemmas = {item.english_lemma.strip().lower() for item in vocabulary_items if item.english_lemma}
+            if len(unique_lemmas) < 4:
+                raise ValueError("Need at least 4 different words in vocabulary for definition matching.")
+        return vocabulary_items
+
+    def _resolve_cefr_level(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        fallback_cefr: str,
+    ) -> str:
+        context = context_repository.get_by_user_id(db, user_id)
+        return context.cefr_level if context is not None else fallback_cefr
+
+    def _dedupe_vocabulary_by_lemma(self, vocabulary_items):
+        deduped: dict[str, object] = {}
+        for item in vocabulary_items:
+            key = item.english_lemma.strip().lower()
+            if not key or key in deduped:
+                continue
+            deduped[key] = item
+        return list(deduped.values())
+
+    def _build_seeds(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        vocabulary_items,
+    ) -> tuple[list[ExerciseSeed], int]:
+        anchors_used_count = 0
+        seeds: list[ExerciseSeed] = []
+        for item in vocabulary_items:
+            source_sentence = item.source_sentence
+            anchors = learning_graph_repository.list_anchors(
+                db,
+                user_id=user_id,
+                english_lemma=item.english_lemma,
+                limit=3,
+            )
+            if anchors:
+                anchor_words = [anchor.english_lemma for anchor in anchors if anchor.english_lemma]
+                if anchor_words:
+                    anchors_used_count += 1
+                    anchor_hint = "Related known words: " + ", ".join(anchor_words) + "."
+                    source_sentence = f"{source_sentence or ''} {anchor_hint}".strip()
+
+            seeds.append(
+                ExerciseSeed(
+                    english_lemma=item.english_lemma,
+                    russian_translation=item.russian_translation,
+                    source_sentence=source_sentence,
+                )
+            )
+
+        if len(seeds) > 1:
+            randomizer = secrets.SystemRandom()
+            randomizer.shuffle(seeds)
+
+        return seeds, anchors_used_count
+
+    async def _generate_items(
+        self,
+        *,
+        seeds: list[ExerciseSeed],
+        size: int,
+        mode: str,
+        cefr_level: str,
+    ) -> tuple[list[ExerciseItem], str]:
+        if size > self._BATCH_SIZE and len(seeds) >= self._BATCH_SIZE:
+            batches = []
+            remaining = size
+            batch_idx = 0
+            while remaining > 0:
+                batch_count = min(self._BATCH_SIZE, remaining)
+                batch_seeds = []
+                for i in range(min(self._BATCH_SIZE, len(seeds))):
+                    seed_idx = (batch_idx * self._BATCH_SIZE + i) % len(seeds)
+                    batch_seeds.append(seeds[seed_idx])
+                batches.append(
+                    GenerateExercisesRequest(
+                        size=batch_count,
+                        cefr_level=cefr_level,
+                        mode=mode,
+                        seeds=batch_seeds,
+                    )
+                )
+                remaining -= batch_count
+                batch_idx += 1
+
+            try:
+                batch_responses = await ai_service.generate_exercises_batch(batches)
+            except TranslationProviderUnavailableError as exc:
+                raise RuntimeError(str(exc)) from exc
+
+            all_items: list[ExerciseItem] = []
+            for response in batch_responses:
+                all_items.extend(
+                    [
+                        ExerciseItem(
+                            prompt=item.prompt,
+                            answer=item.answer,
+                            exercise_type=item.exercise_type,
+                            options=item.options,
+                        )
+                        for item in response.exercises
+                    ]
+                )
+            return all_items[:size], f"AI batch generation used (batches={len(batches)})"
+
+        try:
+            response = await ai_service.generate_exercises_async(
+                GenerateExercisesRequest(size=size, cefr_level=cefr_level, mode=mode, seeds=seeds)
+            )
+        except TranslationProviderUnavailableError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+        items = [
+            ExerciseItem(
+                prompt=item.prompt,
+                answer=item.answer,
+                exercise_type=item.exercise_type,
+                options=item.options,
+            )
+            for item in response.exercises
+        ]
+        return items, f"AI generation used ({response.provider_note})"
+
+
+exercise_engine_application_service = ExerciseEngineApplicationService()
