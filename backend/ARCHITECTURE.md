@@ -29,6 +29,24 @@
 - При несовпадении `user_id` и токена возвращается HTTP 403, при отсутствии/невалидности токена HTTP 401.
 - Для новых клиентских сценариев используются `me`-маршруты без явного `user_id`.
 
+### Импортные границы модулей
+- Внешний модуль может зависеть от другого backend-модуля только через `public_api` или через экспортированный фасад в `__init__.py`.
+- Импорт `repository`, `application_service` и `models` чужого модуля считается нарушением архитектурной границы.
+- Импорт этих слоев внутри собственного модуля разрешен.
+- Общие платформенные компоненты (`app.core.*`) не относятся к модульным границам и могут использоваться всеми модулями.
+
+Примеры:
+- корректно: `from app.modules.learning_graph.public_api import learning_graph_public_api`
+- корректно: `from app.modules.learning_graph import learning_graph_public_api`
+- некорректно: `from app.modules.learning_graph.repository import learning_graph_repository`
+- некорректно: `from app.modules.context_memory.application_service import context_memory_application_service`
+
+Для автоматической проверки используется команда:
+
+```bash
+python tools/check_module_boundaries.py
+```
+
 ## Состояние слоя данных
 Персистентные модули (SQLAlchemy):
 - users

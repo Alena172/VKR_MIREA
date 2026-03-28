@@ -60,6 +60,16 @@ uvicorn app.main:app --reload
 pytest -q
 ```
 
+## Проверка границ модулей
+
+```bash
+python tools/check_module_boundaries.py
+```
+
+Проверка валидирует архитектурное правило модульного монолита:
+- другой модуль можно импортировать через `public_api` или фасад из `__init__.py`
+- прямые cross-module импорты `repository`, `application_service` и `models` запрещены
+
 ## Переменные окружения
 
 Файл `.env` в `backend/`:
