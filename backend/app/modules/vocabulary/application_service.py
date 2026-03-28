@@ -178,7 +178,7 @@ class VocabularyApplicationService:
                 db=db,
                 user_id=user_id,
                 word=english_lemma,
-            )
+            ).tracked
             learning_graph_public_api.register_vocabulary_semantics(
                 db=db,
                 user_id=user_id,

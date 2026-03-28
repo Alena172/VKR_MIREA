@@ -32,18 +32,18 @@ def login_or_register(
     payload: LoginOrRegisterRequest,
     db: Session = Depends(get_db),
 ) -> LoginOrRegisterResponse:
-    user, is_new_user = users_public_api.find_or_create(
+    result = users_public_api.find_or_create(
         db=db,
         email=payload.email,
         full_name=payload.full_name,
         cefr_level=payload.cefr_level,
     )
 
-    token_value = auth_service.create_access_token(user.id)
+    token_value = auth_service.create_access_token(result.user.id)
     return LoginOrRegisterResponse(
         access_token=token_value,
-        user_id=user.id,
-        is_new_user=is_new_user,
+        user_id=result.user.id,
+        is_new_user=result.is_new_user,
     )
 
 

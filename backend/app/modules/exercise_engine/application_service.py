@@ -68,11 +68,11 @@ class ExerciseEngineApplicationService:
             vocabulary_ids=vocabulary_ids,
             mode=mode,
         )
-        cefr_level = context_memory_public_api.get_effective_cefr_level(
+        cefr_level = context_memory_public_api.get_effective_cefr_dto(
             db=db,
             user_id=user_id,
             fallback_cefr=user.cefr_level,
-        )
+        ).cefr_level
 
         required_count = size - len(prefetched)
         generation_target = required_count + (self._PREFETCH_EXTRA if use_prefetch else 0)

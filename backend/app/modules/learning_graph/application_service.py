@@ -123,10 +123,13 @@ class LearningGraphApplicationService:
         current_user_id: int,
     ) -> RecommendationsResponse:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
-        known_lemmas = context_memory_public_api.list_mastered_lemmas(
-            db=db,
-            user_id=current_user_id,
-        )
+        known_lemmas = {
+            item.word
+            for item in context_memory_public_api.list_mastered_lemma_dtos(
+                db=db,
+                user_id=current_user_id,
+            )
+        }
         items = learning_graph_repository.get_recommendations(
             db,
             user_id=current_user_id,
@@ -144,10 +147,13 @@ class LearningGraphApplicationService:
         mode: str,
         limit: int,
     ):
-        known_lemmas = context_memory_public_api.list_mastered_lemmas(
-            db=db,
-            user_id=user_id,
-        )
+        known_lemmas = {
+            item.word
+            for item in context_memory_public_api.list_mastered_lemma_dtos(
+                db=db,
+                user_id=user_id,
+            )
+        }
         return learning_graph_repository.get_recommendations(
             db,
             user_id=user_id,

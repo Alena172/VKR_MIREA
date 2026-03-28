@@ -213,12 +213,13 @@ class LearningSessionSubmissionService:
                     user_answer=item.user_answer,
                 )
 
-        return context_memory_public_api.update_learning_progress(
+        result = context_memory_public_api.update_learning_progress(
             db=db,
             user_id=user_id,
             user_cefr_level=user_cefr_level,
             updates=progress_updates,
         )
+        return result.difficult_words_added
 
     def persist_session(
         self,
