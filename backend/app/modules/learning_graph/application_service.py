@@ -128,6 +128,21 @@ class LearningGraphApplicationService:
         )
         return RecommendationsResponse(user_id=current_user_id, mode=mode, items=items)
 
+    def list_recommendation_items(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        mode: str,
+        limit: int,
+    ):
+        return learning_graph_repository.get_recommendations(
+            db,
+            user_id=user_id,
+            mode=mode,
+            limit=limit,
+        )
+
     def register_vocabulary_semantics(
         self,
         *,

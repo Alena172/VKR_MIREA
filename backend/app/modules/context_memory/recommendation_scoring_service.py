@@ -7,8 +7,8 @@ import re
 from sqlalchemy.orm import Session
 
 from app.modules.context_memory.repository import context_repository
-from app.modules.learning_graph.repository import learning_graph_repository
-from app.modules.learning_session.repository import learning_session_repository
+from app.modules.learning_graph.public_api import learning_graph_public_api
+from app.modules.learning_session.public_api import learning_session_public_api
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
@@ -39,8 +39,8 @@ class RecommendationScoringService:
         scores: dict[str, float],
         limit: int,
     ) -> None:
-        graph_items = learning_graph_repository.get_recommendations(
-            db,
+        graph_items = learning_graph_public_api.list_recommendation_items(
+            db=db,
             user_id=user_id,
             mode="mixed",
             limit=max(limit * 3, 10),
@@ -67,7 +67,7 @@ class RecommendationScoringService:
             for word in (context.difficult_words if context is not None else [])
             if _is_valid_review_word(word)
         ]
-        recent_error_words_stream = learning_session_repository.list_recent_incorrect_words(
+        recent_error_words_stream = learning_session_public_api.list_recent_incorrect_words(
             db,
             user_id=user_id,
             limit=limit * 5,
