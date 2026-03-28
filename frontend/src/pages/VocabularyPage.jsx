@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, getErrorMessage, isAbortError, pollTask } from "../lib/api";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAbortControllers } from "../hooks/useAbortControllers";
+import { saveReviewFocus, saveTrainingPreset } from "../lib/studyPresets";
 
 const FILTER_OPTIONS = [
   { value: "all", label: "Все слова" },
@@ -103,7 +105,27 @@ function sortVocabularyItems(items, progressByWord, sortValue) {
   });
 }
 
+function getAnchorRelationMeta(anchor) {
+  if (anchor.relation_type === "semantic_overlap") {
+    return {
+      label: "Похожий контекст",
+      toneClass: "bg-emerald-100 text-emerald-700",
+    };
+  }
+  if (anchor.relation_type === "polysemy_variant") {
+    return {
+      label: "Другая грань слова",
+      toneClass: "bg-violet-100 text-violet-700",
+    };
+  }
+  return {
+    label: "Общий кластер",
+    toneClass: "bg-slate-100 text-slate-700",
+  };
+}
+
 export default function VocabularyPage({ onError }) {
+  const navigate = useNavigate();
   const [selectedText, setSelectedText] = useState("apple");
   const [sourceSentence, setSourceSentence] = useState("I eat an apple every day.");
   const [translateText, setTranslateText] = useState("book");
@@ -111,6 +133,8 @@ export default function VocabularyPage({ onError }) {
   const [translationResult, setTranslationResult] = useState("");
   const [items, setItems] = useState([]);
   const [progressByWord, setProgressByWord] = useState({});
+  const [anchorsByWord, setAnchorsByWord] = useState({});
+  const [loadingAnchorsByWord, setLoadingAnchorsByWord] = useState({});
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortBy, setSortBy] = useState("review_priority");
@@ -238,6 +262,51 @@ export default function VocabularyPage({ onError }) {
     }
   }
 
+  function openTrainingForWord(item) {
+    saveTrainingPreset({
+      vocabularyIds: [item.id],
+      mode: "sentence_translation_full",
+      size: 3,
+      focusLabel: `${item.english_lemma} - ${item.russian_translation}`,
+    });
+    navigate("/exercises");
+  }
+
+  function openReviewForWord(item, progress) {
+    saveReviewFocus({
+      word: item.english_lemma,
+      translation: item.russian_translation,
+      stateLabel: getVocabularyState(item, progress).label,
+      hasProgress: Boolean(progress),
+    });
+    navigate("/review");
+  }
+
+  async function toggleAnchors(item) {
+    const wordKey = item.english_lemma.toLowerCase();
+    if (anchorsByWord[wordKey]) {
+      setAnchorsByWord((prev) => {
+        const next = { ...prev };
+        delete next[wordKey];
+        return next;
+      });
+      return;
+    }
+
+    setLoadingAnchorsByWord((prev) => ({ ...prev, [wordKey]: true }));
+    try {
+      const data = await api.learningGraphAnchors(item.english_lemma, 5);
+      setAnchorsByWord((prev) => ({
+        ...prev,
+        [wordKey]: data?.anchors || [],
+      }));
+    } catch (error) {
+      onError(getErrorMessage(error));
+    } finally {
+      setLoadingAnchorsByWord((prev) => ({ ...prev, [wordKey]: false }));
+    }
+  }
+
   async function deleteItem(itemId) {
     try {
       await api.deleteVocabularyMe(itemId);
@@ -359,6 +428,9 @@ export default function VocabularyPage({ onError }) {
           {sortedItems.map((item) => {
             const progress = progressByWord[item.english_lemma.toLowerCase()] || null;
             const state = getVocabularyState(item, progress);
+            const wordKey = item.english_lemma.toLowerCase();
+            const relatedAnchors = anchorsByWord[wordKey] || null;
+            const anchorsLoading = Boolean(loadingAnchorsByWord[wordKey]);
             return (
             <li key={item.id} className="surface p-4 md:p-5">
               {editingId === item.id ? (
@@ -408,11 +480,46 @@ export default function VocabularyPage({ onError }) {
                     {item.source_sentence ? <div className="muted mt-2 text-sm">{item.source_sentence}</div> : null}
                   </div>
                   <div className="flex w-32 shrink-0 flex-col gap-2 self-start">
+                    <button className="btn-primary !px-3.5 !py-2 !text-sm" type="button" onClick={() => openTrainingForWord(item)}>
+                      В тренировку
+                    </button>
+                    <button className="btn-secondary !px-3.5 !py-2 !text-sm" type="button" onClick={() => openReviewForWord(item, progress)}>
+                      В повторение
+                    </button>
+                    <button className="btn-secondary !px-3.5 !py-2 !text-sm" type="button" onClick={() => toggleAnchors(item)}>
+                      {anchorsLoading ? "Загрузка..." : relatedAnchors ? "Скрыть связи" : "Связанные"}
+                    </button>
                     <button className="btn-secondary !px-3.5 !py-2 !text-sm" type="button" onClick={() => startEdit(item)}>Редактировать</button>
                     <button className="btn-danger !px-3.5 !py-2 !text-sm" type="button" onClick={() => deleteItem(item.id)}>Удалить</button>
                   </div>
                 </div>
               )}
+              {relatedAnchors ? (
+                <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                  <p className="text-sm font-semibold text-slate-900">Связанные слова из learning graph</p>
+                  {relatedAnchors.length ? (
+                    <div className="mt-2 grid gap-2">
+                      {relatedAnchors.map((anchor) => (
+                        <div key={`${item.id}-${anchor.english_lemma}`} className="rounded-xl bg-white px-3 py-2 text-sm text-slate-700">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-slate-900">
+                              {anchor.english_lemma} ({anchor.russian_translation})
+                            </span>
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getAnchorRelationMeta(anchor).toneClass}`}>
+                              {getAnchorRelationMeta(anchor).label}
+                            </span>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                              score {anchor.score.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-600">Для этого слова пока не найдено связанных якорей.</p>
+                  )}
+                </div>
+              ) : null}
             </li>
             );
           })}

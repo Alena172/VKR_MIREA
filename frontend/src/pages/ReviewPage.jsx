@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { useReviewSession } from "../hooks/useReviewSession";
+import { clearReviewFocus, loadReviewFocus } from "../lib/studyPresets";
 
 const STRATEGY_LABELS = {
   NeighborExpansion: "Соседние связи",
@@ -90,6 +92,7 @@ function getSessionProgress(currentIndex, total) {
 }
 
 export default function ReviewPage({ onError }) {
+  const [reviewFocus, setReviewFocus] = useState(null);
   const {
     currentIndex,
     currentItem,
@@ -122,6 +125,15 @@ export default function ReviewPage({ onError }) {
     ? getDifficultyMeta(currentItem.error_count, currentItem.correct_streak)
     : null;
 
+  useEffect(() => {
+    const focus = loadReviewFocus();
+    if (!focus) {
+      return;
+    }
+    setReviewFocus(focus);
+    clearReviewFocus();
+  }, []);
+
   return (
     <section className="space-y-6">
       {!isSessionActive ? (
@@ -138,6 +150,25 @@ export default function ReviewPage({ onError }) {
               </button>
             </div>
           </header>
+
+          {reviewFocus ? (
+            <section className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Фокус на слове</p>
+                  <p className="mt-1 text-sm text-slate-700">
+                    <strong>{reviewFocus.word}</strong> - {reviewFocus.translation}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-700">
+                    Текущий статус: {reviewFocus.stateLabel || (reviewFocus.hasProgress ? "В повторении" : "Ещё не в SRS")}.
+                  </p>
+                </div>
+                <button type="button" className="btn-secondary" onClick={() => setReviewFocus(null)}>
+                  Скрыть
+                </button>
+              </div>
+            </section>
+          ) : null}
 
           {summary ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

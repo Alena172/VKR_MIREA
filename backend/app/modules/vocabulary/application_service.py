@@ -192,7 +192,6 @@ class VocabularyApplicationService:
                 source_url=normalized_url,
                 vocabulary_item_id=vocabulary_item.id,
             )
-        db.refresh(capture)
         if created_new:
             db.refresh(vocabulary_item)
 

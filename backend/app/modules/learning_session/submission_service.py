@@ -11,7 +11,11 @@ from app.modules.ai_services.contracts import ExplainErrorRequest
 from app.modules.ai_services.service import ai_service
 from app.modules.context_memory.public_api import WordProgressUpdate, context_memory_public_api
 from app.modules.learning_graph.public_api import learning_graph_public_api
-from app.modules.learning_session.evaluation import is_answer_correct, normalize_answer
+from app.modules.learning_session.evaluation import (
+    is_answer_correct,
+    is_semantic_override_candidate,
+    normalize_answer,
+)
 from app.modules.learning_session.repository import AnswerPersistPayload, learning_session_repository
 from app.modules.learning_session.schemas import (
     SessionAnswer,
@@ -67,6 +71,12 @@ class EvaluatedAnswer:
 
 
 class LearningSessionSubmissionService:
+    def _dedupe_answers(self, answers: list[SessionAnswer]) -> list[SessionAnswer]:
+        deduped: dict[int, SessionAnswer] = {}
+        for answer in answers:
+            deduped[answer.exercise_id] = answer
+        return list(deduped.values())
+
     async def evaluate_answers(self, answers: list[SessionAnswer]) -> list[EvaluatedAnswer]:
         if not answers:
             return []
@@ -93,6 +103,7 @@ class LearningSessionSubmissionService:
             and answer.prompt
             and answer.expected_answer
             and len(normalized_expected.split()) >= 5
+            and is_semantic_override_candidate(answer.expected_answer, answer.user_answer)
         ):
             semantic_ok = await ai_service.is_translation_semantically_correct_async(
                 english_prompt=answer.prompt,
@@ -258,8 +269,9 @@ class LearningSessionSubmissionService:
         user_cefr_level: str | None,
         answers: list[SessionAnswer],
     ) -> SessionSubmitResponse:
+        normalized_answers = self._dedupe_answers(answers)
         with application_transaction.boundary(db=db):
-            evaluated_answers = await self.evaluate_answers(answers)
+            evaluated_answers = await self.evaluate_answers(normalized_answers)
             incorrect_feedback, advice_feedback = self.collect_feedback(evaluated_answers)
             self.update_progress(
                 db=db,

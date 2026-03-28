@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import random
 import re
@@ -37,12 +38,24 @@ class ExerciseGenerator:
         self._model = model
         self._max_retries = max_retries
         self._remote_enabled = remote_enabled
-        self._chat_complete_async = chat_complete_async
+        self._chat_complete_async = self._wrap_async_chat_complete(chat_complete_async)
         self._chat_complete_sync = chat_complete_sync
         self._provider_unavailable_error = provider_unavailable_error
         self._translation_service = translation_service
         self._definition_resolver = definition_resolver
         self._recent_sentences = recent_sentences
+
+    def _wrap_async_chat_complete(
+        self,
+        callback: Callable[..., Awaitable[str | None]] | Callable[..., str | None],
+    ) -> Callable[..., Awaitable[str | None]]:
+        if inspect.iscoroutinefunction(callback):
+            return callback
+
+        async def _wrapped(**kwargs) -> str | None:
+            return await asyncio.to_thread(callback, **kwargs)
+
+        return _wrapped
 
     def _extract_json_payload(self, raw: str) -> dict | list | None:
         text = raw.strip()
@@ -117,10 +130,106 @@ class ExerciseGenerator:
         candidate = candidate.replace("**", "").replace("__", "").replace("`", "")
         return re.sub(r"\s+", " ", candidate).strip()
 
-    def _generate_sentence_with_remote(self, word: str, cefr_level: str) -> str | None:
+    def _parse_sentence_translation_payload(self, raw: str) -> tuple[str, str] | None:
+        payload = self._extract_json_payload(raw)
+        if not isinstance(payload, dict):
+            return None
+
+        sentence_en = str(payload.get("sentence_en", "")).strip()
+        sentence_ru = str(payload.get("sentence_ru", "")).strip()
+        if not sentence_en or not sentence_ru:
+            return None
+        return self._sanitize_generated_sentence(sentence_en), sentence_ru.strip().strip('"')
+
+    def _normalize_russian_token(self, token: str) -> str:
+        lowered = token.strip().lower().replace("ё", "е")
+        lowered = re.sub(r"[^а-яa-z]", "", lowered)
+        if len(lowered) <= 4:
+            return lowered
+        for suffix in (
+            "иями", "ями", "ами", "ями", "ого", "ему", "ому", "ыми", "ими",
+            "иях", "иях", "ах", "ях", "ой", "ей", "ою", "ею", "ия", "ья",
+            "ию", "ью", "иям", "ьям", "ию", "ью", "а", "я", "у", "ю", "ы", "и", "е", "о",
+        ):
+            if lowered.endswith(suffix) and len(lowered) - len(suffix) >= 4:
+                return lowered[: -len(suffix)]
+        return lowered
+
+    def _translation_contains_target(self, translated_text: str, target_translation: str) -> bool:
+        target_root = self._normalize_russian_token(target_translation)
+        if not target_root:
+            return True
+        translated_tokens = re.findall(r"[А-Яа-яЁёA-Za-z-]+", translated_text)
+        translated_roots = {self._normalize_russian_token(token) for token in translated_tokens}
+        return target_root in translated_roots
+
+    async def _generate_sentence_translation_pair_with_remote(
+        self,
+        seed: ExerciseSeed,
+        cefr_level: str,
+    ) -> tuple[str, str] | None:
+        history = self._recent_sentences.setdefault(seed.english_lemma.strip().lower(), deque(maxlen=8))
+        prompts = [
+            (
+                "You are an English teacher for a Russian-speaking learner. "
+                "Return only JSON with keys sentence_en and sentence_ru.",
+                (
+                    f"Target word: {seed.english_lemma}\n"
+                    f"Target translation in Russian: {seed.russian_translation}\n"
+                    f"CEFR level: {cefr_level}\n"
+                    f"Avoid repeating these recent sentences: {json.dumps(list(history), ensure_ascii=False)}\n"
+                    f"User context hint: {seed.source_sentence or 'none'}\n"
+                    "Generate exactly one natural English sentence and its Russian translation.\n"
+                    "Constraints:\n"
+                    "- everyday context only\n"
+                    "- include the target word exactly once in sentence_en\n"
+                    "- preserve meaning exactly in sentence_ru\n"
+                    "- sentence_ru must use the provided Russian translation or its correct inflected form\n"
+                    "- no markdown\n"
+                    'Format: {"sentence_en":"...","sentence_ru":"..."}'
+                ),
+            ),
+            (
+                "You are an English teacher for a Russian-speaking learner. "
+                "Return only JSON with keys sentence_en and sentence_ru.",
+                (
+                    f"Target word: {seed.english_lemma}\n"
+                    f"Mandatory Russian translation for the target word: {seed.russian_translation}\n"
+                    f"CEFR level: {cefr_level}\n"
+                    "The translation must not replace the target word with a different object or concept.\n"
+                    "Generate exactly one sentence pair.\n"
+                    'Format: {"sentence_en":"...","sentence_ru":"..."}'
+                ),
+            ),
+        ]
+
+        for system_prompt, user_prompt in prompts:
+            content = await self._chat_complete_async(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.15,
+                max_tokens=180,
+            )
+            if not content:
+                continue
+            pair = self._parse_sentence_translation_payload(content)
+            if not pair:
+                continue
+            sentence_en, sentence_ru = pair
+            word = seed.english_lemma.strip().lower()
+            if (
+                self._is_sentence_suitable(sentence_en, word, cefr_level)
+                and self._translation_contains_target(sentence_ru, seed.russian_translation)
+                and sentence_en not in history
+            ):
+                history.append(sentence_en)
+                return sentence_en, sentence_ru
+        return None
+
+    async def _generate_sentence_with_remote(self, word: str, cefr_level: str) -> str | None:
         history = self._recent_sentences.setdefault(word, deque(maxlen=8))
         for _ in range(self._max_retries + 2):
-            content = self._chat_complete_sync(
+            content = await self._chat_complete_async(
                 system_prompt=(
                     "You are an English teacher. Generate one natural, high-frequency, grammatically correct "
                     "English sentence for a Russian-speaking learner. "
@@ -151,7 +260,7 @@ class ExerciseGenerator:
                 return candidate
         return None
 
-    def _build_sentence_for_word(self, seed: ExerciseSeed, cefr_level: str | None = None) -> str:
+    async def _build_sentence_for_word(self, seed: ExerciseSeed, cefr_level: str | None = None) -> str:
         if not self._remote_enabled():
             raise self._provider_unavailable_error(
                 "Sentence generation requires remote AI provider. "
@@ -160,7 +269,7 @@ class ExerciseGenerator:
 
         word = seed.english_lemma.strip().lower()
         level = (cefr_level or "A2").upper()
-        remote_sentence = self._generate_sentence_with_remote(word=word, cefr_level=level)
+        remote_sentence = await self._generate_sentence_with_remote(word=word, cefr_level=level)
         if remote_sentence:
             return remote_sentence
 
@@ -168,20 +277,41 @@ class ExerciseGenerator:
             "Sentence generation request failed. Check AI_BASE_URL, AI_MODEL and provider availability."
         )
 
-    def _build_ru_translation_of_sentence(self, sentence_en: str, seed: ExerciseSeed) -> str:
+    async def _build_ru_translation_of_sentence(self, sentence_en: str, seed: ExerciseSeed) -> str:
         if self._remote_enabled():
-            content = self._chat_complete_sync(
-                system_prompt="Переведи английское предложение на русский. Верни только перевод без комментариев.",
-                user_prompt=(
-                    f"Предложение: {sentence_en}\n"
-                    f"Ключевое слово: {seed.english_lemma}\n"
-                    f"Желаемый перевод ключевого слова: {seed.russian_translation}"
+            prompts = [
+                (
+                    "Переведи английское предложение на русский. Верни только перевод без комментариев.",
+                    (
+                        f"Предложение: {sentence_en}\n"
+                        f"Ключевое слово: {seed.english_lemma}\n"
+                        f"Желаемый перевод ключевого слова: {seed.russian_translation}\n"
+                        "Обязательно сохрани смысл предложения."
+                    ),
                 ),
-                temperature=0.0,
-                max_tokens=140,
-            )
-            if content:
-                return content.strip().strip('"')
+                (
+                    "Переведи английское предложение на русский. Верни только перевод без комментариев.",
+                    (
+                        f"Предложение: {sentence_en}\n"
+                        f"Ключевое слово: {seed.english_lemma}\n"
+                        f"Обязательный перевод ключевого слова: {seed.russian_translation}\n"
+                        "Используй именно этот перевод или его корректную падежную форму. "
+                        "Не заменяй ключевое слово другим предметом, фруктом или понятием."
+                    ),
+                ),
+            ]
+            for system_prompt, user_prompt in prompts:
+                content = await self._chat_complete_async(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=0.0,
+                    max_tokens=140,
+                )
+                if not content:
+                    continue
+                translated = content.strip().strip('"')
+                if self._translation_contains_target(translated, seed.russian_translation):
+                    return translated
 
         translated = self._translation_service.heuristic_translate(
             sentence_en,
@@ -196,9 +326,25 @@ class ExerciseGenerator:
         )
         return translated or seed.russian_translation
 
-    def _build_sentence_translation_exercise(self, seed: ExerciseSeed, cefr_level: str | None = None) -> GeneratedExerciseItem:
-        sentence_en = self._build_sentence_for_word(seed, cefr_level=cefr_level)
-        sentence_ru = self._build_ru_translation_of_sentence(sentence_en, seed)
+    async def _build_sentence_translation_exercise(
+        self,
+        seed: ExerciseSeed,
+        cefr_level: str | None = None,
+    ) -> GeneratedExerciseItem:
+        level = (cefr_level or "A2").upper()
+        if self._remote_enabled():
+            pair = await self._generate_sentence_translation_pair_with_remote(seed, level)
+            if pair is not None:
+                sentence_en, sentence_ru = pair
+                return GeneratedExerciseItem(
+                    prompt=f"Translate sentence into Russian: {sentence_en}",
+                    answer=sentence_ru,
+                    exercise_type="sentence_translation_full",
+                    options=[],
+                )
+
+        sentence_en = await self._build_sentence_for_word(seed, cefr_level=level)
+        sentence_ru = await self._build_ru_translation_of_sentence(sentence_en, seed)
         return GeneratedExerciseItem(
             prompt=f"Translate sentence into Russian: {sentence_en}",
             answer=sentence_ru,
@@ -223,7 +369,7 @@ class ExerciseGenerator:
                 break
 
         if len(selected_words) < 4:
-            return self._build_sentence_translation_exercise(seed)
+            return await self._build_sentence_translation_exercise(seed)
 
         pairs = []
         for item in selected_words:
@@ -243,10 +389,14 @@ class ExerciseGenerator:
             options=definitions,
         )
 
-    def _build_word_scramble_exercise(self, seed: ExerciseSeed, cefr_level: str | None = None) -> GeneratedExerciseItem:
+    async def _build_word_scramble_exercise(
+        self,
+        seed: ExerciseSeed,
+        cefr_level: str | None = None,
+    ) -> GeneratedExerciseItem:
         letters = self._build_word_scramble_letters(seed.english_lemma)
         if not letters:
-            return self._build_sentence_translation_exercise(seed, cefr_level=cefr_level)
+            return await self._build_sentence_translation_exercise(seed, cefr_level=cefr_level)
         return GeneratedExerciseItem(
             prompt=f"Assemble the word from letters. Translation hint: {seed.russian_translation}",
             answer=seed.english_lemma,
@@ -255,7 +405,6 @@ class ExerciseGenerator:
         )
 
     async def _fallback_generate_exercises(self, payload: GenerateExercisesRequest) -> GenerateExercisesResponse:
-        result: list[GeneratedExerciseItem] = []
         seeds = payload.seeds[:]
         if not seeds:
             return GenerateExercisesResponse(
@@ -263,18 +412,25 @@ class ExerciseGenerator:
                 provider_note="local_heuristic exercise_generation.empty_vocabulary",
             )
 
-        idx = 0
-        while len(result) < payload.size:
-            seed = seeds[idx % len(seeds)]
-            idx += 1
-            if payload.mode == "word_scramble":
-                result.append(self._build_word_scramble_exercise(seed, cefr_level=payload.cefr_level))
-            elif payload.mode == "word_definition_match":
-                start = (idx - 1) % len(seeds)
-                rotated_pool = seeds[start:] + seeds[:start]
-                result.append(await self._build_word_definition_match_exercise(seed, rotated_pool))
-            else:
-                result.append(self._build_sentence_translation_exercise(seed, cefr_level=payload.cefr_level))
+        scheduled_seeds: list[tuple[ExerciseSeed, int]] = []
+        for idx in range(payload.size):
+            scheduled_seeds.append((seeds[idx % len(seeds)], idx))
+
+        semaphore = asyncio.Semaphore(4)
+
+        async def _build_exercise(seed: ExerciseSeed, idx: int) -> GeneratedExerciseItem:
+            async with semaphore:
+                if payload.mode == "word_scramble":
+                    return await self._build_word_scramble_exercise(seed, cefr_level=payload.cefr_level)
+                if payload.mode == "word_definition_match":
+                    start = idx % len(seeds)
+                    rotated_pool = seeds[start:] + seeds[:start]
+                    return await self._build_word_definition_match_exercise(seed, rotated_pool)
+                return await self._build_sentence_translation_exercise(seed, cefr_level=payload.cefr_level)
+
+        result = await asyncio.gather(
+            *(_build_exercise(seed, idx) for seed, idx in scheduled_seeds)
+        )
 
         level_note = f" CEFR={payload.cefr_level}." if payload.cefr_level else ""
         provider_note = (
@@ -369,7 +525,7 @@ class ExerciseGenerator:
                     seed_idx = 0
                     while len(parsed) < payload.size:
                         seed = payload.seeds[seed_idx % len(payload.seeds)]
-                        parsed.append(self._build_sentence_translation_exercise(seed, cefr_level=payload.cefr_level))
+                        parsed.append(await self._build_sentence_translation_exercise(seed, cefr_level=payload.cefr_level))
                         seed_idx += 1
                 return GenerateExercisesResponse(
                     exercises=parsed,

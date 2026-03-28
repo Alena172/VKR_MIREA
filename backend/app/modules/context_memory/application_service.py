@@ -17,6 +17,7 @@ from app.modules.context_memory.assembler import (
     to_progress_snapshot_dto,
     to_review_plan_dto,
     to_review_queue_bulk_submit_dto,
+    to_review_queue_item_dto,
     to_review_queue_response_dto,
     to_review_session_item_dto,
     to_review_session_start_dto,

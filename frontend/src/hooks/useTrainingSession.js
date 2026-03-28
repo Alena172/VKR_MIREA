@@ -7,6 +7,8 @@ const PREFETCH_BATCH_SIZE = 2;
 export function useTrainingSession({ onError }) {
   const [size, setSize] = useState(6);
   const [mode, setMode] = useState("sentence_translation_full");
+  const [selectedVocabularyIds, setSelectedVocabularyIds] = useState([]);
+  const [focusLabel, setFocusLabel] = useState("");
   const [currentExercise, setCurrentExercise] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState("");
@@ -15,6 +17,7 @@ export function useTrainingSession({ onError }) {
   const [submittedAnswers, setSubmittedAnswers] = useState([]);
   const [loadingCurrent, setLoadingCurrent] = useState(false);
   const [loadingPrefetch, setLoadingPrefetch] = useState(false);
+  const [submittingCurrent, setSubmittingCurrent] = useState(false);
   const [sessionResult, setSessionResult] = useState(null);
   const [isTrainingActive, setIsTrainingActive] = useState(false);
   const [generationNote, setGenerationNote] = useState("");
@@ -22,9 +25,9 @@ export function useTrainingSession({ onError }) {
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
-  async function generateBatch(targetMode, batchSize, signal) {
+  async function generateBatch(targetMode, batchSize, vocabularyIds, signal) {
     const { task_id } = await api.generateExercisesMe(
-      { size: batchSize, mode: targetMode, vocabulary_ids: [] },
+      { size: batchSize, mode: targetMode, vocabulary_ids: vocabularyIds || [] },
       { signal },
     );
     const result = await pollTask(task_id, {
@@ -53,6 +56,7 @@ export function useTrainingSession({ onError }) {
     setGenerationNote("");
     setLoadingCurrent(false);
     setLoadingPrefetch(false);
+    setSubmittingCurrent(false);
   }
 
   async function submitSession(answersPayload, signal) {
@@ -61,15 +65,29 @@ export function useTrainingSession({ onError }) {
     setSessionResult(result);
   }
 
-  async function startTraining() {
+  async function startTraining(options = {}) {
+    const nextMode = options.overrideMode || mode;
+    const nextSize = options.overrideSize || size;
+    const nextVocabularyIds = options.overrideVocabularyIds || selectedVocabularyIds;
+    const nextFocusLabel = options.focusLabel || focusLabel;
+
     abortAllRequests();
     setLoadingCurrent(true);
     onError("");
     try {
-      const initialBatchSize = Math.min(PREFETCH_BATCH_SIZE, size);
+      const initialBatchSize = Math.min(PREFETCH_BATCH_SIZE, nextSize);
       const controller = registerController();
       try {
-        const { exercises: initialExercises, note } = await generateBatch(mode, initialBatchSize, controller.signal);
+        const { exercises: initialExercises, note } = await generateBatch(
+          nextMode,
+          initialBatchSize,
+          nextVocabularyIds,
+          controller.signal,
+        );
+        setMode(nextMode);
+        setSize(nextSize);
+        setSelectedVocabularyIds(nextVocabularyIds);
+        setFocusLabel(nextFocusLabel);
         setCurrentExercise(initialExercises[0]);
         setCurrentIndex(0);
         setCurrentAnswer("");
@@ -96,9 +114,10 @@ export function useTrainingSession({ onError }) {
   }
 
   async function submitCurrentAndContinue() {
-    if (!currentExercise) {
+    if (!currentExercise || submittingCurrent) {
       return;
     }
+    setSubmittingCurrent(true);
 
     const nextAnswers = [
       ...submittedAnswers,
@@ -127,6 +146,7 @@ export function useTrainingSession({ onError }) {
         }
       } finally {
         releaseController(controller);
+        setSubmittingCurrent(false);
       }
       return;
     }
@@ -137,6 +157,7 @@ export function useTrainingSession({ onError }) {
       setBufferExercises(rest);
       setCurrentIndex(nextIndex);
       setCurrentAnswer("");
+      setSubmittingCurrent(false);
       return;
     }
 
@@ -146,7 +167,12 @@ export function useTrainingSession({ onError }) {
       const batchSize = Math.max(1, Math.min(PREFETCH_BATCH_SIZE, remaining));
       const controller = registerController();
       try {
-        const { exercises: generatedBatch, note } = await generateBatch(mode, batchSize, controller.signal);
+        const { exercises: generatedBatch, note } = await generateBatch(
+          mode,
+          batchSize,
+          selectedVocabularyIds,
+          controller.signal,
+        );
         const [nextExercise, ...rest] = generatedBatch;
         setCurrentExercise(nextExercise);
         setBufferExercises(rest);
@@ -163,6 +189,7 @@ export function useTrainingSession({ onError }) {
       }
     } finally {
       setLoadingCurrent(false);
+      setSubmittingCurrent(false);
     }
   }
 
@@ -180,7 +207,7 @@ export function useTrainingSession({ onError }) {
     setLoadingPrefetch(true);
     const batchSize = Math.min(PREFETCH_BATCH_SIZE, remaining);
 
-    generateBatch(mode, batchSize, controller.signal)
+    generateBatch(mode, batchSize, selectedVocabularyIds, controller.signal)
       .then(({ exercises: batch, note }) => {
         setBufferExercises((prev) => [...prev, ...batch]);
         setFetchedCount((prev) => prev + batch.length);
@@ -202,7 +229,7 @@ export function useTrainingSession({ onError }) {
       controller.abort();
       releaseController(controller);
     };
-  }, [bufferExercises.length, fetchedCount, isTrainingActive, loadingCurrent, mode, onError, size]);
+  }, [bufferExercises.length, fetchedCount, isTrainingActive, loadingCurrent, mode, onError, selectedVocabularyIds, size]);
   const answerReady = useMemo(() => {
     if (!currentExercise) {
       return false;
@@ -217,6 +244,7 @@ export function useTrainingSession({ onError }) {
     currentExercise,
     currentIndex,
     generationNote,
+    focusLabel,
     isTrainingActive,
     loadingCurrent,
     loadingPrefetch,
@@ -227,8 +255,12 @@ export function useTrainingSession({ onError }) {
     setCurrentAnswer,
     setMode,
     setSize,
+    setSelectedVocabularyIds,
+    setFocusLabel,
+    selectedVocabularyIds,
     size,
     startTraining,
+    submittingCurrent,
     submittedAnswers,
     submitCurrentAndContinue,
   };

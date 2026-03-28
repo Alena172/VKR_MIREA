@@ -1,6 +1,13 @@
 import re
 from difflib import SequenceMatcher
 
+_RUSSIAN_STOPWORDS = {
+    "и", "в", "во", "на", "с", "со", "к", "ко", "по", "под", "над", "от", "до", "из", "у",
+    "за", "для", "о", "об", "про", "без", "после", "перед", "при", "через", "не", "ни", "же",
+    "ли", "бы", "это", "этот", "эта", "эти", "тот", "та", "те", "мой", "моя", "мои", "твой",
+    "твоя", "его", "ее", "их", "я", "ты", "он", "она", "они", "мы", "вы",
+}
+
 
 def normalize_answer(value: str | None) -> str:
     text = (value or "").strip().lower()
@@ -8,6 +15,40 @@ def normalize_answer(value: str | None) -> str:
     text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def answer_similarity_metrics(expected: str | None, user_answer: str | None) -> dict[str, float]:
+    normalized_expected = normalize_answer(expected)
+    normalized_user = normalize_answer(user_answer)
+    expected_tokens = normalized_expected.split()
+    user_tokens = normalized_user.split()
+
+    if not normalized_expected or not normalized_user or not expected_tokens or not user_tokens:
+        return {
+            "text_similarity": 0.0,
+            "token_recall": 0.0,
+            "content_recall": 0.0,
+        }
+
+    expected_token_set = set(expected_tokens)
+    user_token_set = set(user_tokens)
+    expected_content = {token for token in expected_token_set if token not in _RUSSIAN_STOPWORDS}
+    user_content = {token for token in user_token_set if token not in _RUSSIAN_STOPWORDS}
+
+    return {
+        "text_similarity": SequenceMatcher(None, normalized_expected, normalized_user).ratio(),
+        "token_recall": len(expected_token_set & user_token_set) / max(1, len(expected_token_set)),
+        "content_recall": len(expected_content & user_content) / max(1, len(expected_content)),
+    }
+
+
+def is_semantic_override_candidate(expected: str | None, user_answer: str | None) -> bool:
+    metrics = answer_similarity_metrics(expected, user_answer)
+    return (
+        metrics["text_similarity"] >= 0.72
+        and metrics["token_recall"] >= 0.55
+        and metrics["content_recall"] >= 0.6
+    )
 
 
 def is_answer_correct(expected: str | None, user_answer: str | None) -> bool:
@@ -29,9 +70,10 @@ def is_answer_correct(expected: str | None, user_answer: str | None) -> bool:
 
     # For sentence translation tasks we allow close paraphrases:
     # small lexical variation with preserved overall meaning/structure.
-    text_similarity = SequenceMatcher(None, normalized_expected, normalized_user).ratio()
-    expected_token_set = set(expected_tokens)
-    user_token_set = set(user_tokens)
-    token_recall = len(expected_token_set & user_token_set) / max(1, len(expected_token_set))
+    metrics = answer_similarity_metrics(expected, user_answer)
 
-    return text_similarity >= 0.88 and token_recall >= 0.7
+    return (
+        metrics["text_similarity"] >= 0.88
+        and metrics["token_recall"] >= 0.7
+        and metrics["content_recall"] >= 0.75
+    )

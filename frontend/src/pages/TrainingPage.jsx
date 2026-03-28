@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import LoadingSpinner from "../components/LoadingSpinner";
 import DefinitionMatchExercise from "../components/training/DefinitionMatchExercise";
 import SentenceTranslationExercise from "../components/training/SentenceTranslationExercise";
 import WordScrambleExercise from "../components/training/WordScrambleExercise";
 import { useTrainingSession } from "../hooks/useTrainingSession";
+import { clearTrainingPreset, loadTrainingPreset } from "../lib/studyPresets";
 
 const MODE_META = {
   sentence_translation_full: {
@@ -145,6 +147,7 @@ export default function TrainingPage({ onError }) {
     currentAnswer,
     currentExercise,
     currentIndex,
+    focusLabel,
     generationNote,
     isTrainingActive,
     loadingCurrent,
@@ -154,15 +157,34 @@ export default function TrainingPage({ onError }) {
     resetSessionState,
     sessionResult,
     setCurrentAnswer,
+    setFocusLabel,
     setMode,
+    setSelectedVocabularyIds,
     setSize,
+    selectedVocabularyIds,
     size,
     startTraining,
+    submittingCurrent,
     submitCurrentAndContinue,
     submittedAnswers,
   } = useTrainingSession({ onError });
 
   const trainingInsights = buildTrainingInsights(sessionResult, submittedAnswers);
+
+  useEffect(() => {
+    const preset = loadTrainingPreset();
+    if (!preset) {
+      return;
+    }
+
+    clearTrainingPreset();
+    startTraining({
+      overrideMode: preset.mode || "sentence_translation_full",
+      overrideSize: preset.size || 3,
+      overrideVocabularyIds: Array.isArray(preset.vocabularyIds) ? preset.vocabularyIds : [],
+      focusLabel: preset.focusLabel || "",
+    });
+  }, []);
 
   function renderExercise() {
     if (!currentExercise) {
@@ -247,6 +269,20 @@ export default function TrainingPage({ onError }) {
           ) : null}
           {isTrainingActive ? <span className="chip">Задание {currentIndex + 1} из {size}</span> : null}
           {generationNote ? <span className="chip">{generationNote}</span> : null}
+          {focusLabel ? <span className="chip">Фокус: {focusLabel}</span> : null}
+          {selectedVocabularyIds.length ? (
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => {
+                setSelectedVocabularyIds([]);
+                setFocusLabel("");
+              }}
+              disabled={isTrainingActive}
+            >
+              Сбросить фокус
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -272,8 +308,8 @@ export default function TrainingPage({ onError }) {
           {renderExercise()}
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button onClick={submitCurrentAndContinue} className="btn-primary disabled:opacity-50" type="button" disabled={loadingCurrent || !answerReady}>
-              {currentIndex + 1 >= size ? "Завершить и отправить" : "Следующее задание"}
+            <button onClick={submitCurrentAndContinue} className="btn-primary disabled:opacity-50" type="button" disabled={loadingCurrent || submittingCurrent || !answerReady}>
+              {submittingCurrent ? "Сохраняю..." : currentIndex + 1 >= size ? "Завершить и отправить" : "Следующее задание"}
             </button>
             {loadingPrefetch ? <span className="chip">Подгружаю следующую партию...</span> : null}
           </div>
