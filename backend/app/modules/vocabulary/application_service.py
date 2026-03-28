@@ -3,8 +3,8 @@ from __future__ import annotations
 from app.core.application import AsyncTaskResponse, application_access, application_transaction
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import ai_service
-from app.modules.capture.repository import capture_repository
 from app.modules.capture.schemas import CaptureCreate, CaptureItem
+from app.modules.capture.public_api import capture_public_api
 from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.learning_graph.public_api import learning_graph_public_api
 from fastapi import HTTPException
@@ -134,7 +134,7 @@ class VocabularyApplicationService:
         normalized_url = source_url.strip() if source_url else None
 
         with application_transaction.boundary(db=db):
-            capture = capture_repository.create(
+            capture = capture_public_api.create(
                 db,
                 CaptureCreate(
                     user_id=user_id,

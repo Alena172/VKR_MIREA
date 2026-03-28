@@ -1,60 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
-from app.modules.ai_services.contracts import TranslateWithContextRequest
-from app.modules.ai_services.service import (
-    TranslationProviderUnavailableError,
-    ai_service,
-)
-from app.modules.context_memory.public_api import context_memory_public_api
+from app.modules.translation.application_service import translation_application_service
 from app.modules.translation.schemas import TranslateRequest, TranslateRequestMe, TranslateResponse
-from app.modules.users.public_api import users_public_api
-from app.modules.vocabulary.public_api import vocabulary_public_api
 
 router = APIRouter(prefix="/translate", tags=["translation"])
-
-
-async def _translate_for_user(
-    *,
-    user_id: int,
-    text: str,
-    source_context: str | None,
-    db: Session,
-) -> TranslateResponse:
-    user = users_public_api.get_or_404(db=db, user_id=user_id)
-
-    cefr_level = context_memory_public_api.get_effective_cefr_level(
-        db=db,
-        user_id=user_id,
-        fallback_cefr=user.cefr_level,
-    )
-    vocabulary_items = vocabulary_public_api.list_items(db, user_id=user_id)[:50]
-
-    try:
-        ai_response = await ai_service.translate_with_context_async(
-            TranslateWithContextRequest(
-                text=text,
-                cefr_level=cefr_level,
-                source_context=source_context,
-                glossary=[
-                    {
-                        "english_term": item.english_lemma,
-                        "russian_translation": item.russian_translation,
-                        "source_sentence": item.source_sentence,
-                    }
-                    for item in vocabulary_items
-                ],
-            )
-        )
-    except TranslationProviderUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    return TranslateResponse(
-        translated_text=ai_response.translated_text,
-        note=f"AI translation used ({ai_response.provider_note})",
-    )
 
 
 @router.post("/me", response_model=TranslateResponse)
@@ -63,11 +15,11 @@ async def translate_me(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> TranslateResponse:
-    return await _translate_for_user(
+    return await translation_application_service.translate_for_user(
+        db=db,
         user_id=current_user_id,
         text=payload.text,
         source_context=payload.source_context,
-        db=db,
     )
 
 
@@ -77,12 +29,13 @@ async def translate(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> TranslateResponse:
-    user_id = payload.user_id or current_user_id
-    if user_id != current_user_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return await _translate_for_user(
+    user_id = translation_application_service.resolve_target_user_id(
+        requested_user_id=payload.user_id,
+        current_user_id=current_user_id,
+    )
+    return await translation_application_service.translate_for_user(
+        db=db,
         user_id=user_id,
         text=payload.text,
         source_context=payload.source_context,
-        db=db,
     )
