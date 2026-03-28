@@ -8,10 +8,10 @@ from app.modules.ai_services.service import (
     TranslationProviderUnavailableError,
     ai_service,
 )
-from app.modules.context_memory.repository import context_repository
+from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.translation.schemas import TranslateRequest, TranslateRequestMe, TranslateResponse
-from app.modules.users.repository import users_repository
-from app.modules.vocabulary.repository import vocabulary_repository
+from app.modules.users.public_api import users_public_api
+from app.modules.vocabulary.public_api import vocabulary_public_api
 
 router = APIRouter(prefix="/translate", tags=["translation"])
 
@@ -23,13 +23,14 @@ async def _translate_for_user(
     source_context: str | None,
     db: Session,
 ) -> TranslateResponse:
-    user = users_repository.get_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = users_public_api.get_or_404(db=db, user_id=user_id)
 
-    context = context_repository.get_by_user_id(db, user_id)
-    cefr_level = context.cefr_level if context is not None else user.cefr_level
-    vocabulary_items = vocabulary_repository.list_items(db, user_id=user_id)[:50]  # Reduced from 300 to 50
+    cefr_level = context_memory_public_api.get_effective_cefr_level(
+        db=db,
+        user_id=user_id,
+        fallback_cefr=user.cefr_level,
+    )
+    vocabulary_items = vocabulary_public_api.list_items(db, user_id=user_id)[:50]
 
     try:
         ai_response = await ai_service.translate_with_context_async(

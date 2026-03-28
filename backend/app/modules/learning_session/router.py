@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.application import application_access
 from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
 from app.modules.learning_session.repository import learning_session_repository
@@ -14,7 +15,7 @@ from app.modules.learning_session.schemas import (
     SessionSummary,
 )
 from app.modules.learning_session.submission_service import learning_session_submission_service
-from app.modules.users.repository import users_repository
+from app.modules.users.public_api import users_public_api
 
 router = APIRouter(prefix="/sessions", tags=["learning_session"])
 
@@ -112,12 +113,11 @@ async def submit_session(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> SessionSubmitResponse:
-    target_user_id = payload.user_id or current_user_id
-    if payload.user_id is not None and payload.user_id != current_user_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    user = users_repository.get_by_id(db, target_user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    target_user_id = application_access.resolve_target_user_id(
+        requested_user_id=payload.user_id,
+        current_user_id=current_user_id,
+    )
+    user = users_public_api.get_or_404(db=db, user_id=target_user_id)
     return await learning_session_submission_service.submit(
         db=db,
         user_id=target_user_id,

@@ -32,9 +32,9 @@ from app.modules.context_memory.schemas import (
     WordProgressRead,
 )
 from app.modules.learning_session.models import LearningSessionModel
-from app.modules.users.repository import users_repository
 from app.modules.vocabulary.models import VocabularyItemModel
-from app.modules.vocabulary.repository import vocabulary_repository
+from app.modules.users.public_api import users_public_api
+from app.modules.vocabulary.public_api import vocabulary_public_api
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
@@ -68,7 +68,7 @@ class ContextMemoryApplicationService:
     def ensure_user_access(self, *, db: Session, user_id: int, current_user_id: int):
         if user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Forbidden")
-        user = users_repository.get_by_id(db, user_id)
+        user = users_public_api.get_by_id(db, user_id)
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
         return user
@@ -222,8 +222,8 @@ class ContextMemoryApplicationService:
             words = _dedupe_keep_order(
                 [row.word for row in due_rows if _is_valid_review_word(row.word)]
             )[: payload.size]
-            translation_map = vocabulary_repository.get_translation_map(db, user_id=user_id, english_lemmas=words)
-            definition_map = vocabulary_repository.get_definition_map(db, user_id=user_id, english_lemmas=words)
+            translation_map = vocabulary_public_api.get_translation_map(db, user_id=user_id, english_lemmas=words)
+            definition_map = vocabulary_public_api.get_definition_map(db, user_id=user_id, english_lemmas=words)
             row_map = {row.word: row for row in due_rows}
 
             items = [
@@ -244,7 +244,7 @@ class ContextMemoryApplicationService:
                 items=items,
             )
 
-        vocabulary_items = vocabulary_repository.list_items(db, user_id=user_id)
+        vocabulary_items = vocabulary_public_api.list_items(db, user_id=user_id)
         unique_words = _dedupe_keep_order(
             [item.english_lemma for item in vocabulary_items if _is_valid_review_word(item.english_lemma)]
         )
@@ -253,8 +253,8 @@ class ContextMemoryApplicationService:
 
         sample_size = min(payload.size, len(unique_words))
         random_words = secrets.SystemRandom().sample(unique_words, k=sample_size)
-        translation_map = vocabulary_repository.get_translation_map(db, user_id=user_id, english_lemmas=random_words)
-        definition_map = vocabulary_repository.get_definition_map(db, user_id=user_id, english_lemmas=random_words)
+        translation_map = vocabulary_public_api.get_translation_map(db, user_id=user_id, english_lemmas=random_words)
+        definition_map = vocabulary_public_api.get_definition_map(db, user_id=user_id, english_lemmas=random_words)
         progress_map = context_repository.get_word_progress_map(db, user_id=user_id, words=random_words)
 
         items = [
@@ -393,7 +393,7 @@ class ContextMemoryApplicationService:
         with application_transaction.boundary(db=db):
             vocabulary_words = {
                 item.english_lemma.strip().lower()
-                for item in vocabulary_repository.list_items(db, user_id=user_id)
+                for item in vocabulary_public_api.list_items(db, user_id=user_id)
                 if _is_valid_review_word(item.english_lemma)
             }
             removed_word_progress, removed_difficult_words = context_repository.cleanup_user_garbage(
@@ -539,7 +539,7 @@ class ContextMemoryApplicationService:
         rows: list[WordProgressModel],
     ) -> list[ReviewQueueItem]:
         words = [row.word for row in rows]
-        translation_map = vocabulary_repository.get_translation_map(db, user_id=user_id, english_lemmas=words)
+        translation_map = vocabulary_public_api.get_translation_map(db, user_id=user_id, english_lemmas=words)
         return [
             ReviewQueueItem(
                 word=row.word,
@@ -560,7 +560,7 @@ class ContextMemoryApplicationService:
         progress_rows: list[WordProgressModel],
     ) -> list[WordProgressRead]:
         words = [row.word for row in progress_rows]
-        translation_map = vocabulary_repository.get_translation_map(db, user_id=user_id, english_lemmas=words)
+        translation_map = vocabulary_public_api.get_translation_map(db, user_id=user_id, english_lemmas=words)
         return [
             WordProgressRead(
                 user_id=row.user_id,
@@ -580,7 +580,7 @@ class ContextMemoryApplicationService:
         user_id: int,
         progress: WordProgressModel,
     ) -> WordProgressRead:
-        translation_map = vocabulary_repository.get_translation_map(
+        translation_map = vocabulary_public_api.get_translation_map(
             db,
             user_id=user_id,
             english_lemmas=[progress.word],

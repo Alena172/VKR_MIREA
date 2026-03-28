@@ -9,11 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.modules.ai_services.contracts import ExplainErrorRequest
 from app.modules.ai_services.service import ai_service
-from app.modules.context_memory.application_service import (
-    WordProgressUpdate,
-    context_memory_application_service,
-)
-from app.modules.learning_graph.application_service import learning_graph_application_service
+from app.modules.context_memory.public_api import WordProgressUpdate, context_memory_public_api
+from app.modules.learning_graph.public_api import learning_graph_public_api
 from app.modules.learning_session.evaluation import is_answer_correct, normalize_answer
 from app.modules.learning_session.repository import AnswerPersistPayload, learning_session_repository
 from app.modules.learning_session.schemas import (
@@ -207,7 +204,7 @@ class LearningSessionSubmissionService:
                 )
 
             if item.add_to_difficult_words and item.progress_word:
-                learning_graph_application_service.register_mistake(
+                learning_graph_public_api.register_mistake(
                     db=db,
                     user_id=user_id,
                     english_lemma=item.progress_word,
@@ -216,7 +213,7 @@ class LearningSessionSubmissionService:
                     user_answer=item.user_answer,
                 )
 
-        return context_memory_application_service.update_learning_progress(
+        return context_memory_public_api.update_learning_progress(
             db=db,
             user_id=user_id,
             user_cefr_level=user_cefr_level,

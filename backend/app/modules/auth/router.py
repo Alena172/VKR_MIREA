@@ -13,15 +13,14 @@ from app.modules.auth.schemas import (
     TokenVerifyResponse,
 )
 from app.modules.auth.service import auth_service
-from app.modules.users.repository import users_repository
-from app.modules.users.schemas import UserCreate
+from app.modules.users.public_api import users_public_api
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/token", response_model=TokenResponse)
 def token(payload: TokenRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    user = users_repository.get_by_email(db, payload.email)
+    user = users_public_api.get_by_email(db, payload.email)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     token_value = auth_service.create_access_token(user.id)
@@ -33,18 +32,12 @@ def login_or_register(
     payload: LoginOrRegisterRequest,
     db: Session = Depends(get_db),
 ) -> LoginOrRegisterResponse:
-    user = users_repository.get_by_email(db, payload.email)
-    is_new_user = False
-    if user is None:
-        user = users_repository.create(
-            db,
-            UserCreate(
-                email=payload.email,
-                full_name=payload.full_name,
-                cefr_level=payload.cefr_level,
-            ),
-        )
-        is_new_user = True
+    user, is_new_user = users_public_api.find_or_create(
+        db=db,
+        email=payload.email,
+        full_name=payload.full_name,
+        cefr_level=payload.cefr_level,
+    )
 
     token_value = auth_service.create_access_token(user.id)
     return LoginOrRegisterResponse(

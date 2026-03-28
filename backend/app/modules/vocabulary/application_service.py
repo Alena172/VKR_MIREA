@@ -5,8 +5,8 @@ from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import ai_service
 from app.modules.capture.repository import capture_repository
 from app.modules.capture.schemas import CaptureCreate, CaptureItem
-from app.modules.context_memory.application_service import context_memory_application_service
-from app.modules.learning_graph.application_service import learning_graph_application_service
+from app.modules.context_memory.public_api import context_memory_public_api
+from app.modules.learning_graph.public_api import learning_graph_public_api
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -174,13 +174,13 @@ class VocabularyApplicationService:
             else:
                 vocabulary_item = existing
 
-            queued_for_review = context_memory_application_service.ensure_word_progress_entry(
+            queued_for_review = context_memory_public_api.ensure_word_progress_entry(
                 db=db,
                 user_id=user_id,
                 word=english_lemma,
             )
-            learning_graph_application_service.register_vocabulary_semantics(
-                db,
+            learning_graph_public_api.register_vocabulary_semantics(
+                db=db,
                 user_id=user_id,
                 english_lemma=english_lemma,
                 russian_translation=russian_translation,

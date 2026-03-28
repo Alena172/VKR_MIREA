@@ -7,11 +7,11 @@ from sqlalchemy.orm import Session
 from app.core.application import AsyncTaskResponse, application_access
 from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
-from app.modules.context_memory.application_service import context_memory_application_service
+from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.exercise_engine.prefetch_service import prefetch_service
 from app.modules.exercise_engine.schemas import ExerciseGenerateRequest, ExerciseGenerateResponse, ExerciseItem
-from app.modules.learning_graph.application_service import learning_graph_application_service
-from app.modules.vocabulary.repository import vocabulary_repository
+from app.modules.learning_graph.public_api import learning_graph_public_api
+from app.modules.vocabulary.public_api import vocabulary_public_api
 
 
 class ExerciseEngineApplicationService:
@@ -68,7 +68,7 @@ class ExerciseEngineApplicationService:
             vocabulary_ids=vocabulary_ids,
             mode=mode,
         )
-        cefr_level = context_memory_application_service.get_effective_cefr_level(
+        cefr_level = context_memory_public_api.get_effective_cefr_level(
             db=db,
             user_id=user_id,
             fallback_cefr=user.cefr_level,
@@ -108,7 +108,7 @@ class ExerciseEngineApplicationService:
         vocabulary_ids: list[int],
         mode: str,
     ):
-        vocabulary_items = vocabulary_repository.list_items(db, user_id=user_id)
+        vocabulary_items = vocabulary_public_api.list_items(db, user_id=user_id)
         if vocabulary_ids:
             allowed = set(vocabulary_ids)
             vocabulary_items = [item for item in vocabulary_items if item.id in allowed]
@@ -143,7 +143,7 @@ class ExerciseEngineApplicationService:
         seeds: list[ExerciseSeed] = []
         for item in vocabulary_items:
             source_sentence = item.source_sentence
-            anchors = learning_graph_application_service.list_word_anchors(
+            anchors = learning_graph_public_api.list_word_anchors(
                 db=db,
                 user_id=user_id,
                 english_lemma=item.english_lemma,
