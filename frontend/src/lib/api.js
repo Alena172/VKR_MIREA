@@ -238,6 +238,7 @@ export const api = {
     request("/context/me/review-session/start", { method: "POST", body: JSON.stringify(payload), ...options }),
   reviewQueueSubmit: (payload, options = {}) =>
     request("/context/me/review-queue/submit", { method: "POST", body: JSON.stringify(payload), ...options }),
+  listWordProgressMe: (params = {}, options = {}) => request(`/context/me/word-progress${toQuery(params)}`, options),
 
   reviewPlan: (limit = 10, options = {}) => request(`/context/me/review-plan?limit=${limit}&horizon_hours=24`, options),
   cleanupContextGarbage: (options = {}) => request("/context/me/cleanup-garbage", { method: "POST", ...options }),

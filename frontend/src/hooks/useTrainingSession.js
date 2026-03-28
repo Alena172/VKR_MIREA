@@ -56,7 +56,8 @@ export function useTrainingSession({ onError }) {
   }
 
   async function submitSession(answersPayload, signal) {
-    const result = await api.submitSession({ answers: answersPayload }, { signal });
+    const requestAnswers = answersPayload.map(({ exercise_type, ...answer }) => answer);
+    const result = await api.submitSession({ answers: requestAnswers }, { signal });
     setSessionResult(result);
   }
 
@@ -107,6 +108,7 @@ export function useTrainingSession({ onError }) {
         expected_answer: currentExercise.answer,
         user_answer: (currentAnswer || "-").trim() || "-",
         is_correct: false,
+        exercise_type: currentExercise.exercise_type,
       },
     ];
     setSubmittedAnswers(nextAnswers);
@@ -227,6 +229,7 @@ export function useTrainingSession({ onError }) {
     setSize,
     size,
     startTraining,
+    submittedAnswers,
     submitCurrentAndContinue,
   };
 }

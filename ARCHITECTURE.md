@@ -257,6 +257,10 @@ cd backend
 python tools/check_module_boundaries.py
 ```
 
+Проверка охватывает:
+- запрет на cross-module импорты внутренних слоёв;
+- запрет на возврат и конструирование HTTP/web-schema внутри `application_service.py`.
+
 Стандарт слоев:
 - `repository` — SQLAlchemy и persistence
 - `application_service` — use-case orchestration

@@ -6,6 +6,19 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
 from app.modules.context_memory.application_service import context_memory_application_service
+from app.modules.context_memory.contracts import (
+    ContextGarbageCleanupDTO,
+    ContextRecommendationsDTO,
+    ReviewPlanDTO,
+    ReviewQueueBulkSubmitDTO,
+    ReviewQueueItemDTO,
+    ReviewQueueResponseDTO,
+    ReviewSessionItemDTO,
+    ReviewSessionStartDTO,
+    WordProgressDTO,
+    WordProgressDeleteDTO,
+    WordProgressListDTO,
+)
 from app.modules.context_memory.repository import context_repository
 from app.modules.context_memory.schemas import (
     ContextGarbageCleanupResponse,
@@ -26,6 +39,115 @@ from app.modules.context_memory.schemas import (
     WordProgressRead,
 )
 router = APIRouter(prefix="/context", tags=["context_memory"])
+
+
+def _to_review_queue_item_response(item: ReviewQueueItemDTO):
+    from app.modules.context_memory.schemas import ReviewQueueItem
+
+    return ReviewQueueItem(
+        word=item.word,
+        russian_translation=item.russian_translation,
+        next_review_at=item.next_review_at,
+        error_count=item.error_count,
+        correct_streak=item.correct_streak,
+    )
+
+
+def _to_word_progress_response(item: WordProgressDTO) -> WordProgressRead:
+    return WordProgressRead(
+        user_id=item.user_id,
+        word=item.word,
+        russian_translation=item.russian_translation,
+        error_count=item.error_count,
+        correct_streak=item.correct_streak,
+        next_review_at=item.next_review_at,
+    )
+
+
+def _to_context_recommendations_response(result: ContextRecommendationsDTO) -> ContextRecommendations:
+    return ContextRecommendations(
+        user_id=result.user_id,
+        words=result.words,
+        recent_error_words=result.recent_error_words,
+        difficult_words=result.difficult_words,
+        scores=result.scores,
+        next_review_at=result.next_review_at,
+    )
+
+
+def _to_review_queue_response(result: ReviewQueueResponseDTO) -> ReviewQueueResponse:
+    return ReviewQueueResponse(
+        user_id=result.user_id,
+        total_due=result.total_due,
+        items=[_to_review_queue_item_response(item) for item in result.items],
+    )
+
+
+def _to_review_queue_bulk_submit_response(result: ReviewQueueBulkSubmitDTO) -> ReviewQueueBulkSubmitResponse:
+    return ReviewQueueBulkSubmitResponse(
+        user_id=result.user_id,
+        updated=[_to_word_progress_response(item) for item in result.updated],
+    )
+
+
+def _to_review_session_item_response(item: ReviewSessionItemDTO):
+    from app.modules.context_memory.schemas import ReviewSessionItem
+
+    return ReviewSessionItem(
+        word=item.word,
+        russian_translation=item.russian_translation,
+        context_definition=item.context_definition,
+        next_review_at=item.next_review_at,
+        error_count=item.error_count,
+        correct_streak=item.correct_streak,
+    )
+
+
+def _to_review_session_start_response(result: ReviewSessionStartDTO) -> ReviewSessionStartResponse:
+    return ReviewSessionStartResponse(
+        user_id=result.user_id,
+        mode=result.mode,
+        total_items=result.total_items,
+        items=[_to_review_session_item_response(item) for item in result.items],
+    )
+
+
+def _to_word_progress_list_response(result: WordProgressListDTO) -> WordProgressListResponse:
+    return WordProgressListResponse(
+        user_id=result.user_id,
+        total=result.total,
+        limit=result.limit,
+        offset=result.offset,
+        items=[_to_word_progress_response(item) for item in result.items],
+    )
+
+
+def _to_word_progress_delete_response(result: WordProgressDeleteDTO) -> WordProgressDeleteResponse:
+    return WordProgressDeleteResponse(
+        user_id=result.user_id,
+        word=result.word,
+        progress_deleted=result.progress_deleted,
+        removed_from_difficult_words=result.removed_from_difficult_words,
+    )
+
+
+def _to_review_plan_response(result: ReviewPlanDTO) -> ReviewPlanResponse:
+    return ReviewPlanResponse(
+        user_id=result.user_id,
+        due_count=result.due_count,
+        upcoming_count=result.upcoming_count,
+        due_now=[_to_review_queue_item_response(item) for item in result.due_now],
+        upcoming=[_to_review_queue_item_response(item) for item in result.upcoming],
+        recommended_words=result.recommended_words,
+    )
+
+
+def _to_context_garbage_cleanup_response(result: ContextGarbageCleanupDTO) -> ContextGarbageCleanupResponse:
+    return ContextGarbageCleanupResponse(
+        user_id=result.user_id,
+        removed_word_progress=result.removed_word_progress,
+        removed_difficult_words=result.removed_difficult_words,
+    )
 
 
 @router.get("/me", response_model=UserContext)
@@ -287,12 +409,12 @@ def get_recommendations(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ContextRecommendations:
-    return context_memory_application_service.get_recommendations(
+    return _to_context_recommendations_response(context_memory_application_service.get_recommendations(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         limit=limit,
-    )
+    ))
 
 
 @router.get("/{user_id}/review-queue", response_model=ReviewQueueResponse)
@@ -302,12 +424,12 @@ def get_review_queue(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ReviewQueueResponse:
-    return context_memory_application_service.get_review_queue(
+    return _to_review_queue_response(context_memory_application_service.get_review_queue(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         limit=limit,
-    )
+    ))
 
 
 @router.post("/{user_id}/review-queue/submit", response_model=WordProgressRead)
@@ -317,12 +439,12 @@ def submit_review_queue_item(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> WordProgressRead:
-    return context_memory_application_service.submit_review_queue_item(
+    return _to_word_progress_response(context_memory_application_service.submit_review_queue_item(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         payload=payload,
-    )
+    ))
 
 
 @router.post("/{user_id}/review-queue/submit-bulk", response_model=ReviewQueueBulkSubmitResponse)
@@ -332,12 +454,12 @@ def submit_review_queue_bulk(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ReviewQueueBulkSubmitResponse:
-    return context_memory_application_service.submit_review_queue_bulk(
+    return _to_review_queue_bulk_submit_response(context_memory_application_service.submit_review_queue_bulk(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         payload=payload,
-    )
+    ))
 
 
 @router.post("/{user_id}/review-session/start", response_model=ReviewSessionStartResponse)
@@ -347,12 +469,12 @@ def start_review_session(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ReviewSessionStartResponse:
-    return context_memory_application_service.start_review_session(
+    return _to_review_session_start_response(context_memory_application_service.start_review_session(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         payload=payload,
-    )
+    ))
 
 
 @router.get("/{user_id}/word-progress", response_model=WordProgressListResponse)
@@ -369,7 +491,7 @@ def list_word_progress(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> WordProgressListResponse:
-    return context_memory_application_service.list_word_progress(
+    return _to_word_progress_list_response(context_memory_application_service.list_word_progress(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
@@ -381,7 +503,7 @@ def list_word_progress(
         sort_order=sort_order,
         min_streak=min_streak,
         min_errors=min_errors,
-    )
+    ))
 
 
 @router.get("/{user_id}/word-progress/{word}", response_model=WordProgressRead)
@@ -391,12 +513,12 @@ def get_word_progress(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> WordProgressRead:
-    return context_memory_application_service.get_word_progress(
+    return _to_word_progress_response(context_memory_application_service.get_word_progress(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         word=word,
-    )
+    ))
 
 
 @router.delete("/{user_id}/word-progress/{word}", response_model=WordProgressDeleteResponse)
@@ -406,12 +528,12 @@ def delete_word_progress(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> WordProgressDeleteResponse:
-    return context_memory_application_service.delete_word_progress(
+    return _to_word_progress_delete_response(context_memory_application_service.delete_word_progress(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         word=word,
-    )
+    ))
 
 
 @router.get("/{user_id}/review-plan", response_model=ReviewPlanResponse)
@@ -422,13 +544,13 @@ def get_review_plan(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ReviewPlanResponse:
-    return context_memory_application_service.get_review_plan(
+    return _to_review_plan_response(context_memory_application_service.get_review_plan(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         limit=limit,
         horizon_hours=horizon_hours,
-    )
+    ))
 
 
 @router.post("/{user_id}/cleanup-garbage", response_model=ContextGarbageCleanupResponse)
@@ -437,8 +559,8 @@ def cleanup_context_garbage(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ContextGarbageCleanupResponse:
-    return context_memory_application_service.cleanup_context_garbage(
+    return _to_context_garbage_cleanup_response(context_memory_application_service.cleanup_context_garbage(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
-    )
+    ))

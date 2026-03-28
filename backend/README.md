@@ -66,6 +66,10 @@ pytest -q
 python tools/check_module_boundaries.py
 ```
 
+Скрипт проверяет:
+- что межмодульные импорты не ходят в чужие `repository/models/application_service`;
+- что `application_service.py` не возвращает web response-схемы своего модуля.
+
 Давай сделаем хорошо
 Проверка валидирует архитектурное правило модульного монолита:
 - другой модуль можно импортировать через `public_api` или фасад из `__init__.py`

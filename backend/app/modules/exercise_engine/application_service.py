@@ -8,10 +8,13 @@ from app.core.application import AsyncTaskResponse, application_access
 from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
 from app.modules.context_memory.public_api import context_memory_public_api
-from app.modules.exercise_engine.assembler import to_exercise_generate_result_dto
-from app.modules.exercise_engine.contracts import ExerciseGenerateResultDTO
+from app.modules.exercise_engine.assembler import (
+    to_exercise_generate_result_dto,
+    to_exercise_item_dto,
+)
+from app.modules.exercise_engine.contracts import ExerciseGenerateResultDTO, ExerciseItemDTO
 from app.modules.exercise_engine.prefetch_service import prefetch_service
-from app.modules.exercise_engine.schemas import ExerciseGenerateRequest, ExerciseGenerateResponse, ExerciseItem
+from app.modules.exercise_engine.schemas import ExerciseGenerateRequest
 from app.modules.learning_graph.public_api import learning_graph_public_api
 from app.modules.vocabulary.public_api import vocabulary_public_api
 
@@ -55,14 +58,14 @@ class ExerciseEngineApplicationService:
         user = application_access.get_user_or_404(db=db, user_id=user_id)
         use_prefetch = not vocabulary_ids
 
-        prefetched: list[ExerciseItem] = []
+        prefetched: list[ExerciseItemDTO] = []
         if use_prefetch and prefetch_service.has_prefetch(user_id, mode):
             prefetched = prefetch_service.get_prefetched(user_id, mode, size)
             if len(prefetched) >= size:
-                return to_exercise_generate_result_dto(ExerciseGenerateResponse(
+                return to_exercise_generate_result_dto(
                     exercises=prefetched[:size],
                     note="Prefetched exercises used",
-                ))
+                )
 
         vocabulary_items = self._resolve_vocabulary_items(
             db=db,
@@ -97,10 +100,10 @@ class ExerciseEngineApplicationService:
                 prefetch_service.store_prefetch(user_id, mode, extra_items)
 
         note_prefix = "Prefetched + " if prefetched else ""
-        return to_exercise_generate_result_dto(ExerciseGenerateResponse(
+        return to_exercise_generate_result_dto(
             exercises=immediate_items[:size],
             note=f"{note_prefix}{provider_note}; graph_anchors_used={anchors_used_count}",
-        ))
+        )
 
     def _resolve_vocabulary_items(
         self,
@@ -179,7 +182,7 @@ class ExerciseEngineApplicationService:
         size: int,
         mode: str,
         cefr_level: str,
-    ) -> tuple[list[ExerciseItem], str]:
+    ) -> tuple[list[ExerciseItemDTO], str]:
         if size > self._BATCH_SIZE and len(seeds) >= self._BATCH_SIZE:
             batches = []
             remaining = size
@@ -206,11 +209,11 @@ class ExerciseEngineApplicationService:
             except TranslationProviderUnavailableError as exc:
                 raise RuntimeError(str(exc)) from exc
 
-            all_items: list[ExerciseItem] = []
+            all_items: list[ExerciseItemDTO] = []
             for response in batch_responses:
                 all_items.extend(
                     [
-                        ExerciseItem(
+                        to_exercise_item_dto(
                             prompt=item.prompt,
                             answer=item.answer,
                             exercise_type=item.exercise_type,
@@ -229,7 +232,7 @@ class ExerciseEngineApplicationService:
             raise RuntimeError(str(exc)) from exc
 
         items = [
-            ExerciseItem(
+            to_exercise_item_dto(
                 prompt=item.prompt,
                 answer=item.answer,
                 exercise_type=item.exercise_type,

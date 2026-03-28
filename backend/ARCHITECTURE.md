@@ -51,6 +51,10 @@
 python tools/check_module_boundaries.py
 ```
 
+Этот checker валидирует две вещи:
+- cross-module импорты не обходят `public_api`;
+- `application_service.py` не возвращает и не конструирует web response-схемы своего модуля.
+
 ### Стандарт внутренних слоев
 - `repository.py` отвечает только за persistence и SQLAlchemy.
 - `application_service.py`/`submission_service.py` оркестрируют use-case и не должны зависеть от web-слоя.
