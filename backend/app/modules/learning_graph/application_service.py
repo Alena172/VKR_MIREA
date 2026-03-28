@@ -128,6 +128,63 @@ class LearningGraphApplicationService:
         )
         return RecommendationsResponse(user_id=current_user_id, mode=mode, items=items)
 
+    def register_vocabulary_semantics(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        english_lemma: str,
+        russian_translation: str,
+        context_definition_ru: str | None,
+        source_sentence: str | None,
+        source_url: str | None,
+        vocabulary_item_id: int | None,
+    ) -> None:
+        learning_graph_repository.semantic_upsert(
+            db,
+            user_id=user_id,
+            english_lemma=english_lemma,
+            russian_translation=russian_translation,
+            context_definition_ru=context_definition_ru,
+            source_sentence=source_sentence,
+            source_url=source_url,
+            vocabulary_item_id=vocabulary_item_id,
+        )
+
+    def register_mistake(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        english_lemma: str | None,
+        prompt: str | None,
+        expected_answer: str | None,
+        user_answer: str | None,
+    ) -> None:
+        learning_graph_repository.add_mistake_event(
+            db,
+            user_id=user_id,
+            english_lemma=english_lemma,
+            prompt=prompt,
+            expected_answer=expected_answer,
+            user_answer=user_answer,
+        )
+
+    def list_word_anchors(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        english_lemma: str,
+        limit: int,
+    ):
+        return learning_graph_repository.list_anchors(
+            db,
+            user_id=user_id,
+            english_lemma=english_lemma,
+            limit=limit,
+        )
+
     def get_observability(
         self,
         *,

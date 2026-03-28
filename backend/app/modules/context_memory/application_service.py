@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import re
 import secrets
@@ -54,6 +55,13 @@ def _dedupe_keep_order(values: list[str]) -> list[str]:
         seen.add(key)
         result.append(key)
     return result
+
+
+@dataclass(frozen=True)
+class WordProgressUpdate:
+    word: str
+    is_correct: bool
+    mark_difficult: bool = False
 
 
 class ContextMemoryApplicationService:
@@ -455,6 +463,56 @@ class ContextMemoryApplicationService:
             mastered=mastered,
             troubled=troubled,
         )
+
+    def get_effective_cefr_level(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        fallback_cefr: str,
+    ) -> str:
+        context = context_repository.get_by_user_id(db, user_id)
+        return context.cefr_level if context is not None else fallback_cefr
+
+    def ensure_word_progress_entry(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        word: str,
+    ) -> bool:
+        return context_repository.ensure_word_progress(db, user_id=user_id, word=word) is not None
+
+    def update_learning_progress(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        user_cefr_level: str | None,
+        updates: list[WordProgressUpdate],
+    ) -> list[str]:
+        difficult_words_to_add: list[str] = []
+
+        for update in updates:
+            if not update.word:
+                continue
+            context_repository.update_word_progress(
+                db,
+                user_id=user_id,
+                word=update.word,
+                is_correct=update.is_correct,
+            )
+            if update.mark_difficult:
+                difficult_words_to_add.append(update.word)
+
+        context_repository.add_difficult_words(
+            db,
+            user_id=user_id,
+            words=difficult_words_to_add,
+            default_cefr_level=user_cefr_level,
+            auto_commit=False,
+        )
+        return difficult_words_to_add
 
     def get_progress_snapshot(
         self,

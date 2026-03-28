@@ -9,8 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.modules.ai_services.contracts import ExplainErrorRequest
 from app.modules.ai_services.service import ai_service
-from app.modules.context_memory.repository import context_repository
-from app.modules.learning_graph.repository import learning_graph_repository
+from app.modules.context_memory.application_service import (
+    WordProgressUpdate,
+    context_memory_application_service,
+)
+from app.modules.learning_graph.application_service import learning_graph_application_service
 from app.modules.learning_session.evaluation import is_answer_correct, normalize_answer
 from app.modules.learning_session.repository import AnswerPersistPayload, learning_session_repository
 from app.modules.learning_session.schemas import (
@@ -192,21 +195,20 @@ class LearningSessionSubmissionService:
         user_cefr_level: str | None,
         evaluated_answers: list[EvaluatedAnswer],
     ) -> list[str]:
-        difficult_words_to_add: list[str] = []
-
+        progress_updates: list[WordProgressUpdate] = []
         for item in evaluated_answers:
             if item.progress_word:
-                context_repository.update_word_progress(
-                    db,
-                    user_id=user_id,
-                    word=item.progress_word,
-                    is_correct=item.is_correct,
+                progress_updates.append(
+                    WordProgressUpdate(
+                        word=item.progress_word,
+                        is_correct=item.is_correct,
+                        mark_difficult=item.add_to_difficult_words,
+                    )
                 )
 
             if item.add_to_difficult_words and item.progress_word:
-                difficult_words_to_add.append(item.progress_word)
-                learning_graph_repository.add_mistake_event(
-                    db,
+                learning_graph_application_service.register_mistake(
+                    db=db,
                     user_id=user_id,
                     english_lemma=item.progress_word,
                     prompt=item.prompt,
@@ -214,14 +216,12 @@ class LearningSessionSubmissionService:
                     user_answer=item.user_answer,
                 )
 
-        context_repository.add_difficult_words(
-            db,
+        return context_memory_application_service.update_learning_progress(
+            db=db,
             user_id=user_id,
-            words=difficult_words_to_add,
-            default_cefr_level=user_cefr_level,
-            auto_commit=False,
+            user_cefr_level=user_cefr_level,
+            updates=progress_updates,
         )
-        return difficult_words_to_add
 
     def persist_session(
         self,

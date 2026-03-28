@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 from app.core.application import AsyncTaskResponse, application_access
 from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
-from app.modules.context_memory.repository import context_repository
+from app.modules.context_memory.application_service import context_memory_application_service
 from app.modules.exercise_engine.prefetch_service import prefetch_service
 from app.modules.exercise_engine.schemas import ExerciseGenerateRequest, ExerciseGenerateResponse, ExerciseItem
-from app.modules.learning_graph.repository import learning_graph_repository
+from app.modules.learning_graph.application_service import learning_graph_application_service
 from app.modules.vocabulary.repository import vocabulary_repository
 
 
@@ -68,7 +68,11 @@ class ExerciseEngineApplicationService:
             vocabulary_ids=vocabulary_ids,
             mode=mode,
         )
-        cefr_level = self._resolve_cefr_level(db=db, user_id=user_id, fallback_cefr=user.cefr_level)
+        cefr_level = context_memory_application_service.get_effective_cefr_level(
+            db=db,
+            user_id=user_id,
+            fallback_cefr=user.cefr_level,
+        )
 
         required_count = size - len(prefetched)
         generation_target = required_count + (self._PREFETCH_EXTRA if use_prefetch else 0)
@@ -119,16 +123,6 @@ class ExerciseEngineApplicationService:
                 raise ValueError("Need at least 4 different words in vocabulary for definition matching.")
         return vocabulary_items
 
-    def _resolve_cefr_level(
-        self,
-        *,
-        db: Session,
-        user_id: int,
-        fallback_cefr: str,
-    ) -> str:
-        context = context_repository.get_by_user_id(db, user_id)
-        return context.cefr_level if context is not None else fallback_cefr
-
     def _dedupe_vocabulary_by_lemma(self, vocabulary_items):
         deduped: dict[str, object] = {}
         for item in vocabulary_items:
@@ -149,8 +143,8 @@ class ExerciseEngineApplicationService:
         seeds: list[ExerciseSeed] = []
         for item in vocabulary_items:
             source_sentence = item.source_sentence
-            anchors = learning_graph_repository.list_anchors(
-                db,
+            anchors = learning_graph_application_service.list_word_anchors(
+                db=db,
                 user_id=user_id,
                 english_lemma=item.english_lemma,
                 limit=3,
