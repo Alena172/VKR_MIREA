@@ -14,6 +14,34 @@ from app.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+def _vocabulary_item_result_to_dict(item) -> dict:
+    return {
+        "id": item.id,
+        "user_id": item.user_id,
+        "english_lemma": item.english_lemma,
+        "russian_translation": item.russian_translation,
+        "context_definition_ru": item.context_definition_ru,
+        "source_sentence": item.source_sentence,
+        "source_url": item.source_url,
+    }
+
+
+def _capture_to_vocabulary_result_to_dict(result) -> dict:
+    return {
+        "capture": {
+            "id": result.capture.id,
+            "user_id": result.capture.user_id,
+            "selected_text": result.capture.selected_text,
+            "source_url": result.capture.source_url,
+            "source_sentence": result.capture.source_sentence,
+        },
+        "vocabulary": _vocabulary_item_result_to_dict(result.vocabulary),
+        "translation_note": result.translation_note,
+        "created_new_vocabulary_item": result.created_new_vocabulary_item,
+        "queued_for_review": result.queued_for_review,
+    }
+
+
 @celery_app.task(
     bind=True,
     name="vocabulary.add_word_with_ai",
@@ -49,7 +77,7 @@ def add_word_with_ai(
                 source_url=source_url,
             )
         )
-        return item.model_dump()
+        return _vocabulary_item_result_to_dict(item)
     except Exception as exc:
         logger.exception("add_word_with_ai failed for user=%s lemma=%s", user_id, english_lemma)
         raise self.retry(exc=exc)
@@ -91,7 +119,7 @@ def study_flow_capture_to_vocabulary(
                 force_new_vocabulary_item=force_new_vocabulary_item,
             )
         )
-        return result.model_dump()
+        return _capture_to_vocabulary_result_to_dict(result)
     except Exception as exc:
         logger.exception(
             "study_flow_capture_to_vocabulary failed for user=%s text=%s",

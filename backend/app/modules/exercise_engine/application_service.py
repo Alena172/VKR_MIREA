@@ -8,6 +8,8 @@ from app.core.application import AsyncTaskResponse, application_access
 from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
 from app.modules.context_memory.public_api import context_memory_public_api
+from app.modules.exercise_engine.assembler import to_exercise_generate_result_dto
+from app.modules.exercise_engine.contracts import ExerciseGenerateResultDTO
 from app.modules.exercise_engine.prefetch_service import prefetch_service
 from app.modules.exercise_engine.schemas import ExerciseGenerateRequest, ExerciseGenerateResponse, ExerciseItem
 from app.modules.learning_graph.public_api import learning_graph_public_api
@@ -49,7 +51,7 @@ class ExerciseEngineApplicationService:
         vocabulary_ids: list[int],
         size: int,
         mode: str,
-    ) -> ExerciseGenerateResponse:
+    ) -> ExerciseGenerateResultDTO:
         user = application_access.get_user_or_404(db=db, user_id=user_id)
         use_prefetch = not vocabulary_ids
 
@@ -57,10 +59,10 @@ class ExerciseEngineApplicationService:
         if use_prefetch and prefetch_service.has_prefetch(user_id, mode):
             prefetched = prefetch_service.get_prefetched(user_id, mode, size)
             if len(prefetched) >= size:
-                return ExerciseGenerateResponse(
+                return to_exercise_generate_result_dto(ExerciseGenerateResponse(
                     exercises=prefetched[:size],
                     note="Prefetched exercises used",
-                )
+                ))
 
         vocabulary_items = self._resolve_vocabulary_items(
             db=db,
@@ -95,10 +97,10 @@ class ExerciseEngineApplicationService:
                 prefetch_service.store_prefetch(user_id, mode, extra_items)
 
         note_prefix = "Prefetched + " if prefetched else ""
-        return ExerciseGenerateResponse(
+        return to_exercise_generate_result_dto(ExerciseGenerateResponse(
             exercises=immediate_items[:size],
             note=f"{note_prefix}{provider_note}; graph_anchors_used={anchors_used_count}",
-        )
+        ))
 
     def _resolve_vocabulary_items(
         self,

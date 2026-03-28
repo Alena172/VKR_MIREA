@@ -11,6 +11,21 @@ from app.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+def _exercise_result_to_dict(result) -> dict:
+    return {
+        "exercises": [
+            {
+                "prompt": item.prompt,
+                "answer": item.answer,
+                "exercise_type": item.exercise_type,
+                "options": list(item.options),
+            }
+            for item in result.exercises
+        ],
+        "note": result.note,
+    }
+
+
 @celery_app.task(
     bind=True,
     name="exercises.generate_for_user",
@@ -43,7 +58,7 @@ def generate_exercises_for_user(
                 mode=mode,
             )
         )
-        return response.model_dump()
+        return _exercise_result_to_dict(response)
 
     except Exception as exc:
         logger.exception(

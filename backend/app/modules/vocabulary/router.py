@@ -4,10 +4,13 @@ from sqlalchemy.orm import Session
 from app.core.application import AsyncTaskResponse
 from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
+from app.modules.capture.schemas import CaptureItem
 from app.modules.vocabulary.application_service import vocabulary_application_service
+from app.modules.vocabulary.contracts import VocabularyFromCaptureResultDTO, VocabularyItemDTO
 from app.modules.vocabulary.schemas import (
     VocabularyFromCaptureRequest,
     VocabularyFromCaptureRequestMe,
+    VocabularyFromCaptureResponse,
     VocabularyItem,
     VocabularyItemCreate,
     VocabularyItemCreateMe,
@@ -17,16 +20,47 @@ from app.modules.vocabulary.schemas import (
 router = APIRouter(prefix="/vocabulary", tags=["vocabulary"])
 
 
+def _to_vocabulary_response(item: VocabularyItemDTO) -> VocabularyItem:
+    return VocabularyItem(
+        id=item.id,
+        user_id=item.user_id,
+        english_lemma=item.english_lemma,
+        russian_translation=item.russian_translation,
+        context_definition_ru=item.context_definition_ru,
+        source_sentence=item.source_sentence,
+        source_url=item.source_url,
+    )
+
+
+def _to_vocabulary_from_capture_response(result: VocabularyFromCaptureResultDTO) -> VocabularyFromCaptureResponse:
+    return VocabularyFromCaptureResponse(
+        capture=CaptureItem(
+            id=result.capture.id,
+            user_id=result.capture.user_id,
+            selected_text=result.capture.selected_text,
+            source_url=result.capture.source_url,
+            source_sentence=result.capture.source_sentence,
+        ),
+        vocabulary=_to_vocabulary_response(result.vocabulary),
+        translation_note=result.translation_note,
+        created_new_vocabulary_item=result.created_new_vocabulary_item,
+        queued_for_review=result.queued_for_review,
+    )
+
+
 @router.get("/me", response_model=list[VocabularyItem])
 def list_my_items(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> list[VocabularyItem]:
-    return vocabulary_application_service.list_items(
-        db=db,
-        requested_user_id=current_user_id,
-        current_user_id=current_user_id,
-    )
+    return [
+        _to_vocabulary_response(item)
+        for item in vocabulary_application_service.list_items(
+            db=db,
+            requested_user_id=current_user_id,
+            current_user_id=current_user_id,
+        )
+    ]
 
 
 @router.get("", response_model=list[VocabularyItem])
@@ -35,11 +69,14 @@ def list_items(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> list[VocabularyItem]:
-    return vocabulary_application_service.list_items(
-        db=db,
-        requested_user_id=user_id,
-        current_user_id=current_user_id,
-    )
+    return [
+        _to_vocabulary_response(item)
+        for item in vocabulary_application_service.list_items(
+            db=db,
+            requested_user_id=user_id,
+            current_user_id=current_user_id,
+        )
+    ]
 
 
 @router.post("/me", response_model=AsyncTaskResponse, status_code=202)
@@ -113,12 +150,13 @@ def update_my_item(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> VocabularyItem:
-    return vocabulary_application_service.update_item(
+    result = vocabulary_application_service.update_item(
         db=db,
         item_id=item_id,
         payload=payload,
         current_user_id=current_user_id,
     )
+    return _to_vocabulary_response(result)
 
 
 @router.delete("/me/{item_id}")

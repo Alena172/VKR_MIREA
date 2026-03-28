@@ -3,18 +3,21 @@ from __future__ import annotations
 from app.core.application import AsyncTaskResponse, application_access, application_transaction
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import ai_service
-from app.modules.capture.schemas import CaptureCreate, CaptureItem
 from app.modules.capture.public_api import capture_public_api
+from app.modules.capture.schemas import CaptureCreate
 from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.learning_graph.public_api import learning_graph_public_api
+from app.modules.vocabulary.assembler import (
+    to_vocabulary_from_capture_result_dto,
+    to_vocabulary_item_dto,
+)
+from app.modules.vocabulary.contracts import VocabularyFromCaptureResultDTO, VocabularyItemDTO
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.modules.vocabulary.repository import vocabulary_repository
 from app.modules.vocabulary.schemas import (
     VocabularyFromCaptureRequest,
-    VocabularyFromCaptureResponse,
-    VocabularyItem,
     VocabularyItemCreate,
     VocabularyItemUpdateMe,
 )
@@ -26,12 +29,12 @@ class VocabularyApplicationService:
         db: Session,
         requested_user_id: int | None,
         current_user_id: int,
-    ) -> list[VocabularyItem]:
+    ) -> list[VocabularyItemDTO]:
         target_user_id = application_access.resolve_target_user_id(
             requested_user_id=requested_user_id,
             current_user_id=current_user_id,
         )
-        return vocabulary_repository.list_items(db, user_id=target_user_id)
+        return [to_vocabulary_item_dto(item) for item in vocabulary_repository.list_items(db, user_id=target_user_id)]
 
     def add_item(
         self,
@@ -66,7 +69,7 @@ class VocabularyApplicationService:
         russian_translation: str,
         source_sentence: str | None,
         source_url: str | None,
-    ) -> VocabularyItem:
+    ) -> VocabularyItemDTO:
         application_access.ensure_user_exists(db=db, user_id=user_id)
 
         normalized_lemma = english_lemma.strip().lower()
@@ -93,7 +96,7 @@ class VocabularyApplicationService:
                 auto_commit=False,
             )
         db.refresh(item)
-        return VocabularyItem.model_validate(item)
+        return to_vocabulary_item_dto(item)
 
     def add_item_from_capture(
         self,
@@ -128,7 +131,7 @@ class VocabularyApplicationService:
         source_url: str | None,
         source_sentence: str | None,
         force_new_vocabulary_item: bool,
-    ) -> VocabularyFromCaptureResponse:
+    ) -> VocabularyFromCaptureResultDTO:
         user = application_access.get_user_or_404(db=db, user_id=user_id)
         normalized_sentence = source_sentence.strip() if source_sentence else None
         normalized_url = source_url.strip() if source_url else None
@@ -193,15 +196,9 @@ class VocabularyApplicationService:
         if created_new:
             db.refresh(vocabulary_item)
 
-        return VocabularyFromCaptureResponse(
-            capture=CaptureItem(
-                id=capture.id,
-                user_id=capture.user_id,
-                selected_text=capture.selected_text,
-                source_url=capture.source_url,
-                source_sentence=capture.source_sentence,
-            ),
-            vocabulary=VocabularyItem.model_validate(vocabulary_item),
+        return to_vocabulary_from_capture_result_dto(
+            capture=capture,
+            vocabulary=to_vocabulary_item_dto(vocabulary_item),
             translation_note="AI translation used (worker)",
             created_new_vocabulary_item=created_new,
             queued_for_review=queued_for_review,
@@ -214,12 +211,12 @@ class VocabularyApplicationService:
         item_id: int,
         payload: VocabularyItemUpdateMe,
         current_user_id: int,
-    ) -> VocabularyItem:
+    ) -> VocabularyItemDTO:
         item = vocabulary_repository.get_by_id_for_user(db, item_id=item_id, user_id=current_user_id)
         if item is None:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")
 
-        return vocabulary_repository.update(
+        updated = vocabulary_repository.update(
             db,
             item,
             english_lemma=payload.english_lemma,
@@ -227,6 +224,7 @@ class VocabularyApplicationService:
             source_sentence=payload.source_sentence,
             source_url=payload.source_url,
         )
+        return to_vocabulary_item_dto(updated)
 
     def delete_item(
         self,

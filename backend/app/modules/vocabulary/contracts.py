@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.modules.capture.contracts import CaptureItemDTO
+
 
 @dataclass(frozen=True)
 class VocabularyItemDTO:
@@ -12,3 +14,12 @@ class VocabularyItemDTO:
     context_definition_ru: str | None
     source_sentence: str | None
     source_url: str | None
+
+
+@dataclass(frozen=True)
+class VocabularyFromCaptureResultDTO:
+    capture: CaptureItemDTO
+    vocabulary: VocabularyItemDTO
+    translation_note: str
+    created_new_vocabulary_item: bool
+    queued_for_review: bool
