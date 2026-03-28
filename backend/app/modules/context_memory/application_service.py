@@ -519,11 +519,11 @@ class ContextMemoryApplicationService:
             raise HTTPException(status_code=403, detail="Forbidden")
 
         target_user_id = user_id or current_user_id
-        total, avg = learning_session_public_api.get_progress_snapshot(
+        progress = learning_session_public_api.get_progress_dto(
             db,
             user_id=target_user_id,
         )
-        return target_user_id, total, avg
+        return target_user_id, progress.total_sessions, progress.average_accuracy
 
     def _build_review_queue_items(
         self,

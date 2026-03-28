@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.application import application_access, application_transaction
 from app.modules.context_memory.public_api import context_memory_public_api
+from app.modules.learning_graph.assembler import to_registered_vocabulary_sense_dto
+from app.modules.learning_graph.contracts import RegisteredVocabularySenseDTO
 from app.modules.learning_graph.repository import learning_graph_repository
 from app.modules.learning_graph.schemas import (
     InterestUpsertRequest,
@@ -165,8 +167,8 @@ class LearningGraphApplicationService:
         source_sentence: str | None,
         source_url: str | None,
         vocabulary_item_id: int | None,
-    ) -> None:
-        learning_graph_repository.semantic_upsert(
+    ) -> RegisteredVocabularySenseDTO:
+        result = learning_graph_repository.semantic_upsert(
             db,
             user_id=user_id,
             english_lemma=english_lemma,
@@ -176,6 +178,7 @@ class LearningGraphApplicationService:
             source_url=source_url,
             vocabulary_item_id=vocabulary_item_id,
         )
+        return to_registered_vocabulary_sense_dto(result)
 
     def register_mistake(
         self,
