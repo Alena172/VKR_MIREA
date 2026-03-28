@@ -10,7 +10,8 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.modules.context_memory.contracts import WordProgressUpdate
+from app.modules.context_memory.assembler import to_progress_snapshot_dto, to_review_summary_dto
+from app.modules.context_memory.contracts import ProgressSnapshotDTO, ReviewSummaryDTO, WordProgressUpdate
 from app.modules.context_memory.models import WordProgressModel
 from app.modules.context_memory.recommendation_scoring_service import recommendation_scoring_service
 from app.modules.context_memory.repository import context_repository
@@ -407,11 +408,11 @@ class ContextMemoryApplicationService:
         current_user_id: int,
         min_streak: int,
         min_errors: int,
-    ) -> ReviewSummary:
+    ) -> ReviewSummaryDTO:
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
         vocabulary_words = vocabulary_public_api.list_english_lemmas(db, user_id=user_id)
         if not vocabulary_words:
-            return ReviewSummary(
+            return to_review_summary_dto(
                 user_id=user_id,
                 total_tracked=0,
                 due_now=0,
@@ -450,7 +451,7 @@ class ContextMemoryApplicationService:
             or 0
         )
 
-        return ReviewSummary(
+        return to_review_summary_dto(
             user_id=user_id,
             total_tracked=total_tracked,
             due_now=due_now,
@@ -514,7 +515,7 @@ class ContextMemoryApplicationService:
         db: Session,
         user_id: int | None,
         current_user_id: int,
-    ) -> tuple[int, int, float]:
+    ) -> ProgressSnapshotDTO:
         if user_id is not None and user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -523,7 +524,11 @@ class ContextMemoryApplicationService:
             db,
             user_id=target_user_id,
         )
-        return target_user_id, progress.total_sessions, progress.average_accuracy
+        return to_progress_snapshot_dto(
+            user_id=target_user_id,
+            total_sessions=progress.total_sessions,
+            avg_accuracy=progress.average_accuracy,
+        )
 
     def _build_review_queue_items(
         self,

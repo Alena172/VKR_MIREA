@@ -29,3 +29,19 @@ class LearningProgressUpdateResultDTO:
 @dataclass(frozen=True)
 class MasteredLemmaDTO:
     word: str
+
+
+@dataclass(frozen=True)
+class ProgressSnapshotDTO:
+    user_id: int
+    total_sessions: int
+    avg_accuracy: float
+
+
+@dataclass(frozen=True)
+class ReviewSummaryDTO:
+    user_id: int
+    total_tracked: int
+    due_now: int
+    mastered: int
+    troubled: int

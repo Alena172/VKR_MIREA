@@ -5,20 +5,28 @@ from sqlalchemy.orm import Session
 
 from app.core.application import application_access, application_transaction
 from app.modules.context_memory.public_api import context_memory_public_api
-from app.modules.learning_graph.assembler import to_registered_vocabulary_sense_dto
-from app.modules.learning_graph.contracts import RegisteredVocabularySenseDTO
+from app.modules.learning_graph.assembler import (
+    to_learning_graph_observability_dto,
+    to_learning_graph_overview_dto,
+    to_recommendations_result_dto,
+    to_registered_vocabulary_sense_dto,
+    to_semantic_upsert_result_dto,
+    to_sense_anchors_dto,
+    to_user_interests_dto,
+)
+from app.modules.learning_graph.contracts import (
+    LearningGraphObservabilityDTO,
+    LearningGraphOverviewDTO,
+    RecommendationsResultDTO,
+    RegisteredVocabularySenseDTO,
+    SemanticUpsertResultDTO,
+    SenseAnchorsDTO,
+    UserInterestsDTO,
+)
 from app.modules.learning_graph.repository import learning_graph_repository
 from app.modules.learning_graph.schemas import (
     InterestUpsertRequest,
-    LearningGraphObservabilityResponse,
-    LearningGraphOverviewResponse,
-    RecommendationsResponse,
     SemanticUpsertRequest,
-    SemanticUpsertResponse,
-    SenseAnchorsResponse,
-    TopicClusterRead,
-    UserInterestsResponse,
-    WordSenseRead,
 )
 
 
@@ -28,19 +36,19 @@ class LearningGraphApplicationService:
         *,
         db: Session,
         current_user_id: int,
-    ) -> LearningGraphOverviewResponse:
+    ) -> LearningGraphOverviewDTO:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
         overview = learning_graph_repository.get_overview(db, user_id=current_user_id)
-        return LearningGraphOverviewResponse(user_id=current_user_id, **overview)
+        return to_learning_graph_overview_dto(user_id=current_user_id, overview=overview)
 
     def list_interests(
         self,
         *,
         db: Session,
         current_user_id: int,
-    ) -> UserInterestsResponse:
+    ) -> UserInterestsDTO:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
-        return UserInterestsResponse(
+        return to_user_interests_dto(
             user_id=current_user_id,
             interests=learning_graph_repository.list_interests(db, current_user_id),
         )
@@ -51,14 +59,14 @@ class LearningGraphApplicationService:
         db: Session,
         payload: InterestUpsertRequest,
         current_user_id: int,
-    ) -> UserInterestsResponse:
+    ) -> UserInterestsDTO:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
         updated = learning_graph_repository.upsert_interests(
             db,
             user_id=current_user_id,
             interests=payload.interests,
         )
-        return UserInterestsResponse(user_id=current_user_id, interests=updated)
+        return to_user_interests_dto(user_id=current_user_id, interests=updated)
 
     def semantic_upsert(
         self,
@@ -66,7 +74,7 @@ class LearningGraphApplicationService:
         db: Session,
         payload: SemanticUpsertRequest,
         current_user_id: int,
-    ) -> SemanticUpsertResponse:
+    ) -> SemanticUpsertResultDTO:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
 
         try:
@@ -86,33 +94,7 @@ class LearningGraphApplicationService:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         db.refresh(result.sense)
-
-        cluster_read = None
-        if result.cluster is not None:
-            cluster_read = TopicClusterRead(
-                id=result.cluster.id,
-                key=result.cluster.cluster_key,
-                name=result.cluster.name,
-                description=result.cluster.description,
-            )
-
-        return SemanticUpsertResponse(
-            user_id=current_user_id,
-            created_new_sense=result.created_new,
-            semantic_duplicate_of_id=result.duplicate_of_id,
-            sense=WordSenseRead(
-                id=result.sense.id,
-                english_lemma=result.sense.english_lemma,
-                semantic_key=result.sense.semantic_key,
-                russian_translation=result.sense.russian_translation,
-                context_definition_ru=result.sense.context_definition_ru,
-                source_sentence=result.sense.source_sentence,
-                source_url=result.sense.source_url,
-                topic_cluster_id=result.sense.topic_cluster_id,
-                created_at=result.sense.created_at,
-            ),
-            cluster=cluster_read,
-        )
+        return to_semantic_upsert_result_dto(user_id=current_user_id, result=result)
 
     def get_recommendations(
         self,
@@ -121,7 +103,7 @@ class LearningGraphApplicationService:
         mode: str,
         limit: int,
         current_user_id: int,
-    ) -> RecommendationsResponse:
+    ) -> RecommendationsResultDTO:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
         known_lemmas = {
             item.word
@@ -137,7 +119,11 @@ class LearningGraphApplicationService:
             limit=limit,
             known_lemmas=known_lemmas,
         )
-        return RecommendationsResponse(user_id=current_user_id, mode=mode, items=items)
+        return to_recommendations_result_dto(
+            user_id=current_user_id,
+            mode=mode,
+            items=items,
+        )
 
     def list_recommendation_items(
         self,
@@ -225,10 +211,13 @@ class LearningGraphApplicationService:
         *,
         db: Session,
         current_user_id: int,
-    ) -> LearningGraphObservabilityResponse:
+    ) -> LearningGraphObservabilityDTO:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
         snapshot = learning_graph_repository.get_observability(user_id=current_user_id)
-        return LearningGraphObservabilityResponse(user_id=current_user_id, **snapshot)
+        return to_learning_graph_observability_dto(
+            user_id=current_user_id,
+            snapshot=snapshot,
+        )
 
     def get_anchors(
         self,
@@ -237,7 +226,7 @@ class LearningGraphApplicationService:
         english_lemma: str,
         limit: int,
         current_user_id: int,
-    ) -> SenseAnchorsResponse:
+    ) -> SenseAnchorsDTO:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
         anchors = learning_graph_repository.list_anchors(
             db,
@@ -245,9 +234,9 @@ class LearningGraphApplicationService:
             english_lemma=english_lemma,
             limit=limit,
         )
-        return SenseAnchorsResponse(
+        return to_sense_anchors_dto(
             user_id=current_user_id,
-            english_lemma=english_lemma.strip().lower(),
+            english_lemma=english_lemma,
             anchors=anchors,
         )
 

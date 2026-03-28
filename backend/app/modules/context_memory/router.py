@@ -215,15 +215,15 @@ def progress(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ProgressSnapshot:
-    target_user_id, total, avg = context_memory_application_service.get_progress_snapshot(
+    result = context_memory_application_service.get_progress_snapshot(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
     )
     return ProgressSnapshot(
-        user_id=target_user_id,
-        total_sessions=total,
-        avg_accuracy=avg,
+        user_id=result.user_id,
+        total_sessions=result.total_sessions,
+        avg_accuracy=result.avg_accuracy,
     )
 
 
@@ -235,12 +235,19 @@ def review_summary(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> ReviewSummary:
-    return context_memory_application_service.get_review_summary(
+    result = context_memory_application_service.get_review_summary(
         db=db,
         user_id=user_id,
         current_user_id=current_user_id,
         min_streak=min_streak,
         min_errors=min_errors,
+    )
+    return ReviewSummary(
+        user_id=result.user_id,
+        total_tracked=result.total_tracked,
+        due_now=result.due_now,
+        mastered=result.mastered,
+        troubled=result.troubled,
     )
 
 
