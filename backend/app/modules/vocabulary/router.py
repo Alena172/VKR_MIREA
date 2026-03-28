@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.application import AsyncTaskResponse
 from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
-from app.modules.vocabulary.application_service import (
-    AsyncTaskResponse,
-    vocabulary_application_service,
-)
+from app.modules.vocabulary.application_service import vocabulary_application_service
 from app.modules.vocabulary.schemas import (
     VocabularyFromCaptureRequest,
     VocabularyFromCaptureRequestMe,

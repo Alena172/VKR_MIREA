@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.core.application import AsyncTaskResponse, application_access
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import ai_service
 from app.modules.capture.repository import capture_repository
@@ -7,10 +8,8 @@ from app.modules.capture.schemas import CaptureCreate, CaptureItem
 from app.modules.context_memory.repository import context_repository
 from app.modules.learning_graph.repository import learning_graph_repository
 from fastapi import HTTPException
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.modules.users.repository import users_repository
 from app.modules.vocabulary.repository import vocabulary_repository
 from app.modules.vocabulary.schemas import (
     VocabularyFromCaptureRequest,
@@ -20,13 +19,6 @@ from app.modules.vocabulary.schemas import (
     VocabularyItemUpdateMe,
 )
 
-
-class AsyncTaskResponse(BaseModel):
-    task_id: str
-    status: str = "PENDING"
-    message: str = "Task queued. Poll /api/v1/tasks/{task_id} for result."
-
-
 class VocabularyApplicationService:
     def list_items(
         self,
@@ -35,7 +27,7 @@ class VocabularyApplicationService:
         requested_user_id: int | None,
         current_user_id: int,
     ) -> list[VocabularyItem]:
-        target_user_id = self._resolve_target_user_id(
+        target_user_id = application_access.resolve_target_user_id(
             requested_user_id=requested_user_id,
             current_user_id=current_user_id,
         )
@@ -48,11 +40,11 @@ class VocabularyApplicationService:
         payload: VocabularyItemCreate,
         current_user_id: int,
     ) -> AsyncTaskResponse:
-        target_user_id = self._resolve_target_user_id(
+        target_user_id = application_access.resolve_target_user_id(
             requested_user_id=payload.user_id,
             current_user_id=current_user_id,
         )
-        self._ensure_user_exists(db=db, user_id=target_user_id)
+        application_access.ensure_user_exists(db=db, user_id=target_user_id)
 
         from app.tasks.vocabulary_tasks import add_word_with_ai
 
@@ -75,7 +67,7 @@ class VocabularyApplicationService:
         source_sentence: str | None,
         source_url: str | None,
     ) -> VocabularyItem:
-        self._ensure_user_exists(db=db, user_id=user_id)
+        application_access.ensure_user_exists(db=db, user_id=user_id)
 
         normalized_lemma = english_lemma.strip().lower()
         normalized_translation = russian_translation.strip()
@@ -114,11 +106,11 @@ class VocabularyApplicationService:
         payload: VocabularyFromCaptureRequest,
         current_user_id: int,
     ) -> AsyncTaskResponse:
-        target_user_id = self._resolve_target_user_id(
+        target_user_id = application_access.resolve_target_user_id(
             requested_user_id=payload.user_id,
             current_user_id=current_user_id,
         )
-        self._ensure_user_exists(db=db, user_id=target_user_id)
+        application_access.ensure_user_exists(db=db, user_id=target_user_id)
 
         from app.tasks.vocabulary_tasks import study_flow_capture_to_vocabulary
 
@@ -141,7 +133,7 @@ class VocabularyApplicationService:
         source_sentence: str | None,
         force_new_vocabulary_item: bool,
     ) -> VocabularyFromCaptureResponse:
-        user = self._get_user_or_404(db=db, user_id=user_id)
+        user = application_access.get_user_or_404(db=db, user_id=user_id)
         normalized_sentence = source_sentence.strip() if source_sentence else None
         normalized_url = source_url.strip() if source_url else None
 
@@ -246,28 +238,6 @@ class VocabularyApplicationService:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")
         vocabulary_repository.delete(db, item)
         return {"deleted": True}
-
-    def _resolve_target_user_id(
-        self,
-        *,
-        requested_user_id: int | None,
-        current_user_id: int,
-    ) -> int:
-        target_user_id = requested_user_id or current_user_id
-        if requested_user_id is not None and requested_user_id != current_user_id:
-            raise HTTPException(status_code=403, detail="Forbidden")
-        return target_user_id
-
-    def _ensure_user_exists(self, *, db: Session, user_id: int) -> None:
-        user = users_repository.get_by_id(db, user_id)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-
-    def _get_user_or_404(self, *, db: Session, user_id: int):
-        user = users_repository.get_by_id(db, user_id)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-        return user
 
     def _normalize_english_lemma(self, text: str) -> str:
         return text.strip().split()[0].lower()

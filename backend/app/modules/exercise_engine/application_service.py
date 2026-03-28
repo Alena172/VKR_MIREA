@@ -2,24 +2,16 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import HTTPException
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.application import AsyncTaskResponse, application_access
 from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
+from app.modules.context_memory.repository import context_repository
 from app.modules.exercise_engine.prefetch_service import prefetch_service
 from app.modules.exercise_engine.schemas import ExerciseGenerateRequest, ExerciseGenerateResponse, ExerciseItem
 from app.modules.learning_graph.repository import learning_graph_repository
-from app.modules.users.repository import users_repository
 from app.modules.vocabulary.repository import vocabulary_repository
-from app.modules.context_memory.repository import context_repository
-
-
-class AsyncTaskResponse(BaseModel):
-    task_id: str
-    status: str = "PENDING"
-    message: str = "Task queued. Poll /api/v1/tasks/{task_id} for result."
 
 
 class ExerciseEngineApplicationService:
@@ -33,11 +25,11 @@ class ExerciseEngineApplicationService:
         payload: ExerciseGenerateRequest,
         current_user_id: int,
     ) -> AsyncTaskResponse:
-        target_user_id = self._resolve_target_user_id(
+        target_user_id = application_access.resolve_target_user_id(
             requested_user_id=payload.user_id,
             current_user_id=current_user_id,
         )
-        self._ensure_user_exists(db=db, user_id=target_user_id)
+        application_access.ensure_user_exists(db=db, user_id=target_user_id)
 
         from app.tasks.exercise_tasks import generate_exercises_for_user
 
@@ -58,7 +50,7 @@ class ExerciseEngineApplicationService:
         size: int,
         mode: str,
     ) -> ExerciseGenerateResponse:
-        user = self._get_user_or_404(db=db, user_id=user_id)
+        user = application_access.get_user_or_404(db=db, user_id=user_id)
         use_prefetch = not vocabulary_ids
 
         prefetched: list[ExerciseItem] = []
@@ -103,28 +95,6 @@ class ExerciseEngineApplicationService:
             exercises=immediate_items[:size],
             note=f"{note_prefix}{provider_note}; graph_anchors_used={anchors_used_count}",
         )
-
-    def _resolve_target_user_id(
-        self,
-        *,
-        requested_user_id: int | None,
-        current_user_id: int,
-    ) -> int:
-        target_user_id = requested_user_id or current_user_id
-        if requested_user_id is not None and requested_user_id != current_user_id:
-            raise HTTPException(status_code=403, detail="Forbidden")
-        return target_user_id
-
-    def _ensure_user_exists(self, *, db: Session, user_id: int) -> None:
-        user = users_repository.get_by_id(db, user_id)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-
-    def _get_user_or_404(self, *, db: Session, user_id: int):
-        user = users_repository.get_by_id(db, user_id)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-        return user
 
     def _resolve_vocabulary_items(
         self,

@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.application import AsyncTaskResponse
 from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
-from app.modules.exercise_engine.application_service import (
-    AsyncTaskResponse,
-    exercise_engine_application_service,
-)
+from app.modules.exercise_engine.application_service import exercise_engine_application_service
 from app.modules.exercise_engine.schemas import (
     ExerciseGenerateRequest,
     ExerciseGenerateRequestMe,
