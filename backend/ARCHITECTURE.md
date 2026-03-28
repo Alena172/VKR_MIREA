@@ -34,18 +34,29 @@
 - Импорт `repository`, `application_service` и `models` чужого модуля считается нарушением архитектурной границы.
 - Импорт этих слоев внутри собственного модуля разрешен.
 - Общие платформенные компоненты (`app.core.*`) не относятся к модульным границам и могут использоваться всеми модулями.
+- Межмодульный `public_api` должен возвращать DTO из `contracts.py`, а не ORM-модели или HTTP response-схемы.
+- Преобразование внутренних моделей в DTO выполняется в `assembler.py`.
 
 Примеры:
 - корректно: `from app.modules.learning_graph.public_api import learning_graph_public_api`
 - корректно: `from app.modules.learning_graph import learning_graph_public_api`
 - некорректно: `from app.modules.learning_graph.repository import learning_graph_repository`
 - некорректно: `from app.modules.context_memory.application_service import context_memory_application_service`
+- корректно: `translation.application_service -> TranslationResultDTO -> translation.router -> TranslateResponse`
+- некорректно: `translation.application_service -> TranslateResponse`
 
 Для автоматической проверки используется команда:
 
 ```bash
 python tools/check_module_boundaries.py
 ```
+
+### Стандарт внутренних слоев
+- `repository.py` отвечает только за persistence и SQLAlchemy.
+- `application_service.py`/`submission_service.py` оркестрируют use-case и не должны зависеть от web-слоя.
+- `contracts.py` содержит DTO для межмодульных и внутренних application-result контрактов.
+- `assembler.py` содержит явные преобразования `model/result -> DTO`.
+- `router.py` преобразует application DTO в HTTP response schema.
 
 ## Состояние слоя данных
 Персистентные модули (SQLAlchemy):

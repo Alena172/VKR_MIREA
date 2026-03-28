@@ -15,11 +15,15 @@ async def translate_me(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> TranslateResponse:
-    return await translation_application_service.translate_for_user(
+    result = await translation_application_service.translate_for_user(
         db=db,
         user_id=current_user_id,
         text=payload.text,
         source_context=payload.source_context,
+    )
+    return TranslateResponse(
+        translated_text=result.translated_text,
+        note=result.note,
     )
 
 
@@ -33,9 +37,13 @@ async def translate(
         requested_user_id=payload.user_id,
         current_user_id=current_user_id,
     )
-    return await translation_application_service.translate_for_user(
+    result = await translation_application_service.translate_for_user(
         db=db,
         user_id=user_id,
         text=payload.text,
         source_context=payload.source_context,
+    )
+    return TranslateResponse(
+        translated_text=result.translated_text,
+        note=result.note,
     )

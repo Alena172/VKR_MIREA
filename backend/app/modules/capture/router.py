@@ -4,9 +4,20 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
 from app.modules.capture.application_service import capture_application_service
+from app.modules.capture.contracts import CaptureItemDTO
 from app.modules.capture.schemas import CaptureCreate, CaptureCreateMe, CaptureItem
 
 router = APIRouter(prefix="/capture", tags=["capture"])
+
+
+def _to_capture_response(item: CaptureItemDTO) -> CaptureItem:
+    return CaptureItem(
+        id=item.id,
+        user_id=item.user_id,
+        selected_text=item.selected_text,
+        source_url=item.source_url,
+        source_sentence=item.source_sentence,
+    )
 
 
 @router.get("/me", response_model=list[CaptureItem])
@@ -14,11 +25,14 @@ def list_my_capture(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> list[CaptureItem]:
-    return capture_application_service.list_items(
-        db=db,
-        requested_user_id=current_user_id,
-        current_user_id=current_user_id,
-    )
+    return [
+        _to_capture_response(item)
+        for item in capture_application_service.list_items(
+            db=db,
+            requested_user_id=current_user_id,
+            current_user_id=current_user_id,
+        )
+    ]
 
 
 @router.get("", response_model=list[CaptureItem])
@@ -27,11 +41,14 @@ def list_capture(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> list[CaptureItem]:
-    return capture_application_service.list_items(
-        db=db,
-        requested_user_id=user_id,
-        current_user_id=current_user_id,
-    )
+    return [
+        _to_capture_response(item)
+        for item in capture_application_service.list_items(
+            db=db,
+            requested_user_id=user_id,
+            current_user_id=current_user_id,
+        )
+    ]
 
 
 @router.post("/me", response_model=CaptureItem)
@@ -40,7 +57,7 @@ def create_my_capture(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> CaptureItem:
-    return capture_application_service.create_item(
+    result = capture_application_service.create_item(
         db=db,
         payload=CaptureCreate(
             user_id=current_user_id,
@@ -50,6 +67,7 @@ def create_my_capture(
         ),
         current_user_id=current_user_id,
     )
+    return _to_capture_response(result)
 
 
 @router.post("", response_model=CaptureItem)
@@ -58,8 +76,9 @@ def create_capture(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> CaptureItem:
-    return capture_application_service.create_item(
+    result = capture_application_service.create_item(
         db=db,
         payload=payload,
         current_user_id=current_user_id,
     )
+    return _to_capture_response(result)

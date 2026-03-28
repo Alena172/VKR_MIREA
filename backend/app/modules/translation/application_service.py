@@ -7,7 +7,8 @@ from app.core.application import application_access
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
 from app.modules.context_memory.public_api import context_memory_public_api
-from app.modules.translation.schemas import TranslateResponse
+from app.modules.translation.assembler import to_translation_result_dto
+from app.modules.translation.contracts import TranslationResultDTO
 from app.modules.users.public_api import users_public_api
 from app.modules.vocabulary.public_api import vocabulary_public_api
 
@@ -20,7 +21,7 @@ class TranslationApplicationService:
         user_id: int,
         text: str,
         source_context: str | None,
-    ) -> TranslateResponse:
+    ) -> TranslationResultDTO:
         user = users_public_api.get_or_404(db=db, user_id=user_id)
 
         cefr_level = context_memory_public_api.get_effective_cefr_dto(
@@ -49,7 +50,7 @@ class TranslationApplicationService:
         except TranslationProviderUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-        return TranslateResponse(
+        return to_translation_result_dto(
             translated_text=ai_response.translated_text,
             note=f"AI translation used ({ai_response.provider_note})",
         )

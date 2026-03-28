@@ -66,9 +66,19 @@ pytest -q
 python tools/check_module_boundaries.py
 ```
 
+Давай сделаем хорошо
 Проверка валидирует архитектурное правило модульного монолита:
 - другой модуль можно импортировать через `public_api` или фасад из `__init__.py`
 - прямые cross-module импорты `repository`, `application_service` и `models` запрещены
+- межмодульный `public_api` должен возвращать DTO из `contracts.py`, а не ORM или web-response модели
+
+## Архитектурный стандарт слоев
+
+- `repository.py`: persistence и SQLAlchemy
+- `application_service.py`: use-case orchestration
+- `contracts.py`: DTO-контракты
+- `assembler.py`: преобразование внутренних моделей в DTO
+- `router.py`: только HTTP-адаптер и преобразование DTO в response schema
 
 ## Переменные окружения
 

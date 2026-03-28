@@ -194,7 +194,13 @@ class VocabularyApplicationService:
             db.refresh(vocabulary_item)
 
         return VocabularyFromCaptureResponse(
-            capture=CaptureItem.model_validate(capture),
+            capture=CaptureItem(
+                id=capture.id,
+                user_id=capture.user_id,
+                selected_text=capture.selected_text,
+                source_url=capture.source_url,
+                source_sentence=capture.source_sentence,
+            ),
             vocabulary=VocabularyItem.model_validate(vocabulary_item),
             translation_note="AI translation used (worker)",
             created_new_vocabulary_item=created_new,
