@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
+
 from app.core.application import AsyncTaskResponse, application_access, application_transaction
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import ai_service
+from app.modules.base_lexicon.public_api import base_lexicon_public_api
 from app.modules.capture.public_api import capture_public_api
 from app.modules.capture.schemas import CaptureCreate
 from app.modules.context_memory.public_api import context_memory_public_api
@@ -23,6 +26,9 @@ from app.modules.vocabulary.schemas import (
 )
 
 class VocabularyApplicationService:
+    _ENGLISH_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
+    _RUSSIAN_TOKEN_RE = re.compile(r"[А-Яа-яЁё-]+")
+
     def list_items(
         self,
         *,
@@ -148,10 +154,17 @@ class VocabularyApplicationService:
                 auto_commit=False,
             )
             english_lemma = self._normalize_english_lemma(selected_text)
-            russian_translation, context_definition_ru = await self._generate_capture_ai_data(
+            (
+                russian_translation,
+                context_definition_ru,
+                translation_note,
+                semantic_sentence,
+            ) = await self._generate_capture_ai_data(
+                selected_text=selected_text,
                 english_lemma=english_lemma,
                 cefr_level=user.cefr_level,
                 source_sentence=normalized_sentence,
+                db=db,
             )
 
             existing = vocabulary_repository.get_latest_by_lemma(
@@ -188,7 +201,7 @@ class VocabularyApplicationService:
                 english_lemma=english_lemma,
                 russian_translation=russian_translation,
                 context_definition_ru=context_definition_ru,
-                source_sentence=normalized_sentence,
+                source_sentence=semantic_sentence,
                 source_url=normalized_url,
                 vocabulary_item_id=vocabulary_item.id,
             )
@@ -198,7 +211,7 @@ class VocabularyApplicationService:
         return to_vocabulary_from_capture_result_dto(
             capture=capture,
             vocabulary=to_vocabulary_item_dto(vocabulary_item),
-            translation_note="AI translation used (worker)",
+            translation_note=translation_note,
             created_new_vocabulary_item=created_new,
             queued_for_review=queued_for_review,
         )
@@ -235,7 +248,13 @@ class VocabularyApplicationService:
         item = vocabulary_repository.get_by_id_for_user(db, item_id=item_id, user_id=current_user_id)
         if item is None:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")
-        vocabulary_repository.delete(db, item)
+        with application_transaction.boundary(db=db):
+            learning_graph_public_api.delete_vocabulary_links(
+                db=db,
+                user_id=current_user_id,
+                vocabulary_item_id=item.id,
+            )
+            vocabulary_repository.delete(db, item, auto_commit=False)
         return {"deleted": True}
 
     def _normalize_english_lemma(self, text: str) -> str:
@@ -247,28 +266,106 @@ class VocabularyApplicationService:
             value = value.replace("[RU]", "", 1).strip()
         return value or "перевод не найден"
 
+    def _english_tokens(self, text: str | None) -> list[str]:
+        return [token.lower() for token in self._ENGLISH_TOKEN_RE.findall(text or "")]
+
+    def _russian_tokens(self, text: str | None) -> list[str]:
+        return [token.lower() for token in self._RUSSIAN_TOKEN_RE.findall(text or "")]
+
+    def _is_single_word_capture(self, text: str) -> bool:
+        return len(self._english_tokens(text)) == 1
+
+    def _looks_like_context_phrase_expansion(
+        self,
+        *,
+        base_translation: str,
+        contextual_translation: str,
+    ) -> bool:
+        base_tokens = self._russian_tokens(base_translation)
+        contextual_tokens = self._russian_tokens(contextual_translation)
+        if not base_tokens or not contextual_tokens:
+            return False
+        if base_tokens == contextual_tokens:
+            return False
+        if len(base_tokens) == 1 and len(contextual_tokens) >= 2:
+            return True
+        return False
+
     async def _generate_capture_ai_data(
         self,
         *,
+        selected_text: str,
         english_lemma: str,
         cefr_level: str,
         source_sentence: str | None,
-    ) -> tuple[str, str]:
-        ai_response = await ai_service.translate_with_context_async(
+        db: Session,
+    ) -> tuple[str, str, str, str | None]:
+        if self._is_single_word_capture(selected_text):
+            fast_translation = base_lexicon_public_api.lookup_translation(
+                db=db,
+                english_lemma=english_lemma,
+            ) or ai_service.fast_translate_single_word(english_lemma)
+            if fast_translation:
+                normalized_fast_translation = self._normalize_translation(fast_translation)
+                return (
+                    normalized_fast_translation,
+                    ai_service.generate_context_definition_fast(
+                        english_lemma=english_lemma,
+                        russian_translation=normalized_fast_translation,
+                        source_sentence=source_sentence,
+                    ),
+                    "fast_local_word_translation; local_definition",
+                    None,
+                )
+
+        contextual_response = await ai_service.translate_with_context_async(
             TranslateWithContextRequest(
                 text=english_lemma,
                 cefr_level=cefr_level,
                 source_context=source_sentence,
             )
         )
-        russian_translation = self._normalize_translation(ai_response.translated_text)
+        contextual_translation = self._normalize_translation(contextual_response.translated_text)
+
+        translation_note = contextual_response.provider_note
+        semantic_sentence = source_sentence
+        russian_translation = contextual_translation
+
+        if self._is_single_word_capture(selected_text):
+            base_response = await ai_service.translate_with_context_async(
+                TranslateWithContextRequest(
+                    text=english_lemma,
+                    cefr_level=cefr_level,
+                    source_context=None,
+                )
+            )
+            base_translation = self._normalize_translation(base_response.translated_text)
+
+            if self._looks_like_context_phrase_expansion(
+                base_translation=base_translation,
+                contextual_translation=contextual_translation,
+            ):
+                russian_translation = base_translation
+                semantic_sentence = None
+                translation_note = (
+                    f"{contextual_response.provider_note}; "
+                    "capture_mode=base_word_translation; "
+                    f"context_variant_ignored={contextual_translation}"
+                )
+            else:
+                russian_translation = contextual_translation or base_translation
+                translation_note = (
+                    f"{contextual_response.provider_note}; "
+                    "capture_mode=contextual_single_word"
+                )
+
         context_definition_ru = await ai_service.generate_context_definition_async(
             english_lemma=english_lemma,
             russian_translation=russian_translation,
-            source_sentence=source_sentence,
+            source_sentence=semantic_sentence,
             cefr_level=cefr_level,
         )
-        return russian_translation, context_definition_ru
+        return russian_translation, context_definition_ru, translation_note, semantic_sentence
 
 
 vocabulary_application_service = VocabularyApplicationService()

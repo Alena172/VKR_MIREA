@@ -15,7 +15,6 @@ from app.modules.ai_services.contracts import (
     GenerateExercisesResponse,
     TranslateWithContextRequest,
 )
-from app.modules.ai_services.definition_resolver import DictionaryDefinitionResolver
 from app.modules.ai_services.exercise_generator import ExerciseGenerator
 from app.modules.ai_services.translation_service import TranslationService
 
@@ -46,7 +45,6 @@ class AIService:
             timeout_seconds=settings.ai_timeout_seconds,
             max_retries=self._max_retries,
         )
-        self._definition_resolver = DictionaryDefinitionResolver()
         self._recent_sentences: dict[str, deque[str]] = {}
         self._translation_service = TranslationService(
             provider=self._provider,
@@ -65,7 +63,6 @@ class AIService:
             chat_complete_sync=self._chat_completion,
             provider_unavailable_error=TranslationProviderUnavailableError,
             translation_service=self._translation_service,
-            definition_resolver=self._definition_resolver,
             recent_sentences=self._recent_sentences,
         )
 
@@ -240,13 +237,97 @@ class AIService:
         russian_translation: str,
         source_sentence: str | None,
     ) -> str:
-        if source_sentence:
-            return (
-                f"In this context, '{english_lemma}' means '{russian_translation}' in Russian. "
-                f"Example context: {source_sentence.strip()}"
-            )
+        extracted = self._extract_definition_from_source_sentence(
+            english_lemma=english_lemma,
+            source_sentence=source_sentence,
+        )
+        if extracted:
+            return extracted
         return (
-            f"'{english_lemma}' means '{russian_translation}' in Russian in the intended learning context."
+            f"Something described as '{russian_translation}' in Russian, used in the intended learning context."
+        )
+
+    def _extract_definition_from_source_sentence(
+        self,
+        *,
+        english_lemma: str,
+        source_sentence: str | None,
+    ) -> str | None:
+        raw = (source_sentence or "").strip()
+        if not raw:
+            return None
+
+        lemma = re.escape(english_lemma.strip())
+        patterns = (
+            rf"^(?:an?|the)\s+{lemma}\s+(?:is|are)\s+",
+            rf"^{lemma}\s+(?:is|are)\s+",
+        )
+        candidate = raw
+        for pattern in patterns:
+            updated = re.sub(pattern, "", candidate, flags=re.IGNORECASE)
+            if updated != candidate:
+                candidate = updated
+                break
+
+        candidate = candidate.strip(" -,:;")
+        if not candidate or candidate == raw:
+            return None
+        if candidate and candidate[-1] not in ".!?":
+            candidate = f"{candidate}."
+        return candidate[0].upper() + candidate[1:]
+
+    def _sanitize_context_definition(
+        self,
+        *,
+        english_lemma: str,
+        russian_translation: str,
+        source_sentence: str | None,
+        definition: str | None,
+    ) -> str:
+        cleaned = (definition or "").strip().strip('"')
+        if not cleaned:
+            return self._fallback_context_definition(
+                english_lemma=english_lemma,
+                russian_translation=russian_translation,
+                source_sentence=source_sentence,
+            )
+
+        cleaned = (
+            cleaned.replace("’", "'")
+            .replace("‘", "'")
+            .replace("“", '"')
+            .replace("”", '"')
+        )
+        cleaned = re.sub(
+            rf"^In this context,\s*['\"]?{re.escape(english_lemma)}['\"]?\s+means\s+['\"].+?['\"]\s+in Russian\.\s*",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(
+            rf"^['\"]?{re.escape(english_lemma)}['\"]?\s+means\s+['\"].+?['\"]\s+in Russian(?:\s+in the intended learning context)?\.?\s*",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        cleaned = cleaned.replace("Example context:", "").strip(" -,:;")
+
+        extracted = self._extract_definition_from_source_sentence(
+            english_lemma=english_lemma,
+            source_sentence=cleaned,
+        )
+        if extracted:
+            return extracted
+
+        if cleaned:
+            if cleaned[-1] not in ".!?":
+                cleaned = f"{cleaned}."
+            return cleaned[0].upper() + cleaned[1:]
+
+        return self._fallback_context_definition(
+            english_lemma=english_lemma,
+            russian_translation=russian_translation,
+            source_sentence=source_sentence,
         )
 
     def generate_context_definition(
@@ -291,7 +372,12 @@ class AIService:
             max_tokens=220,
         )
         if content:
-            cleaned = content.strip().strip('"')
+            cleaned = self._sanitize_context_definition(
+                english_lemma=english_lemma,
+                russian_translation=russian_translation,
+                source_sentence=source_sentence,
+                definition=content,
+            )
             if len(cleaned) >= 20:
                 return cleaned
         return self._fallback_context_definition(
@@ -311,6 +397,26 @@ class AIService:
         payload: TranslateWithContextRequest,
     ) -> TranslateWithContextResponse:
         return await self._translation_service.translate_with_context_async(payload)
+
+    def fast_translate_single_word(
+        self,
+        text: str,
+    ) -> str | None:
+        return self._translation_service.fast_translate_single_word(text)
+
+    def generate_context_definition_fast(
+        self,
+        *,
+        english_lemma: str,
+        russian_translation: str,
+        source_sentence: str | None,
+    ) -> str:
+        return self._sanitize_context_definition(
+            english_lemma=english_lemma,
+            russian_translation=russian_translation,
+            source_sentence=source_sentence,
+            definition=source_sentence,
+        )
 
     def _extract_json_payload(self, raw: str) -> dict | list | None:
         text = raw.strip()

@@ -4,6 +4,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.api import api_router
 from app.core.config import get_settings
+from app.core.db import SessionLocal
+from app.modules.base_lexicon.public_api import base_lexicon_public_api
 
 settings = get_settings()
 
@@ -28,6 +30,15 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+
+@app.on_event("startup")
+def ensure_base_lexicon_seeded() -> None:
+    db = SessionLocal()
+    try:
+        base_lexicon_public_api.ensure_seeded(db)
+    finally:
+        db.close()
 
 
 @app.get("/health", tags=["system"])

@@ -32,12 +32,14 @@ class TranslateWithContextResponse(BaseModel):
 class ExerciseSeed(BaseModel):
     english_lemma: str = Field(min_length=1, max_length=200)
     russian_translation: str = Field(min_length=1, max_length=200)
+    context_definition_ru: str | None = Field(default=None, max_length=4000)
     source_sentence: str | None = Field(default=None, max_length=2000)
 
 
 class GenerateExercisesRequest(BaseModel):
     size: int = Field(ge=1, le=30)
     cefr_level: str | None = Field(default=None, pattern="^(A1|A2|B1|B2|C1|C2)$")
+    fast_start: bool = False
     mode: str = Field(
         default="sentence_translation_full",
         pattern="^(sentence_translation_full|word_definition_match|word_scramble)$",

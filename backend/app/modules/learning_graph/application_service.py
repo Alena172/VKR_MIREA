@@ -206,6 +206,19 @@ class LearningGraphApplicationService:
             limit=limit,
         )
 
+    def delete_vocabulary_links(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        vocabulary_item_id: int,
+    ) -> int:
+        return learning_graph_repository.delete_vocabulary_links(
+            db,
+            user_id=user_id,
+            vocabulary_item_id=vocabulary_item_id,
+        )
+
     def get_observability(
         self,
         *,

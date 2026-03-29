@@ -1,0 +1,19 @@
+[
+  { "english_lemma": "apple", "russian_translation": "яблоко" },
+  { "english_lemma": "pear", "russian_translation": "груша" },
+  { "english_lemma": "peach", "russian_translation": "персик" },
+  { "english_lemma": "truck", "russian_translation": "грузовик" },
+  { "english_lemma": "character", "russian_translation": "персонаж" },
+  { "english_lemma": "protagonist", "russian_translation": "главный герой" },
+  { "english_lemma": "luscious", "russian_translation": "сочный" },
+  { "english_lemma": "book", "russian_translation": "книга" },
+  { "english_lemma": "word", "russian_translation": "слово" },
+  { "english_lemma": "sentence", "russian_translation": "предложение" },
+  { "english_lemma": "friend", "russian_translation": "друг" },
+  { "english_lemma": "home", "russian_translation": "дом" },
+  { "english_lemma": "school", "russian_translation": "школа" },
+  { "english_lemma": "work", "russian_translation": "работа" },
+  { "english_lemma": "day", "russian_translation": "день" },
+  { "english_lemma": "night", "russian_translation": "ночь" },
+  { "english_lemma": "time", "russian_translation": "время" }
+]

@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.db import Base, get_db
 from app.main import app
+from app.modules.base_lexicon.models import BaseLexiconEntryModel
 from app.modules.capture.models import CaptureItemModel
 from app.modules.context_memory.models import UserContextModel
 from app.modules.learning_session.models import LearningSessionModel
@@ -19,7 +20,7 @@ from app.modules.users.models import UserModel
 from app.modules.vocabulary.models import VocabularyItemModel
 
 # Keep imports for SQLAlchemy metadata registration.
-_ = (UserModel, VocabularyItemModel, CaptureItemModel, LearningSessionModel, UserContextModel)
+_ = (UserModel, VocabularyItemModel, CaptureItemModel, LearningSessionModel, UserContextModel, BaseLexiconEntryModel)
 
 
 test_engine = create_engine(

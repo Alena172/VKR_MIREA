@@ -77,5 +77,18 @@ class LearningGraphPublicApi:
         )
         return [to_word_anchor_dto(item) for item in items]
 
+    @staticmethod
+    def delete_vocabulary_links(
+        db,
+        *,
+        user_id: int,
+        vocabulary_item_id: int,
+    ) -> int:
+        return learning_graph_application_service.delete_vocabulary_links(
+            db=db,
+            user_id=user_id,
+            vocabulary_item_id=vocabulary_item_id,
+        )
+
 
 learning_graph_public_api = LearningGraphPublicApi()

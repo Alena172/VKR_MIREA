@@ -146,8 +146,69 @@ export default function VocabularyPage({ onError }) {
   const [loading, setLoading] = useState(false);
   const [studyFlowLoading, setStudyFlowLoading] = useState(false);
   const [studyFlowStatus, setStudyFlowStatus] = useState("");
+  const [pendingStudyTasks, setPendingStudyTasks] = useState([]);
   const [translateLoading, setTranslateLoading] = useState(false);
   const { registerController, releaseController } = useAbortControllers();
+
+  function addPendingStudyTask(taskId, selectedWord) {
+    setPendingStudyTasks((prev) => ([
+      {
+        taskId,
+        selectedWord,
+        status: "queued",
+        message: "Слово поставлено в очередь на обработку.",
+      },
+      ...prev.filter((item) => item.taskId !== taskId),
+    ]));
+  }
+
+  function updatePendingStudyTask(taskId, patch) {
+    setPendingStudyTasks((prev) => prev.map((item) => (
+      item.taskId === taskId ? { ...item, ...patch } : item
+    )));
+  }
+
+  async function watchStudyFlowTask(taskId, selectedWord) {
+    const controller = registerController();
+    try {
+      const result = await pollTask(taskId, {
+        intervalMs: 800,
+        maxAttempts: 90,
+        signal: controller.signal,
+        onStatus: (status) => {
+          if (status === "STARTED") {
+            updatePendingStudyTask(taskId, {
+              status: "processing",
+              message: "Обрабатываю слово...",
+            });
+          } else if (status === "RETRY") {
+            updatePendingStudyTask(taskId, {
+              status: "retry",
+              message: "Повторная попытка обработки...",
+            });
+          }
+        },
+      });
+
+      updatePendingStudyTask(taskId, {
+        status: "done",
+        message: `Готово: ${result?.vocabulary?.english_lemma || selectedWord}`,
+      });
+      await loadVocabulary();
+      window.setTimeout(() => {
+        setPendingStudyTasks((prev) => prev.filter((item) => item.taskId !== taskId));
+      }, 2500);
+    } catch (error) {
+      if (!isAbortError(error)) {
+        updatePendingStudyTask(taskId, {
+          status: "failed",
+          message: getErrorMessage(error),
+        });
+      }
+    } finally {
+      releaseController(controller);
+    }
+  }
 
   async function loadVocabulary() {
     setLoading(true);
@@ -183,20 +244,10 @@ export default function VocabularyPage({ onError }) {
         selected_text: selectedText,
         source_sentence: sourceSentence,
       }, { signal: controller.signal });
-
-      setStudyFlowStatus("Обрабатываю слово...");
-      await pollTask(task_id, {
-        intervalMs: 800,
-        maxAttempts: 90,
-        signal: controller.signal,
-        onStatus: (status) => {
-          if (status === "STARTED") setStudyFlowStatus("AI генерирует определение...");
-          else if (status === "RETRY") setStudyFlowStatus("Повторная попытка...");
-        },
-      });
-
-      setStudyFlowStatus("Готово!");
-      await loadVocabulary();
+      addPendingStudyTask(task_id, selectedText);
+      setStudyFlowStatus("Слово добавлено в очередь.");
+      window.setTimeout(() => setStudyFlowStatus(""), 2500);
+      void watchStudyFlowTask(task_id, selectedText);
     } catch (error) {
       if (!isAbortError(error)) {
         onError(getErrorMessage(error));
@@ -204,7 +255,6 @@ export default function VocabularyPage({ onError }) {
     } finally {
       releaseController(controller);
       setStudyFlowLoading(false);
-      setStudyFlowStatus("");
     }
   }
 
@@ -355,6 +405,30 @@ export default function VocabularyPage({ onError }) {
         <h2 className="section-title">Словарь и контекстный перевод</h2>
         <p className="muted mt-1 text-sm">Добавляйте новые слова и сразу проверяйте перевод в нужном контексте.</p>
       </header>
+
+      {pendingStudyTasks.length ? (
+        <section className="surface p-4 md:p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-extrabold text-gray-900">Фоновые задачи словаря</p>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {pendingStudyTasks.length}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2">
+            {pendingStudyTasks.map((task) => (
+              <div key={task.taskId} className="rounded-xl border border-[var(--line)] bg-white px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-900">{task.selectedWord}</span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                    {task.status}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm text-slate-600">{task.message}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <form onSubmit={addViaStudyFlow} className="surface p-4 md:p-5 space-y-3">

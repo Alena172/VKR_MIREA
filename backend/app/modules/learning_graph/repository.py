@@ -490,6 +490,15 @@ class LearningGraphRepository:
         )
         cluster = self._ensure_cluster(db, user_id=user_id, cluster_key=cluster_key) if cluster_key else None
 
+        existing_link = None
+        if vocabulary_item_id is not None:
+            existing_link = db.scalar(
+                select(VocabularySenseLinkModel).where(
+                    VocabularySenseLinkModel.user_id == user_id,
+                    VocabularySenseLinkModel.vocabulary_item_id == vocabulary_item_id,
+                )
+            )
+
         existing = db.scalar(
             select(WordSenseModel).where(
                 WordSenseModel.user_id == user_id,
@@ -500,13 +509,7 @@ class LearningGraphRepository:
 
         if existing is not None:
             if vocabulary_item_id is not None:
-                link = db.scalar(
-                    select(VocabularySenseLinkModel).where(
-                        VocabularySenseLinkModel.user_id == user_id,
-                        VocabularySenseLinkModel.vocabulary_item_id == vocabulary_item_id,
-                    )
-                )
-                if link is None:
+                if existing_link is None:
                     db.add(
                         VocabularySenseLinkModel(
                             user_id=user_id,
@@ -514,6 +517,9 @@ class LearningGraphRepository:
                             word_sense_id=existing.id,
                         )
                     )
+                    db.flush()
+                elif existing_link.word_sense_id != existing.id:
+                    existing_link.word_sense_id = existing.id
                     db.flush()
             return SemanticUpsertResult(
                 sense=existing,
@@ -536,14 +542,18 @@ class LearningGraphRepository:
         db.flush()
 
         if vocabulary_item_id is not None:
-            db.add(
-                VocabularySenseLinkModel(
-                    user_id=user_id,
-                    vocabulary_item_id=vocabulary_item_id,
-                    word_sense_id=sense.id,
+            if existing_link is None:
+                db.add(
+                    VocabularySenseLinkModel(
+                        user_id=user_id,
+                        vocabulary_item_id=vocabulary_item_id,
+                        word_sense_id=sense.id,
+                    )
                 )
-            )
-            db.flush()
+                db.flush()
+            elif existing_link.word_sense_id != sense.id:
+                existing_link.word_sense_id = sense.id
+                db.flush()
 
         self._sync_relations_for_sense(
             db,
@@ -613,6 +623,27 @@ class LearningGraphRepository:
         db.add(row)
         db.flush()
         return row
+
+    def delete_vocabulary_links(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        vocabulary_item_id: int,
+    ) -> int:
+        stmt = (
+            select(VocabularySenseLinkModel)
+            .where(
+                VocabularySenseLinkModel.user_id == user_id,
+                VocabularySenseLinkModel.vocabulary_item_id == vocabulary_item_id,
+            )
+        )
+        rows = list(db.scalars(stmt))
+        for row in rows:
+            db.delete(row)
+        if rows:
+            db.flush()
+        return len(rows)
 
     def get_overview(
         self,

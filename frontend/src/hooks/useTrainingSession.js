@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, getErrorMessage, isAbortError, pollTask } from "../lib/api";
 import { useAbortControllers } from "./useAbortControllers";
 
-const PREFETCH_BATCH_SIZE = 2;
+const NEXT_EXERCISE_BUFFER = 1;
 
 export function useTrainingSession({ onError }) {
   const [size, setSize] = useState(6);
@@ -25,9 +25,15 @@ export function useTrainingSession({ onError }) {
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
-  async function generateBatch(targetMode, batchSize, vocabularyIds, signal) {
+  async function generateBatch(targetMode, batchSize, vocabularyIds, signal, { fastStart = false, incremental = false } = {}) {
     const { task_id } = await api.generateExercisesMe(
-      { size: batchSize, mode: targetMode, vocabulary_ids: vocabularyIds || [] },
+      {
+        size: batchSize,
+        mode: targetMode,
+        vocabulary_ids: vocabularyIds || [],
+        fast_start: fastStart,
+        incremental,
+      },
       { signal },
     );
     const result = await pollTask(task_id, {
@@ -75,7 +81,7 @@ export function useTrainingSession({ onError }) {
     setLoadingCurrent(true);
     onError("");
     try {
-      const initialBatchSize = Math.min(PREFETCH_BATCH_SIZE, nextSize);
+      const initialBatchSize = 1;
       const controller = registerController();
       try {
         const { exercises: initialExercises, note } = await generateBatch(
@@ -83,6 +89,7 @@ export function useTrainingSession({ onError }) {
           initialBatchSize,
           nextVocabularyIds,
           controller.signal,
+          { fastStart: true, incremental: true },
         );
         setMode(nextMode);
         setSize(nextSize);
@@ -164,7 +171,7 @@ export function useTrainingSession({ onError }) {
     setLoadingCurrent(true);
     try {
       const remaining = size - fetchedCount;
-      const batchSize = Math.max(1, Math.min(PREFETCH_BATCH_SIZE, remaining));
+      const batchSize = 1;
       const controller = registerController();
       try {
         const { exercises: generatedBatch, note } = await generateBatch(
@@ -172,6 +179,7 @@ export function useTrainingSession({ onError }) {
           batchSize,
           selectedVocabularyIds,
           controller.signal,
+          { incremental: true },
         );
         const [nextExercise, ...rest] = generatedBatch;
         setCurrentExercise(nextExercise);
@@ -199,15 +207,15 @@ export function useTrainingSession({ onError }) {
     }
 
     const remaining = size - fetchedCount;
-    if (remaining <= 0 || bufferExercises.length >= PREFETCH_BATCH_SIZE) {
+    if (remaining <= 0 || bufferExercises.length >= NEXT_EXERCISE_BUFFER) {
       return undefined;
     }
 
     const controller = registerController();
     setLoadingPrefetch(true);
-    const batchSize = Math.min(PREFETCH_BATCH_SIZE, remaining);
+    const batchSize = 1;
 
-    generateBatch(mode, batchSize, selectedVocabularyIds, controller.signal)
+    generateBatch(mode, batchSize, selectedVocabularyIds, controller.signal, { incremental: true })
       .then(({ exercises: batch, note }) => {
         setBufferExercises((prev) => [...prev, ...batch]);
         setFetchedCount((prev) => prev + batch.length);
@@ -229,7 +237,7 @@ export function useTrainingSession({ onError }) {
       controller.abort();
       releaseController(controller);
     };
-  }, [bufferExercises.length, fetchedCount, isTrainingActive, loadingCurrent, mode, onError, selectedVocabularyIds, size]);
+  }, [bufferExercises.length, currentIndex, fetchedCount, isTrainingActive, loadingCurrent, mode, onError, selectedVocabularyIds, size]);
   const answerReady = useMemo(() => {
     if (!currentExercise) {
       return false;

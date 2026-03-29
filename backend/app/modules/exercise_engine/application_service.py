@@ -43,6 +43,8 @@ class ExerciseEngineApplicationService:
             vocabulary_ids=payload.vocabulary_ids or [],
             size=payload.size,
             mode=payload.mode,
+            fast_start=payload.fast_start,
+            incremental=payload.incremental,
         )
         return AsyncTaskResponse(task_id=task.id)
 
@@ -54,6 +56,8 @@ class ExerciseEngineApplicationService:
         vocabulary_ids: list[int],
         size: int,
         mode: str,
+        fast_start: bool = False,
+        incremental: bool = False,
     ) -> ExerciseGenerateResultDTO:
         user = application_access.get_user_or_404(db=db, user_id=user_id)
         use_prefetch = not vocabulary_ids
@@ -80,7 +84,8 @@ class ExerciseEngineApplicationService:
         ).cefr_level
 
         required_count = size - len(prefetched)
-        generation_target = required_count + (self._PREFETCH_EXTRA if use_prefetch else 0)
+        server_prefetch_extra = self._PREFETCH_EXTRA if use_prefetch and not fast_start and not incremental else 0
+        generation_target = required_count + server_prefetch_extra
         seeds, anchors_used_count = self._build_seeds(
             db=db,
             user_id=user_id,
@@ -91,6 +96,7 @@ class ExerciseEngineApplicationService:
             size=generation_target,
             mode=mode,
             cefr_level=cefr_level,
+            fast_start=fast_start,
         )
 
         immediate_items = prefetched + generated_items[:required_count]
@@ -100,9 +106,11 @@ class ExerciseEngineApplicationService:
                 prefetch_service.store_prefetch(user_id, mode, extra_items)
 
         note_prefix = "Prefetched + " if prefetched else ""
+        fast_start_note = "fast_start; " if fast_start else ""
+        incremental_note = "incremental; " if incremental else ""
         return to_exercise_generate_result_dto(
             exercises=immediate_items[:size],
-            note=f"{note_prefix}{provider_note}; graph_anchors_used={anchors_used_count}",
+            note=f"{note_prefix}{fast_start_note}{incremental_note}{provider_note}; graph_anchors_used={anchors_used_count}",
         )
 
     def _resolve_vocabulary_items(
@@ -123,9 +131,13 @@ class ExerciseEngineApplicationService:
             raise ValueError("Vocabulary is empty. Add words before generating exercises.")
 
         if mode == "word_definition_match":
+            vocabulary_items = [
+                item for item in vocabulary_items
+                if (item.context_definition_ru or "").strip()
+            ]
             unique_lemmas = {item.english_lemma.strip().lower() for item in vocabulary_items if item.english_lemma}
             if len(unique_lemmas) < 4:
-                raise ValueError("Need at least 4 different words in vocabulary for definition matching.")
+                raise ValueError("Need at least 4 different words with saved definitions for definition matching.")
         return vocabulary_items
 
     def _dedupe_vocabulary_by_lemma(self, vocabulary_items):
@@ -165,6 +177,7 @@ class ExerciseEngineApplicationService:
                 ExerciseSeed(
                     english_lemma=item.english_lemma,
                     russian_translation=item.russian_translation,
+                    context_definition_ru=item.context_definition_ru,
                     source_sentence=source_sentence,
                 )
             )
@@ -182,6 +195,7 @@ class ExerciseEngineApplicationService:
         size: int,
         mode: str,
         cefr_level: str,
+        fast_start: bool = False,
     ) -> tuple[list[ExerciseItemDTO], str]:
         if size > self._BATCH_SIZE and len(seeds) >= self._BATCH_SIZE:
             batches = []
@@ -197,6 +211,7 @@ class ExerciseEngineApplicationService:
                     GenerateExercisesRequest(
                         size=batch_count,
                         cefr_level=cefr_level,
+                        fast_start=fast_start,
                         mode=mode,
                         seeds=batch_seeds,
                     )
@@ -226,7 +241,13 @@ class ExerciseEngineApplicationService:
 
         try:
             response = await ai_service.generate_exercises_async(
-                GenerateExercisesRequest(size=size, cefr_level=cefr_level, mode=mode, seeds=seeds)
+                GenerateExercisesRequest(
+                    size=size,
+                    cefr_level=cefr_level,
+                    fast_start=fast_start,
+                    mode=mode,
+                    seeds=seeds,
+                )
             )
         except TranslationProviderUnavailableError as exc:
             raise RuntimeError(str(exc)) from exc

@@ -25,6 +25,8 @@ def generate_me(
             user_id=current_user_id,
             vocabulary_ids=payload.vocabulary_ids,
             size=payload.size,
+            fast_start=payload.fast_start,
+            incremental=payload.incremental,
             mode=payload.mode,
         ),
         current_user_id=current_user_id,

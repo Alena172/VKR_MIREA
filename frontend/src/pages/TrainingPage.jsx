@@ -223,12 +223,12 @@ export default function TrainingPage({ onError }) {
 
   return (
     <section className="space-y-4">
-      {loadingCurrent ? <LoadingSpinner message="Генерирую упражнения..." estimatedSeconds="3-8" /> : null}
+      {loadingCurrent ? <LoadingSpinner message="Готовлю первое упражнение..." estimatedSeconds="1-4" /> : null}
 
       <header className="surface p-4 md:p-5">
         <p className="kicker">Training</p>
         <h2 className="section-title">Тренировка</h2>
-        <p className="muted mt-1 text-sm">Выберите формат, количество заданий и пройдите сессию без ожиданий: следующие упражнения подгружаются заранее.</p>
+        <p className="muted mt-1 text-sm">Первое упражнение приходит как можно раньше, а остальная сессия догружается в фоне, пока ты решаешь текущее задание.</p>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <label className="text-sm">
@@ -269,6 +269,7 @@ export default function TrainingPage({ onError }) {
           ) : null}
           {isTrainingActive ? <span className="chip">Задание {currentIndex + 1} из {size}</span> : null}
           {generationNote ? <span className="chip">{generationNote}</span> : null}
+          {isTrainingActive && !loadingPrefetch ? <span className="chip">Остальные задания готовятся в фоне</span> : null}
           {focusLabel ? <span className="chip">Фокус: {focusLabel}</span> : null}
           {selectedVocabularyIds.length ? (
             <button

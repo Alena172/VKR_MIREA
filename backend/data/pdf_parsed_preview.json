@@ -1,0 +1,802 @@
+[
+  {
+    "english_lemma": "arouse",
+    "russian_translation": "вызывать, пробуждать"
+  },
+  {
+    "english_lemma": "pretty",
+    "russian_translation": "довольно-таки"
+  },
+  {
+    "english_lemma": "grand",
+    "russian_translation": "большой, великий"
+  },
+  {
+    "english_lemma": "volume",
+    "russian_translation": "громкость"
+  },
+  {
+    "english_lemma": "draw (drew, drawn)",
+    "russian_translation": "тянуть"
+  },
+  {
+    "english_lemma": "coach",
+    "russian_translation": "автобус, вагон, телега"
+  },
+  {
+    "english_lemma": "provide",
+    "russian_translation": "обеспечивать, снабжать"
+  },
+  {
+    "english_lemma": "provider",
+    "russian_translation": "поставщик"
+  },
+  {
+    "english_lemma": "provision",
+    "russian_translation": "обеспечение"
+  },
+  {
+    "english_lemma": "cope with",
+    "russian_translation": "совладать, справиться"
+  },
+  {
+    "english_lemma": "condition",
+    "russian_translation": "состояние"
+  },
+  {
+    "english_lemma": "land",
+    "russian_translation": "приземляться, высаживаться"
+  },
+  {
+    "english_lemma": "scope",
+    "russian_translation": "пределы, район"
+  },
+  {
+    "english_lemma": "pack",
+    "russian_translation": "пачка, связка, колода, и т. д."
+  },
+  {
+    "english_lemma": "package",
+    "russian_translation": "пакет"
+  },
+  {
+    "english_lemma": "craft",
+    "russian_translation": "ремесло, мастерство"
+  },
+  {
+    "english_lemma": "craftsman",
+    "russian_translation": "ремесленник"
+  },
+  {
+    "english_lemma": "crafty",
+    "russian_translation": "ловкий, хитрый"
+  },
+  {
+    "english_lemma": "worth",
+    "russian_translation": "стоимость, стоящий"
+  },
+  {
+    "english_lemma": "worthy",
+    "russian_translation": "достойный"
+  },
+  {
+    "english_lemma": "urban",
+    "russian_translation": "городской"
+  },
+  {
+    "english_lemma": "urbanization",
+    "russian_translation": "урбанизация"
+  },
+  {
+    "english_lemma": "pond",
+    "russian_translation": "пруд"
+  },
+  {
+    "english_lemma": "familiar",
+    "russian_translation": "знакомый"
+  },
+  {
+    "english_lemma": "familiarity",
+    "russian_translation": "знакомство"
+  },
+  {
+    "english_lemma": "unfamiliar",
+    "russian_translation": "незнакомый"
+  },
+  {
+    "english_lemma": "familiarize",
+    "russian_translation": "ознакомиться"
+  },
+  {
+    "english_lemma": "tap",
+    "russian_translation": "стучать"
+  },
+  {
+    "english_lemma": "column",
+    "russian_translation": "столб, колонна"
+  },
+  {
+    "english_lemma": "guilt",
+    "russian_translation": "вина"
+  },
+  {
+    "english_lemma": "guilty",
+    "russian_translation": "виновный"
+  },
+  {
+    "english_lemma": "arm",
+    "russian_translation": "рука"
+  },
+  {
+    "english_lemma": "forearm",
+    "russian_translation": "предплечье"
+  },
+  {
+    "english_lemma": "chamber",
+    "russian_translation": "кабинет, зал, палата, камера"
+  },
+  {
+    "english_lemma": "owe",
+    "russian_translation": "задолжать"
+  },
+  {
+    "english_lemma": "include",
+    "russian_translation": "включать, содержать в себе"
+  },
+  {
+    "english_lemma": "inclusion",
+    "russian_translation": "включение"
+  },
+  {
+    "english_lemma": "inclusive",
+    "russian_translation": "включающий в себя"
+  },
+  {
+    "english_lemma": "inclusively",
+    "russian_translation": "включительно"
+  },
+  {
+    "english_lemma": "appoint",
+    "russian_translation": "назначать, утверждать"
+  },
+  {
+    "english_lemma": "appointment",
+    "russian_translation": "деловое свидание, встреча"
+  },
+  {
+    "english_lemma": "celebrate",
+    "russian_translation": "праздновать"
+  },
+  {
+    "english_lemma": "celebration",
+    "russian_translation": "праздник"
+  },
+  {
+    "english_lemma": "celebratory",
+    "russian_translation": "праздничный"
+  },
+  {
+    "english_lemma": "abuse",
+    "russian_translation": "оскорблять, бранить, брань"
+  },
+  {
+    "english_lemma": "abusive",
+    "russian_translation": "оскорбительный"
+  },
+  {
+    "english_lemma": "dig (dug, dug)",
+    "russian_translation": "копать"
+  },
+  {
+    "english_lemma": "behavior",
+    "russian_translation": "поведение"
+  },
+  {
+    "english_lemma": "cable",
+    "russian_translation": "канат, кабель, трос и т.д."
+  },
+  {
+    "english_lemma": "intelligent",
+    "russian_translation": "умный"
+  },
+  {
+    "english_lemma": "intelligence",
+    "russian_translation": "интеллект"
+  },
+  {
+    "english_lemma": "admit",
+    "russian_translation": "признавать, допускать"
+  },
+  {
+    "english_lemma": "admission",
+    "russian_translation": "допущение, допуск"
+  },
+  {
+    "english_lemma": "admittedly",
+    "russian_translation": "по общему признанию"
+  },
+  {
+    "english_lemma": "cream",
+    "russian_translation": "крем, сливки"
+  },
+  {
+    "english_lemma": "creamy",
+    "russian_translation": "сливочный"
+  },
+  {
+    "english_lemma": "ice cream",
+    "russian_translation": "мороженое"
+  },
+  {
+    "english_lemma": "appropriate",
+    "russian_translation": "присвоить"
+  },
+  {
+    "english_lemma": "appropriation",
+    "russian_translation": "присвоение"
+  },
+  {
+    "english_lemma": "root",
+    "russian_translation": "корень"
+  },
+  {
+    "english_lemma": "compare",
+    "russian_translation": "сравнить"
+  },
+  {
+    "english_lemma": "comparable",
+    "russian_translation": "сравнимый"
+  },
+  {
+    "english_lemma": "incomparable",
+    "russian_translation": "несравнимый"
+  },
+  {
+    "english_lemma": "comparative",
+    "russian_translation": "сравнительный"
+  },
+  {
+    "english_lemma": "comparatively",
+    "russian_translation": "в сравнении"
+  },
+  {
+    "english_lemma": "human",
+    "russian_translation": "человек, человеческий"
+  },
+  {
+    "english_lemma": "inhuman",
+    "russian_translation": "бесчеловечный"
+  },
+  {
+    "english_lemma": "humanity",
+    "russian_translation": "человечество"
+  },
+  {
+    "english_lemma": "slay (slew, slain)",
+    "russian_translation": "умертвить"
+  },
+  {
+    "english_lemma": "persist",
+    "russian_translation": "сохраниться"
+  },
+  {
+    "english_lemma": "persistent",
+    "russian_translation": "стойкий, устойчивый"
+  },
+  {
+    "english_lemma": "persistence",
+    "russian_translation": "упорство"
+  },
+  {
+    "english_lemma": "wide",
+    "russian_translation": "широкий, просторный"
+  },
+  {
+    "english_lemma": "widen",
+    "russian_translation": "расширять"
+  },
+  {
+    "english_lemma": "width",
+    "russian_translation": "ширина"
+  },
+  {
+    "english_lemma": "quarter",
+    "russian_translation": "четверть"
+  },
+  {
+    "english_lemma": "vanish",
+    "russian_translation": "исчезнуть"
+  },
+  {
+    "english_lemma": "stir",
+    "russian_translation": "шевелить(ся), двигать и т.д."
+  },
+  {
+    "english_lemma": "opening",
+    "russian_translation": "отверстие"
+  },
+  {
+    "english_lemma": "library",
+    "russian_translation": "библиотека"
+  },
+  {
+    "english_lemma": "librarian",
+    "russian_translation": "библиотекарь"
+  },
+  {
+    "english_lemma": "link",
+    "russian_translation": "связь, звено, ссылка"
+  },
+  {
+    "english_lemma": "linkage",
+    "russian_translation": "связывание"
+  },
+  {
+    "english_lemma": "expose",
+    "russian_translation": "выставлять, обнажать"
+  },
+  {
+    "english_lemma": "exposition",
+    "russian_translation": "выставка, выставление"
+  },
+  {
+    "english_lemma": "dig up",
+    "russian_translation": "откопать"
+  },
+  {
+    "english_lemma": "narrate",
+    "russian_translation": "повествовать, рассказывать"
+  },
+  {
+    "english_lemma": "narrative",
+    "russian_translation": "рассказ, повествовательный"
+  },
+  {
+    "english_lemma": "narration",
+    "russian_translation": "пересказ"
+  },
+  {
+    "english_lemma": "enable",
+    "russian_translation": "давать возможность"
+  },
+  {
+    "english_lemma": "laugh",
+    "russian_translation": "смеяться"
+  },
+  {
+    "english_lemma": "example",
+    "russian_translation": "пример"
+  },
+  {
+    "english_lemma": "for example",
+    "russian_translation": "например"
+  },
+  {
+    "english_lemma": "stake",
+    "russian_translation": "стойка, кол, столб"
+  },
+  {
+    "english_lemma": "decent",
+    "russian_translation": "приличный, достойный"
+  },
+  {
+    "english_lemma": "indecent",
+    "russian_translation": "неприличный"
+  },
+  {
+    "english_lemma": "decency",
+    "russian_translation": "порядочность"
+  },
+  {
+    "english_lemma": "indecency",
+    "russian_translation": "непристойность"
+  },
+  {
+    "english_lemma": "owing",
+    "russian_translation": "обязанный, должный"
+  },
+  {
+    "english_lemma": "glove",
+    "russian_translation": "перчатка"
+  },
+  {
+    "english_lemma": "cure",
+    "russian_translation": "лечить"
+  },
+  {
+    "english_lemma": "curable",
+    "russian_translation": "излечимый"
+  },
+  {
+    "english_lemma": "incurable",
+    "russian_translation": "неизлечимый"
+  },
+  {
+    "english_lemma": "curative",
+    "russian_translation": "лечебный"
+  },
+  {
+    "english_lemma": "avoid",
+    "russian_translation": "избегать"
+  },
+  {
+    "english_lemma": "avoidance",
+    "russian_translation": "уклонение"
+  },
+  {
+    "english_lemma": "think over",
+    "russian_translation": "обдумать"
+  },
+  {
+    "english_lemma": "think through",
+    "russian_translation": "взвесить"
+  },
+  {
+    "english_lemma": "emerge",
+    "russian_translation": "появляться"
+  },
+  {
+    "english_lemma": "emergent",
+    "russian_translation": "возникающий"
+  },
+  {
+    "english_lemma": "emergence",
+    "russian_translation": "появление"
+  },
+  {
+    "english_lemma": "take",
+    "russian_translation": "воспринимать"
+  },
+  {
+    "english_lemma": "fisherman",
+    "russian_translation": "рыбак"
+  },
+  {
+    "english_lemma": "fishery",
+    "russian_translation": "рыболовство"
+  },
+  {
+    "english_lemma": "conscious",
+    "russian_translation": "сознательный, сознающий"
+  },
+  {
+    "english_lemma": "unconscious",
+    "russian_translation": "без сознания"
+  },
+  {
+    "english_lemma": "consciousness",
+    "russian_translation": "сознание"
+  },
+  {
+    "english_lemma": "subconscious",
+    "russian_translation": "подсознательный"
+  },
+  {
+    "english_lemma": "subconsciousness",
+    "russian_translation": "подсознание"
+  },
+  {
+    "english_lemma": "detect",
+    "russian_translation": "обнаружить, выявить"
+  },
+  {
+    "english_lemma": "anywhere",
+    "russian_translation": "где угодно, куда угодно"
+  },
+  {
+    "english_lemma": "anyhow",
+    "russian_translation": "как угодно"
+  },
+  {
+    "english_lemma": "dare",
+    "russian_translation": "осмелиться"
+  },
+  {
+    "english_lemma": "anger",
+    "russian_translation": "гнев"
+  },
+  {
+    "english_lemma": "stuff",
+    "russian_translation": "вещи, всякая фигня"
+  },
+  {
+    "english_lemma": "fortunate",
+    "russian_translation": "удачный"
+  },
+  {
+    "english_lemma": "fortunately",
+    "russian_translation": "к счастью"
+  },
+  {
+    "english_lemma": "unfortunately",
+    "russian_translation": "к сожалению"
+  },
+  {
+    "english_lemma": "unfortunate",
+    "russian_translation": "несчастный"
+  },
+  {
+    "english_lemma": "wilderness",
+    "russian_translation": "глушь, дикая местность"
+  },
+  {
+    "english_lemma": "shut out",
+    "russian_translation": "не впускать"
+  },
+  {
+    "english_lemma": "shut in",
+    "russian_translation": "не выпускать"
+  },
+  {
+    "english_lemma": "noise",
+    "russian_translation": "шум"
+  },
+  {
+    "english_lemma": "noisy",
+    "russian_translation": "шумный"
+  },
+  {
+    "english_lemma": "noiseless",
+    "russian_translation": "бесшумный"
+  },
+  {
+    "english_lemma": "fat",
+    "russian_translation": "жир, жирный"
+  },
+  {
+    "english_lemma": "fatness",
+    "russian_translation": "упитанность"
+  },
+  {
+    "english_lemma": "fatten",
+    "russian_translation": "откармливать"
+  },
+  {
+    "english_lemma": "fail",
+    "russian_translation": "потерпеть неудачу"
+  },
+  {
+    "english_lemma": "steady",
+    "russian_translation": "устойчивый"
+  },
+  {
+    "english_lemma": "steadiness",
+    "russian_translation": "устойчивость"
+  },
+  {
+    "english_lemma": "unsteady",
+    "russian_translation": "неустойчивый"
+  },
+  {
+    "english_lemma": "loss",
+    "russian_translation": "потеря"
+  },
+  {
+    "english_lemma": "path",
+    "russian_translation": "путь"
+  },
+  {
+    "english_lemma": "pathway",
+    "russian_translation": "путь"
+  },
+  {
+    "english_lemma": "upside down",
+    "russian_translation": "вверх ногами"
+  },
+  {
+    "english_lemma": "cozy",
+    "russian_translation": "уютный"
+  },
+  {
+    "english_lemma": "depict",
+    "russian_translation": "изображать, описывать"
+  },
+  {
+    "english_lemma": "depiction",
+    "russian_translation": "описание"
+  },
+  {
+    "english_lemma": "room",
+    "russian_translation": "место, пространство"
+  },
+  {
+    "english_lemma": "roomy",
+    "russian_translation": "вместительный"
+  },
+  {
+    "english_lemma": "lens",
+    "russian_translation": "линза, объектив"
+  },
+  {
+    "english_lemma": "tail",
+    "russian_translation": "хвост"
+  },
+  {
+    "english_lemma": "tails",
+    "russian_translation": "обрезки, отходы"
+  },
+  {
+    "english_lemma": "tailed",
+    "russian_translation": "хвостатый"
+  },
+  {
+    "english_lemma": "can",
+    "russian_translation": "жестяная банка"
+  },
+  {
+    "english_lemma": "canned",
+    "russian_translation": "консервированный"
+  },
+  {
+    "english_lemma": "flour",
+    "russian_translation": "мука"
+  },
+  {
+    "english_lemma": "magazine",
+    "russian_translation": "журнал"
+  },
+  {
+    "english_lemma": "tense",
+    "russian_translation": "напряжённый, напрягать"
+  },
+  {
+    "english_lemma": "tension",
+    "russian_translation": "напряженность"
+  },
+  {
+    "english_lemma": "way",
+    "russian_translation": "способ"
+  },
+  {
+    "english_lemma": "split (split, split)",
+    "russian_translation": "расколоться, распасться"
+  },
+  {
+    "english_lemma": "ring (rang, rung)",
+    "russian_translation": "звонить, звонок"
+  },
+  {
+    "english_lemma": "thumb",
+    "russian_translation": "большой палец"
+  },
+  {
+    "english_lemma": "boundary",
+    "russian_translation": "граница, черта"
+  },
+  {
+    "english_lemma": "wage",
+    "russian_translation": "заработок, оплата"
+  },
+  {
+    "english_lemma": "point",
+    "russian_translation": "смысл, суть"
+  },
+  {
+    "english_lemma": "pointless",
+    "russian_translation": "бессмысленный"
+  },
+  {
+    "english_lemma": "favor (favour)",
+    "russian_translation": "благоприятствовать"
+  },
+  {
+    "english_lemma": "favourite",
+    "russian_translation": "любимый"
+  },
+  {
+    "english_lemma": "favorable",
+    "russian_translation": "благоприятный"
+  },
+  {
+    "english_lemma": "unfavorable",
+    "russian_translation": "неблагоприятный"
+  },
+  {
+    "english_lemma": "chef",
+    "russian_translation": "шеф-повар"
+  },
+  {
+    "english_lemma": "considerable",
+    "russian_translation": "крупный, значительный"
+  },
+  {
+    "english_lemma": "inconsiderable",
+    "russian_translation": "незначительный"
+  },
+  {
+    "english_lemma": "multiple",
+    "russian_translation": "множественный, неединичный"
+  },
+  {
+    "english_lemma": "lessen",
+    "russian_translation": "уменьшать(ся)"
+  },
+  {
+    "english_lemma": "landmark",
+    "russian_translation": "ориентир"
+  },
+  {
+    "english_lemma": "solid",
+    "russian_translation": "сплошной"
+  },
+  {
+    "english_lemma": "herb",
+    "russian_translation": "трава"
+  },
+  {
+    "english_lemma": "herbal",
+    "russian_translation": "травяной"
+  },
+  {
+    "english_lemma": "topic",
+    "russian_translation": "тема, предмет обсуждения"
+  },
+  {
+    "english_lemma": "topical",
+    "russian_translation": "актуальный, тематический"
+  },
+  {
+    "english_lemma": "hurt (hurt, hurt)",
+    "russian_translation": "причинять боль или болеть"
+  },
+  {
+    "english_lemma": "affiliate",
+    "russian_translation": "филиал, отделение, мл. партнёр"
+  },
+  {
+    "english_lemma": "affiliated",
+    "russian_translation": "аффилированный"
+  },
+  {
+    "english_lemma": "affiliation",
+    "russian_translation": "присоединение"
+  },
+  {
+    "english_lemma": "anxiety",
+    "russian_translation": "беспокойство, тревога"
+  },
+  {
+    "english_lemma": "wave",
+    "russian_translation": "волна"
+  },
+  {
+    "english_lemma": "long ago",
+    "russian_translation": "давно"
+  },
+  {
+    "english_lemma": "space",
+    "russian_translation": "пространство"
+  },
+  {
+    "english_lemma": "spacious",
+    "russian_translation": "просторный"
+  },
+  {
+    "english_lemma": "spatial",
+    "russian_translation": "пространственный"
+  },
+  {
+    "english_lemma": "cord",
+    "russian_translation": "верёвка, шнур"
+  },
+  {
+    "english_lemma": "vision",
+    "russian_translation": "зрение или видение"
+  },
+  {
+    "english_lemma": "visionary",
+    "russian_translation": "провидец, мечтатель"
+  },
+  {
+    "english_lemma": "dozen",
+    "russian_translation": "дюжина"
+  },
+  {
+    "english_lemma": "several",
+    "russian_translation": "несколько"
+  },
+  {
+    "english_lemma": "terms",
+    "russian_translation": "отношения"
+  }
+]

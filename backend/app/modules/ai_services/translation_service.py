@@ -13,6 +13,56 @@ from app.modules.ai_services.contracts import (
 
 
 class TranslationService:
+    _DIRECT_MAP = {
+        "apple": "яблоко",
+        "pear": "груша",
+        "truck": "грузовик",
+        "through": "через",
+        "book": "книга",
+        "language": "язык",
+        "word": "слово",
+        "sentence": "предложение",
+        "learn": "изучать",
+        "study": "учиться",
+        "speak": "говорить",
+        "read": "читать",
+        "write": "писать",
+        "practice": "практиковать",
+        "translate": "переводить",
+        "hello": "привет",
+        "world": "мир",
+        "good": "хороший",
+        "bad": "плохой",
+        "small": "маленький",
+        "big": "большой",
+        "fast": "быстрый",
+        "slow": "медленный",
+        "home": "дом",
+        "school": "школа",
+        "work": "работа",
+        "friend": "друг",
+        "time": "время",
+        "day": "день",
+        "night": "ночь",
+        "today": "сегодня",
+        "tomorrow": "завтра",
+        "yesterday": "вчера",
+    }
+    _AMBIGUOUS_MAP = {
+        "right": {"left": "право", "correct": "правильный", "answer": "правильный"},
+        "light": {"lamp": "свет", "dark": "свет", "weight": "легкий"},
+        "book": {"read": "книга", "page": "книга", "ticket": "забронировать", "hotel": "забронировать"},
+        "watch": {"movie": "смотреть", "video": "смотреть", "time": "часы"},
+    }
+    _PHRASE_MAP = {
+        "look up": "искать",
+        "find out": "выяснить",
+        "turn on": "включить",
+        "turn off": "выключить",
+        "go on": "продолжать",
+        "pick up": "подбирать",
+    }
+
     def __init__(
         self,
         *,
@@ -136,57 +186,8 @@ class TranslationService:
         if glossary_translation:
             return glossary_translation
 
-        direct_map = {
-            "apple": "яблоко",
-            "pear": "груша",
-            "through": "через",
-            "book": "книга",
-            "language": "язык",
-            "word": "слово",
-            "sentence": "предложение",
-            "learn": "изучать",
-            "study": "учиться",
-            "speak": "говорить",
-            "read": "читать",
-            "write": "писать",
-            "practice": "практиковать",
-            "translate": "переводить",
-            "hello": "привет",
-            "world": "мир",
-            "good": "хороший",
-            "bad": "плохой",
-            "small": "маленький",
-            "big": "большой",
-            "fast": "быстрый",
-            "slow": "медленный",
-            "home": "дом",
-            "school": "школа",
-            "work": "работа",
-            "friend": "друг",
-            "time": "время",
-            "day": "день",
-            "night": "ночь",
-            "today": "сегодня",
-            "tomorrow": "завтра",
-            "yesterday": "вчера",
-        }
-        ambiguous_map = {
-            "right": {"left": "право", "correct": "правильный", "answer": "правильный"},
-            "light": {"lamp": "свет", "dark": "свет", "weight": "легкий"},
-            "book": {"read": "книга", "page": "книга", "ticket": "забронировать", "hotel": "забронировать"},
-            "watch": {"movie": "смотреть", "video": "смотреть", "time": "часы"},
-        }
-        phrase_map = {
-            "look up": "искать",
-            "find out": "выяснить",
-            "turn on": "включить",
-            "turn off": "выключить",
-            "go on": "продолжать",
-            "pick up": "подбирать",
-        }
-
         lowered = text.strip().lower()
-        for phrase, translated in phrase_map.items():
+        for phrase, translated in self._PHRASE_MAP.items():
             if lowered == phrase:
                 return translated
 
@@ -195,16 +196,30 @@ class TranslationService:
             return None
         norm_tokens = [self._normalize_token(token) for token in tokens]
         key = norm_tokens[0] if len(norm_tokens) == 1 else " ".join(norm_tokens)
-        if key in direct_map:
-            return direct_map[key]
+        if key in self._DIRECT_MAP:
+            return self._DIRECT_MAP[key]
 
-        if len(norm_tokens) == 1 and norm_tokens[0] in ambiguous_map:
+        if len(norm_tokens) == 1 and norm_tokens[0] in self._AMBIGUOUS_MAP:
             context_tokens = set(self._tokenize(context or ""))
-            variants = ambiguous_map[norm_tokens[0]]
+            variants = self._AMBIGUOUS_MAP[norm_tokens[0]]
             for trigger, translated in variants.items():
                 if trigger in context_tokens:
                     return translated
         return None
+
+    def fast_translate_single_word(
+        self,
+        text: str,
+        glossary: list[TranslateGlossaryItem] | None = None,
+    ) -> str | None:
+        normalized = self._normalize_english_text(text)
+        if not normalized or " " in normalized:
+            return None
+        return self.pick_contextual_translation(
+            normalized,
+            None,
+            glossary,
+        )
 
     def heuristic_translate(
         self,

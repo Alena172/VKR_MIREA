@@ -5,6 +5,8 @@ class ExerciseGenerateRequest(BaseModel):
     user_id: int | None = Field(default=None, ge=1)
     vocabulary_ids: list[int] = Field(default_factory=list)
     size: int = Field(default=10, ge=1, le=30)
+    fast_start: bool = False
+    incremental: bool = False
     mode: str = Field(
         default="sentence_translation_full",
         pattern="^(sentence_translation_full|word_definition_match|word_scramble)$",
@@ -14,6 +16,8 @@ class ExerciseGenerateRequest(BaseModel):
 class ExerciseGenerateRequestMe(BaseModel):
     vocabulary_ids: list[int] = Field(default_factory=list)
     size: int = Field(default=10, ge=1, le=30)
+    fast_start: bool = False
+    incremental: bool = False
     mode: str = Field(
         default="sentence_translation_full",
         pattern="^(sentence_translation_full|word_definition_match|word_scramble)$",

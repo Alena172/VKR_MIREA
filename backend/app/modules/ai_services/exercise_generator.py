@@ -15,11 +15,21 @@ from app.modules.ai_services.contracts import (
     GeneratedExerciseItem,
     TranslateGlossaryItem,
 )
-from app.modules.ai_services.definition_resolver import DictionaryDefinitionResolver
 from app.modules.ai_services.translation_service import TranslationService
 
 
 class ExerciseGenerator:
+    _FAST_START_EN_TEMPLATES = (
+        "The key word is {word}.",
+        "Today's word is {word}.",
+        "Please remember the word {word}.",
+    )
+    _FAST_START_RU_TEMPLATES = (
+        "Ключевое слово — {translation}.",
+        "Слово на сегодня — {translation}.",
+        "Пожалуйста, запомни слово {translation}.",
+    )
+
     def __init__(
         self,
         *,
@@ -31,7 +41,6 @@ class ExerciseGenerator:
         chat_complete_sync: Callable[..., str | None],
         provider_unavailable_error: type[Exception],
         translation_service: TranslationService,
-        definition_resolver: DictionaryDefinitionResolver,
         recent_sentences: dict[str, deque[str]],
     ) -> None:
         self._provider = provider
@@ -42,7 +51,6 @@ class ExerciseGenerator:
         self._chat_complete_sync = chat_complete_sync
         self._provider_unavailable_error = provider_unavailable_error
         self._translation_service = translation_service
-        self._definition_resolver = definition_resolver
         self._recent_sentences = recent_sentences
 
     def _wrap_async_chat_complete(
@@ -76,13 +84,13 @@ class ExerciseGenerator:
         return None
 
     def _is_word_scramble_suitable(self, word: str) -> bool:
-        clean_word = word.strip().lower()
+        clean_word = re.sub(r"[^a-z]", "", word.strip().lower())
         if len(clean_word) < 3 or len(clean_word) > 15:
             return False
         return clean_word.isalpha()
 
     def _build_word_scramble_letters(self, answer: str) -> list[str]:
-        clean = answer.strip().lower()
+        clean = re.sub(r"[^a-z]", "", answer.strip().lower())
         if not self._is_word_scramble_suitable(clean):
             return []
 
@@ -129,6 +137,40 @@ class ExerciseGenerator:
         candidate = text.strip().strip('"').strip("'")
         candidate = candidate.replace("**", "").replace("__", "").replace("`", "")
         return re.sub(r"\s+", " ", candidate).strip()
+
+    def _sanitize_definition_for_match(self, word: str, definition: str) -> str:
+        cleaned = re.sub(r"\s+", " ", (definition or "").strip())
+        if not cleaned:
+            return ""
+
+        lemma = word.strip().lower()
+        pattern = re.compile(rf"\b{re.escape(lemma)}s?\b", flags=re.IGNORECASE)
+        cleaned = pattern.sub("it", cleaned)
+        cleaned = re.sub(r"^(an?|the)\s+it\s+(is|are)\s+", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"^it\s+(is|are)\s+", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,;:-")
+
+        if cleaned:
+            cleaned = cleaned[0].upper() + cleaned[1:]
+        if cleaned and cleaned[-1] not in ".!?":
+            cleaned = f"{cleaned}."
+        return cleaned
+
+    def _build_fast_start_sentence_translation_exercise(
+        self,
+        seed: ExerciseSeed,
+    ) -> GeneratedExerciseItem:
+        normalized_word = seed.english_lemma.strip().lower()
+        translation = seed.russian_translation.strip()
+        template_index = sum(ord(char) for char in normalized_word) % len(self._FAST_START_EN_TEMPLATES)
+        sentence_en = self._FAST_START_EN_TEMPLATES[template_index].format(word=normalized_word)
+        sentence_ru = self._FAST_START_RU_TEMPLATES[template_index].format(translation=translation)
+        return GeneratedExerciseItem(
+            prompt=f"Translate sentence into Russian: {sentence_en}",
+            answer=sentence_ru,
+            exercise_type="sentence_translation_full",
+            options=[],
+        )
 
     def _parse_sentence_translation_payload(self, raw: str) -> tuple[str, str] | None:
         payload = self._extract_json_payload(raw)
@@ -369,14 +411,23 @@ class ExerciseGenerator:
                 break
 
         if len(selected_words) < 4:
-            return await self._build_sentence_translation_exercise(seed)
+            raise ValueError("Need at least 4 unique words to build a local definition match exercise.")
 
         pairs = []
         for item in selected_words:
+            definition = (item.context_definition_ru or "").strip()
+            if not definition:
+                raise ValueError("Definition match exercise requires stored definitions in vocabulary.")
+            sanitized_definition = self._sanitize_definition_for_match(
+                item.english_lemma,
+                definition,
+            )
+            if not sanitized_definition:
+                raise ValueError("Definition match exercise requires non-empty stored definitions in vocabulary.")
             pairs.append(
                 {
                     "word": item.english_lemma.strip().lower(),
-                    "definition": await self._definition_resolver.resolve(item.english_lemma, item.russian_translation),
+                    "definition": sanitized_definition,
                 }
             )
         definitions = [pair["definition"] for pair in pairs]
@@ -394,12 +445,13 @@ class ExerciseGenerator:
         seed: ExerciseSeed,
         cefr_level: str | None = None,
     ) -> GeneratedExerciseItem:
-        letters = self._build_word_scramble_letters(seed.english_lemma)
+        normalized_answer = re.sub(r"[^a-z]", "", seed.english_lemma.strip().lower())
+        letters = self._build_word_scramble_letters(normalized_answer)
         if not letters:
-            return await self._build_sentence_translation_exercise(seed, cefr_level=cefr_level)
+            raise ValueError("Word scramble requires an alphabetic word between 3 and 15 characters.")
         return GeneratedExerciseItem(
             prompt=f"Assemble the word from letters. Translation hint: {seed.russian_translation}",
-            answer=seed.english_lemma,
+            answer=normalized_answer,
             exercise_type="word_scramble",
             options=letters,
         )
@@ -410,6 +462,17 @@ class ExerciseGenerator:
             return GenerateExercisesResponse(
                 exercises=[],
                 provider_note="local_heuristic exercise_generation.empty_vocabulary",
+            )
+
+        if payload.fast_start and payload.mode == "sentence_translation_full":
+            result = [
+                self._build_fast_start_sentence_translation_exercise(seeds[idx % len(seeds)])
+                for idx in range(payload.size)
+            ]
+            level_note = f" CEFR={payload.cefr_level}." if payload.cefr_level else ""
+            return GenerateExercisesResponse(
+                exercises=result,
+                provider_note=f"local_fast_start_template{level_note}",
             )
 
         scheduled_seeds: list[tuple[ExerciseSeed, int]] = []
@@ -493,7 +556,7 @@ class ExerciseGenerator:
         return parsed
 
     async def generate_exercises_async(self, payload: GenerateExercisesRequest) -> GenerateExercisesResponse:
-        if payload.mode in {"sentence_translation_full", "word_definition_match"}:
+        if payload.mode in {"sentence_translation_full", "word_definition_match", "word_scramble"}:
             return await self._fallback_generate_exercises(payload)
 
         seeds_with_context = [

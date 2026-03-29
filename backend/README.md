@@ -66,6 +66,31 @@ pytest -q
 python tools/check_module_boundaries.py
 ```
 
+## Импорт базового словаря
+
+Быстрый перевод одиночных слов использует `base_lexicon` в БД.
+
+Импорт JSON/CSV:
+
+```bash
+python tools/import_base_lexicon.py data/base_lexicon.seed.json
+```
+
+Формат JSON:
+
+```json
+[
+  { "english_lemma": "truck", "russian_translation": "грузовик" }
+]
+```
+
+Формат CSV:
+
+```csv
+english_lemma,russian_translation
+truck,грузовик
+```
+
 Скрипт проверяет:
 - что межмодульные импорты не ходят в чужие `repository/models/application_service`;
 - что `application_service.py` не возвращает web response-схемы своего модуля.

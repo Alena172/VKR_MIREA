@@ -39,6 +39,8 @@ def generate_exercises_for_user(
     vocabulary_ids: list[int],
     size: int,
     mode: str,
+    fast_start: bool = False,
+    incremental: bool = False,
 ) -> dict:
     """Generate exercises for a user and return them as a serialisable dict.
 
@@ -56,6 +58,8 @@ def generate_exercises_for_user(
                 vocabulary_ids=vocabulary_ids,
                 size=size,
                 mode=mode,
+                fast_start=fast_start,
+                incremental=incremental,
             )
         )
         return _exercise_result_to_dict(response)
