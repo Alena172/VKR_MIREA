@@ -12,6 +12,9 @@ class VocabularyItemDTO:
     english_lemma: str
     russian_translation: str
     context_definition_ru: str | None
+    context_definition_source: str | None
+    context_definition_confidence: str | None
+    definition_reused_from_item_id: int | None
     source_sentence: str | None
     source_url: str | None
 

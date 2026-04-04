@@ -8,6 +8,9 @@ class VocabularyItemCreate(BaseModel):
     english_lemma: str = Field(min_length=1, max_length=200)
     russian_translation: str = Field(min_length=1, max_length=200)
     context_definition_ru: str | None = Field(default=None, max_length=3000)
+    context_definition_source: str | None = Field(default=None, max_length=64)
+    context_definition_confidence: str | None = Field(default=None, max_length=16)
+    definition_reused_from_item_id: int | None = Field(default=None, ge=1)
     source_sentence: str | None = Field(default=None, max_length=2000)
     source_url: str | None = Field(default=None, max_length=2000)
 
@@ -27,6 +30,9 @@ class VocabularyItem(BaseModel):
     english_lemma: str
     russian_translation: str
     context_definition_ru: str | None = None
+    context_definition_source: str | None = None
+    context_definition_confidence: str | None = None
+    definition_reused_from_item_id: int | None = None
     source_sentence: str | None = None
     source_url: str | None = None
 

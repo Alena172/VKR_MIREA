@@ -29,6 +29,29 @@ class VocabularyRepository:
             db.flush()
         return item
 
+    def list_definition_candidates(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        english_lemma: str,
+        limit: int = 20,
+    ) -> list[VocabularyItemModel]:
+        normalized = english_lemma.strip().lower()
+        if not normalized:
+            return []
+        stmt = (
+            select(VocabularyItemModel)
+            .where(
+                VocabularyItemModel.user_id == user_id,
+                VocabularyItemModel.english_lemma == normalized,
+                VocabularyItemModel.context_definition_ru.is_not(None),
+            )
+            .order_by(VocabularyItemModel.id.desc())
+            .limit(limit)
+        )
+        return list(db.scalars(stmt))
+
     def get_by_id_for_user(self, db: Session, item_id: int, user_id: int) -> VocabularyItemModel | None:
         stmt = select(VocabularyItemModel).where(
             VocabularyItemModel.id == item_id,

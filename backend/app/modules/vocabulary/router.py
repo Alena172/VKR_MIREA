@@ -27,6 +27,9 @@ def _to_vocabulary_response(item: VocabularyItemDTO) -> VocabularyItem:
         english_lemma=item.english_lemma,
         russian_translation=item.russian_translation,
         context_definition_ru=item.context_definition_ru,
+        context_definition_source=item.context_definition_source,
+        context_definition_confidence=item.context_definition_confidence,
+        definition_reused_from_item_id=item.definition_reused_from_item_id,
         source_sentence=item.source_sentence,
         source_url=item.source_url,
     )

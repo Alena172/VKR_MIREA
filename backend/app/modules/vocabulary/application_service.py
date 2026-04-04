@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -30,6 +31,15 @@ from app.modules.vocabulary.schemas import (
 class VocabularyApplicationService:
     _ENGLISH_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
     _RUSSIAN_TOKEN_RE = re.compile(r"[А-Яа-яЁё-]+")
+    _GENERIC_TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'-]*")
+    _REUSE_CONFIDENCE_THRESHOLD = 0.72
+
+    @dataclass(frozen=True)
+    class DefinitionResolution:
+        context_definition: str
+        source: str
+        confidence: str
+        reused_from_item_id: int | None = None
 
     def list_items(
         self,
@@ -89,7 +99,9 @@ class VocabularyApplicationService:
         normalized_sentence = source_sentence.strip() if source_sentence else None
         normalized_url = source_url.strip() if source_url else None
 
-        context_definition_ru = await ai_service.generate_context_definition_async(
+        definition_resolution = await self._resolve_context_definition(
+            db=db,
+            user_id=user_id,
             english_lemma=normalized_lemma,
             russian_translation=normalized_translation,
             source_sentence=normalized_sentence,
@@ -102,7 +114,10 @@ class VocabularyApplicationService:
                     user_id=user_id,
                     english_lemma=normalized_lemma,
                     russian_translation=normalized_translation,
-                    context_definition_ru=context_definition_ru,
+                    context_definition_ru=definition_resolution.context_definition,
+                    context_definition_source=definition_resolution.source,
+                    context_definition_confidence=definition_resolution.confidence,
+                    definition_reused_from_item_id=definition_resolution.reused_from_item_id,
                     source_sentence=normalized_sentence,
                     source_url=normalized_url,
                 ),
@@ -155,7 +170,6 @@ class VocabularyApplicationService:
 
         (
             russian_translation,
-            context_definition_ru,
             translation_note,
             semantic_sentence,
         ) = await self._generate_capture_ai_data(
@@ -164,6 +178,13 @@ class VocabularyApplicationService:
             cefr_level=user.cefr_level,
             source_sentence=normalized_sentence,
             db=db,
+        )
+        definition_resolution = await self._resolve_context_definition(
+            db=db,
+            user_id=user_id,
+            english_lemma=self._normalize_english_lemma(selected_text),
+            russian_translation=russian_translation,
+            source_sentence=semantic_sentence,
         )
 
         with application_transaction.boundary(db=db):
@@ -193,7 +214,10 @@ class VocabularyApplicationService:
                         user_id=user_id,
                         english_lemma=english_lemma,
                         russian_translation=russian_translation,
-                        context_definition_ru=context_definition_ru,
+                        context_definition_ru=definition_resolution.context_definition,
+                        context_definition_source=definition_resolution.source,
+                        context_definition_confidence=definition_resolution.confidence,
+                        definition_reused_from_item_id=definition_resolution.reused_from_item_id,
                         source_sentence=normalized_sentence,
                         source_url=normalized_url,
                     ),
@@ -212,7 +236,7 @@ class VocabularyApplicationService:
                 user_id=user_id,
                 english_lemma=english_lemma,
                 russian_translation=russian_translation,
-                context_definition_ru=context_definition_ru,
+                context_definition_ru=definition_resolution.context_definition,
                 source_sentence=semantic_sentence,
                 source_url=normalized_url,
                 vocabulary_item_id=vocabulary_item.id,
@@ -284,6 +308,13 @@ class VocabularyApplicationService:
     def _russian_tokens(self, text: str | None) -> list[str]:
         return [token.lower() for token in self._RUSSIAN_TOKEN_RE.findall(text or "")]
 
+    def _generic_tokens(self, text: str | None) -> set[str]:
+        return {
+            token.lower()
+            for token in self._GENERIC_TOKEN_RE.findall(text or "")
+            if len(token) >= 3
+        }
+
     def _is_single_word_capture(self, text: str) -> bool:
         return len(self._english_tokens(text)) == 1
 
@@ -303,6 +334,118 @@ class VocabularyApplicationService:
             return True
         return False
 
+    def _classify_confidence(self, score: float) -> str:
+        if score >= 0.9:
+            return "high"
+        if score >= self._REUSE_CONFIDENCE_THRESHOLD:
+            return "medium"
+        return "low"
+
+    def _score_definition_candidate(
+        self,
+        *,
+        candidate,
+        russian_translation: str,
+        source_sentence: str | None,
+    ) -> float:
+        score = 0.0
+
+        if candidate.context_definition_ru:
+            score += 0.2
+
+        candidate_translation = (candidate.russian_translation or "").strip().lower()
+        normalized_translation = russian_translation.strip().lower()
+        if candidate_translation and candidate_translation == normalized_translation:
+            score += 0.45
+
+        current_tokens = self._generic_tokens(source_sentence)
+        candidate_tokens = self._generic_tokens(candidate.source_sentence)
+        if current_tokens and candidate_tokens:
+            overlap = len(current_tokens & candidate_tokens) / max(1, len(current_tokens))
+            score += 0.35 * overlap
+        elif not current_tokens and candidate_translation == normalized_translation:
+            score += 0.15
+
+        candidate_source = (candidate.context_definition_source or "").strip().lower()
+        if candidate_source.startswith("reuse"):
+            score += 0.03
+        elif candidate_source.startswith("llm"):
+            score += 0.08
+        elif candidate_source.startswith("local"):
+            score += 0.05
+
+        return min(score, 1.0)
+
+    def _find_reusable_definition(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        english_lemma: str,
+        russian_translation: str,
+        source_sentence: str | None,
+    ) -> DefinitionResolution | None:
+        candidates = vocabulary_repository.list_definition_candidates(
+            db,
+            user_id=user_id,
+            english_lemma=english_lemma,
+            limit=20,
+        )
+        best_candidate = None
+        best_score = 0.0
+        for candidate in candidates:
+            score = self._score_definition_candidate(
+                candidate=candidate,
+                russian_translation=russian_translation,
+                source_sentence=source_sentence,
+            )
+            if score > best_score:
+                best_score = score
+                best_candidate = candidate
+
+        if best_candidate is None or best_score < self._REUSE_CONFIDENCE_THRESHOLD:
+            return None
+
+        return self.DefinitionResolution(
+            context_definition=best_candidate.context_definition_ru or "",
+            source="reuse_existing_context_definition",
+            confidence=self._classify_confidence(best_score),
+            reused_from_item_id=best_candidate.id,
+        )
+
+    async def _resolve_context_definition(
+        self,
+        *,
+        db: Session,
+        user_id: int,
+        english_lemma: str,
+        russian_translation: str,
+        source_sentence: str | None,
+        cefr_level: str | None = None,
+    ) -> DefinitionResolution:
+        reusable = self._find_reusable_definition(
+            db=db,
+            user_id=user_id,
+            english_lemma=english_lemma,
+            russian_translation=russian_translation,
+            source_sentence=source_sentence,
+        )
+        if reusable is not None:
+            return reusable
+
+        definition = await ai_service.generate_context_definition_async(
+            english_lemma=english_lemma,
+            russian_translation=russian_translation,
+            source_sentence=source_sentence,
+            cefr_level=cefr_level,
+        )
+        return self.DefinitionResolution(
+            context_definition=definition,
+            source="llm_generated_context_definition",
+            confidence="medium",
+            reused_from_item_id=None,
+        )
+
     async def _generate_capture_ai_data(
         self,
         *,
@@ -311,7 +454,7 @@ class VocabularyApplicationService:
         cefr_level: str,
         source_sentence: str | None,
         db: Session,
-    ) -> tuple[str, str, str, str | None]:
+    ) -> tuple[str, str, str | None]:
         if self._is_single_word_capture(selected_text):
             fast_translation = base_lexicon_public_api.lookup_translation(
                 db=db,
@@ -321,11 +464,6 @@ class VocabularyApplicationService:
                 normalized_fast_translation = self._normalize_translation(fast_translation)
                 return (
                     normalized_fast_translation,
-                    ai_service.generate_context_definition_fast(
-                        english_lemma=english_lemma,
-                        russian_translation=normalized_fast_translation,
-                        source_sentence=source_sentence,
-                    ),
                     "fast_local_word_translation; local_definition",
                     None,
                 )
@@ -371,13 +509,7 @@ class VocabularyApplicationService:
                     "capture_mode=contextual_single_word"
                 )
 
-        context_definition_ru = await ai_service.generate_context_definition_async(
-            english_lemma=english_lemma,
-            russian_translation=russian_translation,
-            source_sentence=semantic_sentence,
-            cefr_level=cefr_level,
-        )
-        return russian_translation, context_definition_ru, translation_note, semantic_sentence
+        return russian_translation, translation_note, semantic_sentence
 
 
 vocabulary_application_service = VocabularyApplicationService()
