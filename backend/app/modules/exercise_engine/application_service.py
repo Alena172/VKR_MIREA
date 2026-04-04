@@ -4,6 +4,7 @@ import secrets
 
 from sqlalchemy.orm import Session
 
+from app.celery_app import enqueue_task
 from app.core.application import AsyncTaskResponse, application_access
 from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
@@ -38,13 +39,17 @@ class ExerciseEngineApplicationService:
 
         from app.tasks.exercise_tasks import generate_exercises_for_user
 
-        task = generate_exercises_for_user.delay(
-            user_id=target_user_id,
-            vocabulary_ids=payload.vocabulary_ids or [],
-            size=payload.size,
-            mode=payload.mode,
-            fast_start=payload.fast_start,
-            incremental=payload.incremental,
+        task = enqueue_task(
+            generate_exercises_for_user,
+            owner_user_id=current_user_id,
+            kwargs={
+                "user_id": target_user_id,
+                "vocabulary_ids": payload.vocabulary_ids or [],
+                "size": payload.size,
+                "mode": payload.mode,
+                "fast_start": payload.fast_start,
+                "incremental": payload.incremental,
+            },
         )
         return AsyncTaskResponse(task_id=task.id)
 

@@ -27,6 +27,101 @@ const EXERCISE_TYPE_META = {
   word_scramble: "Собери слово",
 };
 
+function safeParseJsonArray(value) {
+  if (!value || typeof value !== "string") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function extractPromptWords(prompt) {
+  if (!prompt) {
+    return [];
+  }
+  return [...prompt.matchAll(/\d+\.\s*([a-z][a-z'-]{0,48})/gi)].map((match) => match[1].toLowerCase());
+}
+
+function buildDefinitionMatchRows(item) {
+  const expectedPairs = safeParseJsonArray(item.expected_answer);
+  const userPairs = safeParseJsonArray(item.user_answer);
+  const promptWords = extractPromptWords(item.prompt);
+
+  const expectedByWord = new Map(
+    expectedPairs
+      .filter((pair) => pair && typeof pair.word === "string" && typeof pair.definition === "string")
+      .map((pair) => [pair.word.toLowerCase(), pair.definition]),
+  );
+  const userByWord = new Map(
+    userPairs
+      .filter((pair) => pair && typeof pair.word === "string" && typeof pair.definition === "string")
+      .map((pair) => [pair.word.toLowerCase(), pair.definition]),
+  );
+
+  const orderedWords = [...new Set([
+    ...promptWords,
+    ...expectedByWord.keys(),
+    ...userByWord.keys(),
+  ])];
+
+  return orderedWords.map((word) => {
+    const expectedDefinition = expectedByWord.get(word) || "Не найдено";
+    const userDefinition = userByWord.get(word) || "Не выбрано";
+    return {
+      word,
+      expectedDefinition,
+      userDefinition,
+      isCorrect: expectedDefinition === userDefinition,
+    };
+  });
+}
+
+function DefinitionMatchSummary({ item }) {
+  const rows = buildDefinitionMatchRows(item);
+
+  return (
+    <div className="mt-3 space-y-3 text-sm text-slate-700">
+      {rows.map((row) => (
+        <div
+          key={`${item.exercise_id}-${row.word}`}
+          className={`rounded-xl border p-3 ${row.isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}
+        >
+          <p className="font-semibold text-slate-900">{row.word}</p>
+          <p className="mt-2"><strong>Твоё сопоставление:</strong> {row.userDefinition}</p>
+          {!row.isCorrect ? (
+            <p className="mt-1"><strong>Правильное определение:</strong> {row.expectedDefinition}</p>
+          ) : (
+            <p className="mt-1 text-green-700">Сопоставлено верно.</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WordScrambleSummary({ item }) {
+  const normalizedUser = (item.user_answer || "").trim() || "—";
+  const normalizedExpected = (item.expected_answer || "").trim() || "—";
+
+  return (
+    <div className="mt-3 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+      <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <p className="font-semibold text-slate-900">Собранное слово</p>
+        <p className="mt-2 text-base font-bold uppercase tracking-wide">{normalizedUser}</p>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <p className="font-semibold text-slate-900">Правильный вариант</p>
+        <p className="mt-2 text-base font-bold uppercase tracking-wide">{normalizedExpected}</p>
+      </div>
+    </div>
+  );
+}
+
 function buildTrainingInsights(sessionResult, submittedAnswers) {
   if (!sessionResult || !submittedAnswers.length) {
     return null;
@@ -119,6 +214,8 @@ function TrainingFeedbackCard({ item, kind }) {
       ? "border-red-200 bg-red-50"
       : "border-amber-200 bg-amber-50";
   const feedback = kind === "incorrect" ? item.incorrectFeedback : item.adviceFeedback;
+  const isDefinitionMatch = item.exercise_type === "word_definition_match";
+  const isWordScramble = item.exercise_type === "word_scramble";
 
   return (
     <article className={`rounded-xl border p-4 ${toneClass}`}>
@@ -129,10 +226,14 @@ function TrainingFeedbackCard({ item, kind }) {
         </span>
       </div>
       <p className="mt-3 text-sm font-medium text-slate-800">{item.prompt}</p>
-      <div className="mt-3 space-y-1 text-sm text-slate-700">
-        <p><strong>Твой ответ:</strong> {item.user_answer}</p>
-        <p><strong>Ожидаемый ответ:</strong> {item.expected_answer}</p>
-      </div>
+      {isDefinitionMatch ? <DefinitionMatchSummary item={item} /> : null}
+      {isWordScramble ? <WordScrambleSummary item={item} /> : null}
+      {!isDefinitionMatch && !isWordScramble ? (
+        <div className="mt-3 space-y-1 text-sm text-slate-700">
+          <p><strong>Твой ответ:</strong> {item.user_answer}</p>
+          <p><strong>Ожидаемый ответ:</strong> {item.expected_answer}</p>
+        </div>
+      ) : null}
       <div className="mt-3 rounded-lg bg-white/80 p-3 text-sm text-slate-700">
         <p className="font-semibold text-slate-900">{title}</p>
         <p className="mt-1">{feedback}</p>

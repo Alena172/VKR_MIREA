@@ -23,18 +23,31 @@ class TaskStatusResponse(BaseModel):
 @router.get("/{task_id}", response_model=TaskStatusResponse)
 def get_task_status(
     task_id: str,
-    _current_user_id: int = Depends(get_current_user_id),
+    current_user_id: int = Depends(get_current_user_id),
 ) -> TaskStatusResponse:
     """Poll the status of a background Celery task.
 
     Returns the task result once it reaches SUCCESS state.
     """
-    from app.celery_app import CELERY_AVAILABLE, _LOCAL_TASK_RESULTS, celery_app
+    from app.celery_app import (
+        CELERY_AVAILABLE,
+        _LOCAL_TASK_RESULTS,
+        _prune_local_task_results,
+        celery_app,
+        task_ownership_registry,
+    )
+
+    owner_user_id = task_ownership_registry.get_owner_user_id(task_id)
+    if owner_user_id is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if owner_user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     if not CELERY_AVAILABLE:
+        _prune_local_task_results()
         task_data = _LOCAL_TASK_RESULTS.get(task_id)
         if task_data is None:
-            return TaskStatusResponse(task_id=task_id, status="PENDING")
+            raise HTTPException(status_code=404, detail="Task not found")
         if task_data["status"] == "SUCCESS":
             task_result = task_data["result"]
             if isinstance(task_result, dict):

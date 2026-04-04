@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import re
 
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from app.celery_app import enqueue_task
 from app.core.application import AsyncTaskResponse, application_access, application_transaction
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import ai_service
@@ -15,8 +19,6 @@ from app.modules.vocabulary.assembler import (
     to_vocabulary_item_dto,
 )
 from app.modules.vocabulary.contracts import VocabularyFromCaptureResultDTO, VocabularyItemDTO
-from fastapi import HTTPException
-from sqlalchemy.orm import Session
 
 from app.modules.vocabulary.repository import vocabulary_repository
 from app.modules.vocabulary.schemas import (
@@ -57,12 +59,16 @@ class VocabularyApplicationService:
 
         from app.tasks.vocabulary_tasks import add_word_with_ai
 
-        task = add_word_with_ai.delay(
-            user_id=target_user_id,
-            english_lemma=payload.english_lemma.strip().lower(),
-            russian_translation=payload.russian_translation.strip(),
-            source_sentence=payload.source_sentence.strip() if payload.source_sentence else None,
-            source_url=payload.source_url.strip() if payload.source_url else None,
+        task = enqueue_task(
+            add_word_with_ai,
+            owner_user_id=current_user_id,
+            kwargs={
+                "user_id": target_user_id,
+                "english_lemma": payload.english_lemma.strip().lower(),
+                "russian_translation": payload.russian_translation.strip(),
+                "source_sentence": payload.source_sentence.strip() if payload.source_sentence else None,
+                "source_url": payload.source_url.strip() if payload.source_url else None,
+            },
         )
         return AsyncTaskResponse(task_id=task.id)
 
@@ -83,12 +89,13 @@ class VocabularyApplicationService:
         normalized_sentence = source_sentence.strip() if source_sentence else None
         normalized_url = source_url.strip() if source_url else None
 
+        context_definition_ru = await ai_service.generate_context_definition_async(
+            english_lemma=normalized_lemma,
+            russian_translation=normalized_translation,
+            source_sentence=normalized_sentence,
+        )
+
         with application_transaction.boundary(db=db):
-            context_definition_ru = await ai_service.generate_context_definition_async(
-                english_lemma=normalized_lemma,
-                russian_translation=normalized_translation,
-                source_sentence=normalized_sentence,
-            )
             item = vocabulary_repository.create(
                 db,
                 VocabularyItemCreate(
@@ -119,12 +126,16 @@ class VocabularyApplicationService:
 
         from app.tasks.vocabulary_tasks import study_flow_capture_to_vocabulary
 
-        task = study_flow_capture_to_vocabulary.delay(
-            user_id=target_user_id,
-            selected_text=payload.selected_text,
-            source_url=payload.source_url,
-            source_sentence=payload.source_sentence,
-            force_new_vocabulary_item=payload.force_new_vocabulary_item,
+        task = enqueue_task(
+            study_flow_capture_to_vocabulary,
+            owner_user_id=current_user_id,
+            kwargs={
+                "user_id": target_user_id,
+                "selected_text": payload.selected_text,
+                "source_url": payload.source_url,
+                "source_sentence": payload.source_sentence,
+                "force_new_vocabulary_item": payload.force_new_vocabulary_item,
+            },
         )
         return AsyncTaskResponse(task_id=task.id)
 
@@ -142,6 +153,19 @@ class VocabularyApplicationService:
         normalized_sentence = source_sentence.strip() if source_sentence else None
         normalized_url = source_url.strip() if source_url else None
 
+        (
+            russian_translation,
+            context_definition_ru,
+            translation_note,
+            semantic_sentence,
+        ) = await self._generate_capture_ai_data(
+            selected_text=selected_text,
+            english_lemma=self._normalize_english_lemma(selected_text),
+            cefr_level=user.cefr_level,
+            source_sentence=normalized_sentence,
+            db=db,
+        )
+
         with application_transaction.boundary(db=db):
             capture = capture_public_api.create(
                 db,
@@ -154,18 +178,6 @@ class VocabularyApplicationService:
                 auto_commit=False,
             )
             english_lemma = self._normalize_english_lemma(selected_text)
-            (
-                russian_translation,
-                context_definition_ru,
-                translation_note,
-                semantic_sentence,
-            ) = await self._generate_capture_ai_data(
-                selected_text=selected_text,
-                english_lemma=english_lemma,
-                cefr_level=user.cefr_level,
-                source_sentence=normalized_sentence,
-                db=db,
-            )
 
             existing = vocabulary_repository.get_latest_by_lemma(
                 db,

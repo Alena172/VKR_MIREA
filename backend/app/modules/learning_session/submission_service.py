@@ -413,9 +413,9 @@ class LearningSessionSubmissionService:
         answers: list[SessionAnswer],
     ) -> SessionSubmitResponse:
         normalized_answers = self._dedupe_answers(answers)
+        evaluated_answers = await self.evaluate_answers(normalized_answers)
+        incorrect_feedback, advice_feedback = self.collect_feedback(evaluated_answers)
         with application_transaction.boundary(db=db):
-            evaluated_answers = await self.evaluate_answers(normalized_answers)
-            incorrect_feedback, advice_feedback = self.collect_feedback(evaluated_answers)
             self.update_progress(
                 db=db,
                 user_id=user_id,
