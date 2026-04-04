@@ -207,6 +207,22 @@ class TranslationService:
                     return translated
         return None
 
+    def _looks_ambiguous(self, text: str) -> bool:
+        lowered = self._normalize_english_text(text)
+        if lowered in self._PHRASE_MAP:
+            return False
+        tokens = self._tokenize(lowered)
+        if len(tokens) != 1:
+            return False
+        return self._normalize_token(tokens[0]) in self._AMBIGUOUS_MAP
+
+    def _build_remote_provider_note(self, payload: TranslateWithContextRequest) -> str:
+        uses_glossary = bool(payload.glossary)
+        uses_context = bool((payload.source_context or "").strip())
+        if uses_glossary or uses_context or self._looks_ambiguous(payload.text):
+            return f"ai_disambiguation:{self._provider}/{self._model}"
+        return f"ai_translation:{self._provider}/{self._model}"
+
     def fast_translate_single_word(
         self,
         text: str,
@@ -304,7 +320,7 @@ class TranslationService:
         if content:
             return TranslateWithContextResponse(
                 translated_text=content.strip().strip('"'),
-                provider_note=f"remote:{self._provider}/{self._model};glossary={len(payload.glossary)}",
+                provider_note=self._build_remote_provider_note(payload),
             )
         if self._translation_strict_remote:
             raise self._provider_unavailable_error(

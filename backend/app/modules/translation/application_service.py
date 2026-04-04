@@ -14,6 +14,18 @@ from app.modules.vocabulary.public_api import vocabulary_public_api
 
 
 class TranslationApplicationService:
+    def _build_translation_note(self, provider_note: str) -> str:
+        normalized = provider_note.strip().lower()
+        if normalized.startswith("local_heuristic"):
+            return f"Local heuristic translation used ({provider_note})"
+        if normalized.startswith("ai_disambiguation:"):
+            return f"AI disambiguation used ({provider_note})"
+        if normalized.startswith("ai_translation:"):
+            return f"AI translation used ({provider_note})"
+        if normalized.startswith("glossary"):
+            return f"Glossary translation used ({provider_note})"
+        return f"Translation completed ({provider_note})"
+
     async def translate_for_user(
         self,
         *,
@@ -52,7 +64,7 @@ class TranslationApplicationService:
 
         return to_translation_result_dto(
             translated_text=ai_response.translated_text,
-            note=f"AI translation used ({ai_response.provider_note})",
+            note=self._build_translation_note(ai_response.provider_note),
         )
 
     def resolve_target_user_id(

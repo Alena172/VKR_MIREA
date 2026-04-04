@@ -158,6 +158,9 @@ class EvaluatedAnswer:
 
 
 class LearningSessionSubmissionService:
+    _STYLE_ADVICE_MIN_TOKENS = 6
+    _STYLE_ADVICE_MAX_TOKENS = 24
+
     def _should_run_semantic_check(self, expected_answer: str | None, user_answer: str | None) -> bool:
         metrics = answer_similarity_metrics(expected_answer, user_answer)
         return (
@@ -168,10 +171,40 @@ class LearningSessionSubmissionService:
 
     def _should_add_style_advice(self, expected_answer: str | None, user_answer: str | None) -> bool:
         metrics = answer_similarity_metrics(expected_answer, user_answer)
-        return not (
+        normalized_expected = normalize_answer(expected_answer)
+        normalized_user = normalize_answer(user_answer)
+        expected_tokens = normalized_expected.split()
+        user_tokens = normalized_user.split()
+
+        # Keep stylistic feedback for medium-length free-form answers only.
+        if (
+            len(expected_tokens) < self._STYLE_ADVICE_MIN_TOKENS
+            or len(user_tokens) < self._STYLE_ADVICE_MIN_TOKENS
+            or len(expected_tokens) > self._STYLE_ADVICE_MAX_TOKENS
+            or len(user_tokens) > self._STYLE_ADVICE_MAX_TOKENS
+        ):
+            return False
+
+        # If the answer is nearly identical, feedback is noise.
+        if (
             metrics["canonical_token_recall"] >= 0.92
             and metrics["canonical_content_recall"] >= 0.92
+            and metrics["text_similarity"] >= 0.9
+        ):
+            return False
+
+        # Only ask for style advice when the answer is clearly close in meaning
+        # but still differs enough lexically to warrant a suggestion.
+        high_confidence_semantic_match = (
+            metrics["canonical_token_recall"] >= 0.78
+            and metrics["canonical_content_recall"] >= 0.82
         )
+        noticeable_style_deviation = (
+            metrics["text_similarity"] <= 0.9
+            or metrics["token_recall"] <= 0.82
+            or metrics["content_recall"] <= 0.85
+        )
+        return high_confidence_semantic_match and noticeable_style_deviation
 
     def _dedupe_answers(self, answers: list[SessionAnswer]) -> list[SessionAnswer]:
         deduped: dict[int, SessionAnswer] = {}
