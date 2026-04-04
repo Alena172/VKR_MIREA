@@ -1,6 +1,6 @@
 # ContextVocab
 
-ContextVocab - это full-stack платформа для изучения английского языка русскоязычными пользователями. Проект объединяет:
+ContextVocab - это платформа для изучения английского языка русскоязычными пользователями. Проект объединяет:
 
 - backend на FastAPI
 - frontend на React
@@ -17,9 +17,9 @@ ContextVocab - это full-stack платформа для изучения ан
 ## Структура репозитория
 
 ```text
-backend/    FastAPI modular monolith, миграции БД, тесты, Celery-задачи
-frontend/   React + Vite single-page application
-extension/  Browser extension (Manifest V3)
+backend/    FastAPI-модульный монолит, миграции БД, тесты, Celery-задачи
+frontend/   React + Vite одностраничное приложение
+extension/  Браузерное расширение (Manifest V3)
 gateway/    Nginx-конфиг для единой локальной точки входа
 docs/       Дополнительные заметки по проекту
 ```
@@ -74,14 +74,14 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 ## Текущая модель рекомендаций
 
-Сейчас самый зрелый recommendation-flow в проекте связан именно с повторением уже известных слов:
+Сейчас самый зрелый рекомендательный сценарий в проекте связан именно с повторением уже известных слов:
 
 - recent mistakes
 - difficult words
 - due words по SRS
-- дополнительные graph-based boosts
+- дополнительные сигналы от графа
 
-В проекте пока нет отдельного production-ready механизма, который бы полноценно рекомендовал совершенно новые слова из внешнего пула кандидатов.
+В проекте пока нет отдельного готового production-механизма, который бы полноценно рекомендовал совершенно новые слова из внешнего пула кандидатов.
 
 ## Куда читать дальше
 
