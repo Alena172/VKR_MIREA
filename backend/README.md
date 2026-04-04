@@ -1,117 +1,32 @@
-# Backend (модульный монолит)
+# Backend
 
-## Быстрый старт
+Backend - это FastAPI modular monolith, который отвечает за аутентификацию, словарь, перевод, генерацию упражнений, review-flow и API фоновых задач.
+
+## Технологический стек
+
+- Python 3.11+
+- FastAPI
+- SQLAlchemy 2.x
+- Alembic
+- PostgreSQL
+- Redis
+- Celery
+- Flower
+
+## Локальный запуск
+
+### 1. Python-окружение
 
 ```bash
+cd backend
 python -m venv .venv
-.venv\\Scripts\\activate
+.venv\Scripts\activate
 pip install -e .
 ```
 
-## Запуск всего проекта одной командой (root compose)
+### 2. Файл окружения
 
-Из корня репозитория:
-
-```bash
-docker compose up -d --build
-```
-
-Проверка:
-- backend: `http://localhost:8000/health`
-- frontend: `http://localhost:5173`
-- postgres: `localhost:15432`
-
-Остановка:
-
-```bash
-docker compose down
-```
-
-## Запуск полного контура (backend + frontend)
-
-1. Backend:
-```bash
-cd backend
-copy .env.example .env
-docker compose up -d
-alembic upgrade head
-uvicorn app.main:app --reload
-```
-2. Frontend:
-```bash
-cd ../frontend
-copy .env.example .env
-npm install
-npm run dev
-```
-
-## Запуск с PostgreSQL
-
-```bash
-copy .env.example .env
-docker compose up -d
-alembic upgrade head
-uvicorn app.main:app --reload
-```
-
-## Запуск тестов
-
-```bash
-pytest -q
-```
-
-## Проверка границ модулей
-
-```bash
-python tools/check_module_boundaries.py
-```
-
-## Импорт базового словаря
-
-Быстрый перевод одиночных слов использует `base_lexicon` в БД.
-
-Импорт JSON/CSV:
-
-```bash
-python tools/import_base_lexicon.py data/base_lexicon.seed.json
-```
-
-Формат JSON:
-
-```json
-[
-  { "english_lemma": "truck", "russian_translation": "грузовик" }
-]
-```
-
-Формат CSV:
-
-```csv
-english_lemma,russian_translation
-truck,грузовик
-```
-
-Скрипт проверяет:
-- что межмодульные импорты не ходят в чужие `repository/models/application_service`;
-- что `application_service.py` не возвращает web response-схемы своего модуля.
-
-Давай сделаем хорошо
-Проверка валидирует архитектурное правило модульного монолита:
-- другой модуль можно импортировать через `public_api` или фасад из `__init__.py`
-- прямые cross-module импорты `repository`, `application_service` и `models` запрещены
-- межмодульный `public_api` должен возвращать DTO из `contracts.py`, а не ORM или web-response модели
-
-## Архитектурный стандарт слоев
-
-- `repository.py`: persistence и SQLAlchemy
-- `application_service.py`: use-case orchestration
-- `contracts.py`: DTO-контракты
-- `assembler.py`: преобразование внутренних моделей в DTO
-- `router.py`: только HTTP-адаптер и преобразование DTO в response schema
-
-## Переменные окружения
-
-Файл `.env` в `backend/`:
+Создай `.env` в папке `backend/`:
 
 ```env
 DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/vkr_db
@@ -125,251 +40,197 @@ TRANSLATION_STRICT_REMOTE=true
 JWT_SECRET=change_me
 JWT_ISSUER=vkr
 JWT_ACCESS_TTL_MINUTES=1440
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
 ```
 
-Провайдер AI:
-- `AI_PROVIDER=stub` — локальные deterministic-ответы (режим по умолчанию)
-- `AI_PROVIDER=openai_compatible` + `AI_API_KEY` — удаленный LLM через OpenAI-compatible `/chat/completions`
-- `AI_PROVIDER=ollama` — удаленный LLM через локальный Ollama (`/chat/completions` совместимый `/v1`)
-- `AI_MAX_RETRIES` — количество повторных попыток remote-запроса при ошибках сети/провайдера
-- `TRANSLATION_STRICT_REMOTE=true` — строгий режим перевода: если remote AI недоступен, `/translate/*` и `study-flow` возвращают `503` вместо локального fallback
+Шаблон хранится в [`.env.example`](/d:/VKR/VKR_V3_Curs/backend/.env.example).
 
-Пример `.env` для Ollama (если backend запущен в Docker, Ollama на хосте):
+### 3. Поднять инфраструктуру
 
-```env
-AI_PROVIDER=ollama
-AI_BASE_URL=http://host.docker.internal:11434/v1
-AI_API_KEY=
-AI_MODEL=llama3.1:8b
-TRANSLATION_STRICT_REMOTE=true
-```
-
-Диагностика AI:
-- `GET /api/v1/ai/status` — текущая конфигурация AI (provider/model/remote_enabled/timeout/retries)
-
-## Аутентификация (JWT)
-
-`POST /api/v1/auth/token`:
-- принимает `email`
-- возвращает `access_token` (JWT) и `user_id`
-
-`POST /api/v1/auth/login-or-register`:
-- принимает `email`, `full_name`, `cefr_level`
-- если пользователя нет, создает его и сразу возвращает JWT
-- если пользователь уже есть, выполняет вход и возвращает JWT
-
-`POST /api/v1/auth/verify`:
-- принимает `token`
-- возвращает `valid` и `user_id`, если токен валиден
-
-`GET /api/v1/auth/me`:
-- возвращает `user_id` из токена
-
-Примечание:
-- для user-bound эндпоинтов требуется `Authorization: Bearer <token>`
-- большинство эндпоинтов принимают `user_id`, но если он не передан, используется `user_id` из JWT
-- для новых endpoint-first сценариев доступны `me`-маршруты (например, `/api/v1/vocabulary/me`, `/api/v1/context/me/*`)
-
-## Словарь
-
-`GET /api/v1/vocabulary/me`:
-- возвращает словарь текущего пользователя из JWT
-
-`POST /api/v1/vocabulary/me`:
-- добавляет слово в словарь текущего пользователя
-- принимает `english_lemma`, `russian_translation`, `source_sentence`, `source_url`
-
-## Capture
-
-`GET /api/v1/capture/me`:
-- возвращает историю capture текущего пользователя
-
-`POST /api/v1/capture/me`:
-- сохраняет выделение текущего пользователя
-- принимает `selected_text`, `source_url`, `source_sentence`
-
-## Перевод и упражнения
-
-`POST /api/v1/translate/me`:
-- перевод EN->RU для текущего пользователя
-- принимает `text`, `source_context`
-- в строгом режиме (`TRANSLATION_STRICT_REMOTE=true`) требует доступный remote AI (`AI_PROVIDER=ollama` или `AI_PROVIDER=openai_compatible` + `AI_API_KEY`), иначе вернет `503`
-
-`POST /api/v1/exercises/me/generate`:
-- генерирует упражнения для текущего пользователя
-- принимает `size`, `vocabulary_ids`
-
-## Миграции
+Из корня репозитория:
 
 ```bash
-alembic upgrade head
-alembic downgrade -1
+docker compose up -d postgres redis
 ```
 
-## Ответ `sessions/submit`
+### 4. Применить миграции
 
-`POST /api/v1/sessions/submit` возвращает:
-- `session`: агрегированную статистику по сессии (`total`, `correct`, `accuracy`)
-- `incorrect_feedback`: AI-объяснения на русском для неверных ответов, где переданы `prompt` и `expected_answer`
-- при неверных ответах слово из `prompt` автоматически добавляется в `context_memory.difficult_words`
+```bash
+cd backend
+alembic upgrade head
+```
 
-## История ответов сессии
+### 5. Запустить API
 
-`GET /api/v1/sessions/{session_id}/answers?user_id={user_id}` возвращает ответы по упражнениям (параметр `user_id` опционален):
-- `prompt`, `expected_answer`, `user_answer`
-- `is_correct`
-- `explanation_ru` для ошибочных ответов (если была сгенерирована)
+```bash
+uvicorn app.main:app --reload
+```
 
-`GET /api/v1/sessions/me`:
-- возвращает историю сессий текущего пользователя c серверными фильтрами и пагинацией
-- query-параметры: `limit`, `offset`, `min_accuracy`, `max_accuracy`, `date_from`, `date_to`
-- ответ: `total`, `limit`, `offset`, `items[]`
+Backend будет доступен по адресу `http://localhost:8000`.
 
-`GET /api/v1/sessions/me/{session_id}/answers`:
-- возвращает ответы конкретной сессии текущего пользователя
+## Полный запуск через Docker
 
-## Рекомендации на повторение
+Из корня репозитория:
 
-`GET /api/v1/context/{user_id}/recommendations?limit=10` возвращает (есть аналог `/api/v1/context/me/recommendations`):
-- `words`: объединенный приоритетный список слов на повторение
-- `recent_error_words`: слова из последних ошибок пользователя
-- `difficult_words`: слова из `context_memory`
-- `scores`: числовой вес слова для ранжирования (чем выше, тем выше приоритет)
-- `next_review_at`: дата/время следующего рекомендованного повторения по каждому слову
+```bash
+docker compose up -d --build
+```
 
-Приоритизация `words`:
-- частота ошибок (чем чаще слово ошибочно, тем выше)
-- свежесть ошибок (последние ошибки весят больше)
-- бонус словам из `difficult_words`
-- бонус словам, у которых наступило время повторения (`next_review_at <= now`)
+Сервисы:
 
-## Очередь повторения (SRS)
+- backend: `http://localhost:8000`
+- frontend: `http://localhost:5173`
+- gateway: `http://localhost:8080`
+- Flower: `http://localhost:5555`
+- PostgreSQL: `localhost:15432`
+- Redis: `localhost:6379`
 
-`GET /api/v1/context/{user_id}/review-queue?limit=20` возвращает только слова, у которых уже наступило время повторения (есть аналог `/api/v1/context/me/review-queue`):
-- `total_due`: сколько слов сейчас ожидает повторения
-- `items`: элементы очереди
-- для каждого элемента: `word`, `russian_translation`, `next_review_at`, `error_count`, `correct_streak`
+## Режим разработки
 
-`POST /api/v1/context/{user_id}/review-queue/submit` принимает результат повторения (есть аналог `/api/v1/context/me/review-queue/submit`):
-- тело запроса: `word`, `is_correct`
-- обновляет SRS-прогресс слова (`error_count`, `correct_streak`, `next_review_at`)
-- при ошибке автоматически добавляет слово в `difficult_words`
-- в ответе возвращает `russian_translation`, если слово есть в словаре пользователя
+Для autoreload и bind mount:
 
-`POST /api/v1/context/{user_id}/review-queue/submit-bulk` принимает пачку результатов (есть аналог `/api/v1/context/me/review-queue/submit-bulk`):
-- тело запроса: `items[]` с полями `word`, `is_correct`
-- возвращает `updated[]` с обновленным состоянием SRS по каждому слову
-- `updated[]` также содержит `russian_translation`, если перевод найден в словаре
+```bash
+docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
+```
 
-## Просмотр прогресса слов
+Этот режим:
 
-`GET /api/v1/context/{user_id}/word-progress?limit=20&offset=0&status=all&q=&sort_by=next_review_at&sort_order=asc&min_streak=3&min_errors=3` возвращает список SRS-прогресса (есть аналог `/api/v1/context/me/word-progress`):
-- `total`, `limit`, `offset`
-- `items` с полями `word`, `russian_translation`, `error_count`, `correct_streak`, `next_review_at`
-- `status`: `all | due | upcoming | mastered | troubled`
-- `q`: фильтр по подстроке слова
-- `sort_by`: `next_review_at | error_count | correct_streak`
-- `sort_order`: `asc | desc`
-- `min_streak`: порог для статуса `mastered`
-- `min_errors`: порог для статуса `troubled`
+- монтирует backend-код в контейнер
+- запускает Alembic перед uvicorn
+- использует reload в uvicorn
+- поднимает Celery worker с dev-friendly solo pool
 
-`GET /api/v1/context/{user_id}/word-progress/{word}` возвращает прогресс по конкретному слову (есть аналог `/api/v1/context/me/word-progress/{word}`).
+## Настройка AI
 
-`DELETE /api/v1/context/{user_id}/word-progress/{word}` удаляет прогресс слова (есть аналог `/api/v1/context/me/word-progress/{word}`):
-- `progress_deleted`: удалена ли запись SRS-прогресса
-- `removed_from_difficult_words`: удалено ли слово из `difficult_words`
+Весь доступ к AI централизован в `app.modules.ai_services`.
 
-## План повторения
+Поддерживаемые провайдеры:
 
-`GET /api/v1/context/{user_id}/review-plan?limit=10&horizon_hours=24` возвращает единый план для UI (есть аналог `/api/v1/context/me/review-plan`):
-- `due_count`: количество слов для повторения сейчас (в рамках `limit`)
-- `upcoming_count`: количество слов, которые станут due в заданном горизонте (в рамках `limit`)
-- `due_now`: слова, которые нужно повторять прямо сейчас
-- `upcoming`: слова, которые станут due в заданном горизонте `horizon_hours`
-- `recommended_words`: ранжированный список слов по сигналам ошибок и контекста
+- `stub`: локальное детерминированное поведение
+- `openai_compatible`: внешний `/chat/completions`
+- `ollama`: локальный или удаленный Ollama-compatible endpoint
 
-## SRS-аналитика
+### Текущая философия использования AI
 
-`GET /api/v1/context/review-summary?user_id={user_id}&min_streak=3&min_errors=3` возвращает (есть аналог `/api/v1/context/me/review-summary`):
-- `total_tracked`: всего слов в SRS-трекинге
-- `due_now`: сколько слов нужно повторять сейчас
-- `mastered`: сколько слов стабилизированы (по текущему порогу streak)
-- `troubled`: сколько слов остаются проблемными (по текущему порогу ошибок)
+Backend не считает LLM универсальным решением для всех задач.
 
-## Personal Learning Graph
+Текущее поведение гибридное:
 
-`GET /api/v1/learning-graph/me/overview`:
-- агрегаты графа пользователя: интересы, кластеры, senses, события ошибок, количество связей
-- топ интересов, топ кластеров, топ тегов ошибок
+- локальные эвристики и `base_lexicon` обрабатывают простые случаи перевода
+- внешний AI используется для семантической неоднозначности, генерации предложений и feedback там, где от этого есть реальная польза
+- для `context_definition` используется стратегия `reuse-first, LLM-fallback`
 
-`GET /api/v1/learning-graph/me/interests`:
-- список интересов пользователя с весами
+### Стратегия получения `context_definition`
 
-`PUT /api/v1/learning-graph/me/interests`:
-- upsert интересов пользователя
-- тело: `interests[]` с полями `interest`, `weight`
+При создании элемента словаря:
 
-`POST /api/v1/learning-graph/me/semantic-upsert`:
-- семантическая дедупликация словаря по паре (`english_lemma`, `semantic_key`)
-- автоматически назначает `topic_cluster`
-- может создать связь с существующим `vocabulary_item` через `vocabulary_item_id`
+1. backend ищет уже существующие определения для той же леммы в словаре пользователя
+2. кандидаты оцениваются по переводу и пересечению контекста
+3. если найден надежный кандидат, определение переиспользуется
+4. иначе вызывается AI и строится новое определение
 
-`GET /api/v1/learning-graph/me/recommendations?mode=mixed&limit=10`:
-- рекомендации слов из графа
-- режимы: `interest`, `weakness`, `mixed`
-- для каждого слова возвращаются `score`, `reasons`, `topic_cluster`, `mistake_count`
-- дополнительно возвращаются `strategy_sources[]` и `primary_strategy` для UI-объяснимости
+Вместе с определением сохраняются метаданные:
 
-`GET /api/v1/learning-graph/me/anchors?english_lemma=obtain&limit=5`:
-- возвращает anchor-узлы (связанные senses) для слова: `english_lemma`, `relation_type`, `score`, `topic_cluster`
+- `context_definition_source`
+- `context_definition_confidence`
+- `definition_reused_from_item_id`
 
-`GET /api/v1/learning-graph/me/observability`:
-- продуктовые и технические метрики рекомендаций:
-- `total_requests`, `empty_recommendations_share`, `weak_recommendations_share`
-- `avg_items_per_response`, `avg_top_score`, `avg_mean_score`
-- латентность стратегий (`strategy_latency[]`: avg/p95/max/last)
-- распределение `primary_strategy` (`primary_strategy_distribution[]`)
+## Фоновые задачи
 
-## Сквозной orchestration-flow
+Тяжелые операции выполняются через Celery:
 
-`POST /api/v1/vocabulary/from-capture` выполняет в одном запросе:
-- сохранение `capture` (данные из расширения)
-- перевод выбранного слова через AI
-- добавление в `vocabulary` (с дедупликацией по лемме)
-- инициализацию SRS-прогресса в `word_progress`
+- создание словарных элементов с AI
+- orchestration для capture -> vocabulary
+- генерация упражнений
 
-Параметры:
-- `force_new_vocabulary_item`: принудительно создать новую словарную запись даже при дубле
+Статус задачи доступен через `/api/v1/tasks/{task_id}`.
 
-`POST /api/v1/vocabulary/me/from-capture`:
-- тот же orchestration-flow для текущего пользователя из JWT
-- рекомендуется для frontend/extension как основной endpoint
+Ownership задач принудительно контролируется:
 
-## Интеграция с расширением
+- каждая поставленная задача связана с `owner_user_id`
+- только владелец может опрашивать ее статус
 
-Расширение браузера использует backend endpoints:
-- `POST /api/v1/translate/me`
+## Основные API-группы
+
+### Auth
+
+- `POST /api/v1/auth/token`
+- `POST /api/v1/auth/login-or-register`
+- `POST /api/v1/auth/verify`
+- `GET /api/v1/auth/me`
+
+### Vocabulary
+
+- `GET /api/v1/vocabulary/me`
+- `POST /api/v1/vocabulary/me`
+- `PUT /api/v1/vocabulary/me/{item_id}`
+- `DELETE /api/v1/vocabulary/me/{item_id}`
 - `POST /api/v1/vocabulary/me/from-capture`
 
-Папка расширения:
-- `../extension`
+### Translation
 
-## Текущие модули
-- auth
-- users
-- vocabulary
-- capture
-- translation
-- exercise_engine
-- learning_session
-- context_memory
-- ai_services
-- learning_graph
-- tasks
+- `POST /api/v1/translate/me`
 
-Языки зафиксированы бизнес-правилом:
-- Родной язык: русский (RU)
-- Изучаемый язык: английский (EN)
+### Exercises и sessions
 
+- `POST /api/v1/exercises/me/generate`
+- `POST /api/v1/sessions/submit`
+- `GET /api/v1/sessions/me`
+- `GET /api/v1/sessions/me/{session_id}/answers`
 
+### Review и SRS
 
+- `GET /api/v1/context/me/recommendations`
+- `GET /api/v1/context/me/review-queue`
+- `POST /api/v1/context/me/review-queue/submit`
+- `POST /api/v1/context/me/review-queue/submit-bulk`
+- `GET /api/v1/context/me/word-progress`
+- `GET /api/v1/context/me/review-plan`
+- `GET /api/v1/context/me/review-summary`
+
+### Learning graph
+
+- `GET /api/v1/learning-graph/me/interests`
+- `PUT /api/v1/learning-graph/me/interests`
+- `POST /api/v1/learning-graph/me/semantic-upsert`
+- `GET /api/v1/learning-graph/me/recommendations`
+- `GET /api/v1/learning-graph/me/anchors`
+- `GET /api/v1/learning-graph/me/overview`
+- `GET /api/v1/learning-graph/me/observability`
+
+## Проверки и тесты
+
+### Проверка границ модулей
+
+```bash
+python tools/check_module_boundaries.py
+```
+
+Эта проверка валидирует, что:
+
+- межмодульные импорты проходят через `public_api` или явные фасады
+- `application_service.py` не возвращает response schema из web-слоя
+
+### Тесты
+
+```bash
+pytest -q
+```
+
+Текущий тестовый контур в основном интеграционный и использует SQLite in-memory.
+
+## Импорт данных
+
+В проекте есть `base_lexicon` seed для быстрого локального перевода частотных слов.
+
+Импорт:
+
+```bash
+python tools/import_base_lexicon.py data/base_lexicon.seed.json
+```
+
+## Дополнительные материалы
+
+Подробности по слоям, границам модулей и runtime-ограничениям смотри в [ARCHITECTURE.md](/d:/VKR/VKR_V3_Curs/backend/ARCHITECTURE.md).

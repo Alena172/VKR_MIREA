@@ -1,125 +1,173 @@
-# Архитектурные заметки
+# Архитектура backend
 
-## Область системы
-Модульный монолит для веб-приложения и браузерного расширения.
+## Обзор
 
-Ограничения предметной области:
-- Родной язык всегда русский.
-- Изучаемый язык всегда английский.
-- Языковые поля намеренно не хранятся в профиле пользователя.
+Backend ContextVocab - это FastAPI-based модульный монолит. Система разделена на бизнес-модули с явными границами вместо перехода к микросервисам. Такой подход позволяет разворачивать проект как одно приложение, но при этом удерживать доменную логику в управляемом виде.
 
-## Границы модулей backend
-- auth: точка входа для аутентификации и идентификации
-- users: пользователи и базовый уровень CEFR
-- vocabulary: английская лемма, русский перевод и контекст источника
-- capture: прием данных из браузерного расширения
-- translation: контекстный перевод EN->RU
-- exercise_engine: генерация учебных заданий
-- learning_session: отправка ответов, AI-обратная связь по ошибкам и результаты сессии
-- context_memory: SRS-логика, очередь повторения, review-plan/review-summary
-- ai_services: фасад AI/ML-инференса
-- learning_graph: персональный граф обучения (интересы, semantic senses, кластеры, ошибки)
-- tasks: polling статуса фоновых задач Celery
+Основные runtime-компоненты:
 
-## Правила интеграции
-- Модули взаимодействуют через явные сервисные интерфейсы или API-контракты.
-- Прямой доступ к таблицам другого модуля запрещен.
-- Использование AI централизовано в `ai_services`.
-- Эндпоинты, привязанные к пользователю, требуют JWT (`Authorization: Bearer`).
-- При несовпадении `user_id` и токена возвращается HTTP 403, при отсутствии/невалидности токена HTTP 401.
-- Для новых клиентских сценариев используются `me`-маршруты без явного `user_id`.
+- FastAPI-приложение
+- PostgreSQL
+- Redis как broker и result backend
+- Celery worker для фоновых задач
+- Flower для мониторинга задач
 
-### Импортные границы модулей
-- Внешний модуль может зависеть от другого backend-модуля только через `public_api` или через экспортированный фасад в `__init__.py`.
-- Импорт `repository`, `application_service` и `models` чужого модуля считается нарушением архитектурной границы.
-- Импорт этих слоев внутри собственного модуля разрешен.
-- Общие платформенные компоненты (`app.core.*`) не относятся к модульным границам и могут использоваться всеми модулями.
-- Межмодульный `public_api` должен возвращать DTO из `contracts.py`, а не ORM-модели или HTTP response-схемы.
-- Преобразование внутренних моделей в DTO выполняется в `assembler.py`.
+Backend является источником истины для:
 
-Примеры:
-- корректно: `from app.modules.learning_graph.public_api import learning_graph_public_api`
-- корректно: `from app.modules.learning_graph import learning_graph_public_api`
-- некорректно: `from app.modules.learning_graph.repository import learning_graph_repository`
-- некорректно: `from app.modules.context_memory.application_service import context_memory_application_service`
-- корректно: `translation.application_service -> TranslationResultDTO -> translation.router -> TranslateResponse`
-- некорректно: `translation.application_service -> TranslateResponse`
+- аутентификации и user identity
+- словарных элементов и захваченных слов
+- контекстного перевода
+- генерации и проверки упражнений
+- review recommendations и repetition state
+- graph-based enrichment вокруг уже известных слов
 
-Для автоматической проверки используется команда:
+## Общая структура
 
-```bash
-python tools/check_module_boundaries.py
-```
+Точка входа находится в `app/`. Бизнес-логика организована по модулям:
 
-Этот checker валидирует две вещи:
-- cross-module импорты не обходят `public_api`;
-- `application_service.py` не возвращает и не конструирует web response-схемы своего модуля.
+- `auth`: вход, регистрация, выпуск JWT
+- `users`: профиль пользователя и preferences
+- `vocabulary`: сохраненные слова, контекстные определения, CRUD
+- `capture`: pipeline от захваченного текста к словарю
+- `translation`: перевод для web и extension
+- `exercise_engine`: orchestration генерации упражнений
+- `learning_session`: отправка ответов, проверка, scoring, обновление прогресса
+- `context_memory`: SRS-oriented рекомендации на повторение
+- `learning_graph`: semantic и interest-based слой поверх известных слов
+- `tasks`: API статуса фоновых задач
+- `ai_services`: централизованный слой интеграции с внешним AI
+- `core`: база данных, конфигурация, DI, bootstrap приложения
 
-### Стандарт внутренних слоев
-- `repository.py` отвечает только за persistence и SQLAlchemy.
-- `application_service.py`/`submission_service.py` оркестрируют use-case и не должны зависеть от web-слоя.
-- `contracts.py` содержит DTO для межмодульных и внутренних application-result контрактов.
-- `assembler.py` содержит явные преобразования `model/result -> DTO`.
-- `router.py` преобразует application DTO в HTTP response schema.
+## Правила дизайна модулей
 
-## Состояние слоя данных
-Персистентные модули (SQLAlchemy):
-- users
-- vocabulary
-- capture
-- context_memory
-- learning_sessions
-- learning_session_answers
-- learning_graph_* (interests, topic_clusters, word_senses, relations, mistake_events, links)
+Каждый модуль должен быть внутренне цельным и иметь маленькую, осознанную публичную поверхность.
 
-AI-сценарии (текущий локальный stub-провайдер):
-- translation
-- exercise_engine
-- объяснения ошибок в learning_session
-- ai_services
+Типичная структура модуля:
 
-Провайдер AI:
-- поддержан режим `stub` (по умолчанию)
-- поддержан режим `openai_compatible` с внешним `/chat/completions`
-- есть endpoint диагностики `ai/status` для проверки активного режима и параметров
+- `models.py`: SQLAlchemy-модели модуля
+- `repository.py`: persistence и query logic
+- `application_service.py`: orchestration и бизнес-use-case
+- `contracts.py`: внутренние DTO для обмена между слоями и модулями
+- `assembler.py`: преобразование ORM-объектов, contracts и API-схем
+- `router.py`: FastAPI-endpoints
+- `public_api.py`: явно экспортируемые функции для других модулей
 
-Контур обучения:
-- `sessions/submit` сохраняет агрегат сессии и ответы по каждому упражнению
-- `sessions/me` и `sessions/me/{session_id}/answers` дают user-scoped доступ к истории без `user_id` в query
-- `sessions/me` поддерживает серверные фильтры и пагинацию для масштабирования UI истории
-- для неверных ответов генерируется `explanation_ru`
-- слово из `prompt` автоматически попадает в `context_memory.difficult_words`
-- `context/{user_id}/recommendations` объединяет сложные слова и последние ошибки в список на повторение
-- список на повторение ранжируется по частоте и свежести ошибок с бонусом за `difficult_words`
-- endpoint рекомендаций также возвращает `scores` для прозрачного объяснения ранжирования
-- SRS-прогресс хранится в `word_progress` (`correct_streak`, `next_review_at`) и обновляется при каждом ответе
-- `context/{user_id}/review-queue` возвращает очередь слов, уже готовых к повторению по SRS
-- `context/{user_id}/review-queue/submit` позволяет обновлять SRS по одному слову вне полной сессии
-- `context/{user_id}/review-queue/submit-bulk` позволяет обновлять SRS пачкой для снижения числа запросов с фронта
-- `context/{user_id}/word-progress` и `context/{user_id}/word-progress/{word}` дают доступ к состоянию SRS для UI прогресса
-- `context/{user_id}/word-progress/{word}` (`DELETE`) удаляет SRS-запись слова и очищает его из `difficult_words`
-- `context/{user_id}/word-progress` поддерживает фильтры `status` и `q` для экранов due/mastered/troubled
-- `context/{user_id}/word-progress` также поддерживает серверную сортировку (`sort_by`, `sort_order`)
-- пороги для `mastered/troubled` задаются через query-параметры (`min_streak`, `min_errors`)
-- `context/{user_id}/review-plan` отдает единый ответ для экрана повторения с настраиваемым горизонтом (due/upcoming/recommended)
-- `context/review-summary` агрегирует состояние SRS (due/mastered/troubled) для дашборда
-- `vocabulary/from-capture` объединяет capture/translation/vocabulary/SRS-init в одном endpoint
-- `vocabulary/from-capture` также синхронизирует `learning_graph.word_senses` и связь с `vocabulary_items`
-- `learning_graph/me/interests` позволяет управлять интересами пользователя как сигналом рекомендаций
-- `learning_graph/me/semantic-upsert` обеспечивает семантическую дедупликацию (lemma + semantic_key)
-- `learning_graph/me/recommendations` отдает рекомендации в режимах `interest|weakness|mixed`
-- `learning_graph/me/recommendations` возвращает `strategy_sources[]` и `primary_strategy` для explainability в UI
-- `learning_graph/me/anchors` возвращает anchor-узлы для конкретной леммы (связи/веса/типы)
-- `learning_graph/me/observability` возвращает quality-метрики выдачи и латентности стратегий
-- `learning_graph/me/overview` дает агрегированную картину графа (узлы/ребра/топ-кластеры/теги ошибок)
-- `vocabulary/me/from-capture` и `capture/me` дают тот же сценарий через user-scoped JWT-маршруты
-- `translate/me` и `exercises/me/generate` фиксируют AI-сценарии без явного `user_id` в клиентских payload
-- `auth/token`, `auth/verify` и `auth/me` закрывают JWT-аутентификацию и идентификацию пользователя
-- браузерное расширение работает как внешний клиент к `translate` и `study-flow`
+Правила границ:
 
-## Стратегия миграций
-- Схема БД управляется через Alembic.
-- Начальная миграция: `alembic/versions/0001_initial_schema.py`.
+- один модуль не должен напрямую зависеть от чужого `repository.py` или `models.py`, если это не является осознанной и стабильной частью контракта
+- межмодульный доступ должен идти через `public_api.py` или согласованные contracts
+- router должен оставаться тонким и делегировать работу application service
+- AI-клиенты не должны вызываться хаотично из разных мест; для этого существует централизованный `ai_services`
 
+## Модель запросов и транзакций
 
+Синхронные HTTP-запросы используют FastAPI dependencies для создания DB session на запрос. Orchestration записи принадлежит application service.
 
+В backend действует важное operational-правило:
+
+- внешние AI-вызовы по возможности должны происходить до открытия write-транзакции
+- транзакции в БД должны быть короткими и заниматься только persistence
+
+Это особенно важно для:
+
+- генерации `context_definition` в `vocabulary`
+- AI-assisted проверки ответов в `learning_session`
+
+Цель - не держать открытую транзакцию БД, пока система ждет сетевой ответ от AI-провайдера.
+
+## Persistence и база данных
+
+PostgreSQL - основное production-хранилище. SQLAlchemy-модели определены внутри модулей, миграции Alembic лежат в `alembic/versions/`.
+
+Текущие принципы хранения:
+
+- изоляция пользовательских данных является базовым требованием для словаря, review-потоков и задач
+- review scheduling и tracking прогресса находятся рядом с learning flow, а не вынесены в отдельную analytics-систему
+- graph-related структуры сохраняются в базе, но не считаются основным recommendation-source
+
+SQLite по-прежнему используется в части легковесного test setup, но production-архитектура ориентирована на поведение PostgreSQL.
+
+## Политика использования AI
+
+Backend использует AI как слой усиления, а не как ответ по умолчанию на любую задачу.
+
+Текущее поведение:
+
+- перевод работает по модели hybrid-first: glossary, локальные mappings и heuristics запускаются раньше удаленного AI
+- `context_definition` обязательно для словарных элементов, но система сначала пытается reuse и только потом вызывает LLM
+- генерация упражнений использует AI только там, где действительно нужна свободная генерация или семантическая гибкость
+- проверка ответов эскалирует к AI только тогда, когда детерминированной логики недостаточно
+
+Это снижает latency, стоимость и operational risk, сохраняя ценность AI там, где действительно важна семантика.
+
+## Фоновые задачи и task layer
+
+Celery используется для асинхронных операций, например генерации упражнений и других потенциально дорогих workflows. Redis выступает broker'ом и result backend.
+
+В проекте также есть local fallback task registry для dev-oriented сценариев. Статус задач отдается через модуль `tasks`.
+
+Ключевые ограничения:
+
+- ownership задач привязан к пользователю
+- endpoint статуса задачи не должен раскрывать чужие task metadata
+- записи local fallback считаются временными и очищаются по TTL
+
+## Модель рекомендаций
+
+Сейчас в проекте существуют два recommendation-слоя, и они решают разные задачи:
+
+- `context_memory`: практические рекомендации на повторение, такие как due words, recent mistakes и difficult items
+- `learning_graph`: semantic и interest-aware обогащение поверх уже известных слов
+
+Это различие принципиально:
+
+- `context_memory` входит в core learning loop
+- `learning_graph` является дополнительным слоем и не должен считаться главным источником продуктовой ценности
+
+На текущем этапе безопаснее удерживать `learning_graph` в стабильном состоянии и не раздувать его дальше, пока не измерено его реальное влияние на UX и learning outcome.
+
+## Основные продуктовые потоки
+
+### 1. Перевод и захват
+
+1. Клиент отправляет текст на перевод.
+2. Модуль `translation` выбирает лучший доступный перевод через локальную логику и AI fallback.
+3. Расширение или frontend может сохранить слово или фразу в словарь.
+
+### 2. Сохранение словарного элемента
+
+1. Пользователь отправляет лемму, перевод и исходный контекст.
+2. Модуль `vocabulary` пытается переиспользовать уже существующее контекстное определение.
+3. Если confidence недостаточный, AI строит новое определение.
+4. Финальный словарный элемент сохраняется вместе с definition metadata.
+
+### 3. Генерация и прохождение упражнений
+
+1. `exercise_engine` готовит упражнения синхронно или в фоне.
+2. `learning_session` принимает ответы.
+3. Сначала выполняются детерминированные проверки.
+4. AI-assisted semantic evaluation включается только при необходимости.
+5. Обновляется прогресс обучения и review state.
+
+### 4. Рекомендации на повторение
+
+1. `context_memory` строит review plan на основе due words, recent mistakes и difficult words.
+2. Сигналы `learning_graph` могут обогащать приоритизацию.
+3. Frontend показывает кандидатов на повторение и запускает тренировочный поток.
+
+## Чем backend сейчас не является
+
+Чтобы ожидания были реалистичными, важно зафиксировать, чем backend пока не является:
+
+- это не микросервисная архитектура
+- это не универсальная recommendation-платформа
+- это не production-proven механизм поиска совершенно новых слов для изучения
+- это не полностью event-driven система
+
+Это модульный монолит, оптимизированный под один учебный цикл: захватить слово, понять его в контексте, потренировать и повторить в нужный момент.
+
+## Связанные документы
+
+- [README проекта](d:\VKR\VKR_V3_Curs\README.md)
+- [Общая архитектура проекта](d:\VKR\VKR_V3_Curs\ARCHITECTURE.md)
+- [Backend README](d:\VKR\VKR_V3_Curs\backend\README.md)
