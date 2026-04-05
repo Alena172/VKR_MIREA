@@ -72,7 +72,7 @@ export default function App() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="card max-w-3xl w-full">
           <div className="card-header">
-            <h1 className="text-2xl font-bold text-primary-600">ContextVocab</h1>
+            <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
             <p className="text-sm text-gray-600 mt-1">Вход в платформу изучения английского</p>
           </div>
           <div className="card-body">
@@ -102,7 +102,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 flex">
       <aside className="w-64 bg-white shadow-lg border-r border-gray-200">
         <div className="p-6 border-b border-gray-200">
-          <h1 className="text-2xl font-bold text-primary-600">ContextVocab</h1>
+          <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
           <p className="text-sm text-gray-600 mt-1">Умный словарь</p>
           <p className="mt-3 inline-flex rounded-full bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700">ID: {userId}</p>
         </div>
