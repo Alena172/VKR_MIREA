@@ -6,14 +6,10 @@ import re
 import secrets
 from typing import Literal
 
-from app.core.application import application_transaction
 from fastapi import HTTPException
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.context_memory.assembler import (
-    to_context_garbage_cleanup_dto,
-    to_context_recommendations_dto,
     to_progress_snapshot_dto,
     to_review_plan_dto,
     to_review_queue_bulk_submit_dto,
@@ -27,8 +23,6 @@ from app.modules.context_memory.assembler import (
     to_word_progress_list_dto,
 )
 from app.modules.context_memory.contracts import (
-    ContextGarbageCleanupDTO,
-    ContextRecommendationsDTO,
     ProgressSnapshotDTO,
     ReviewPlanDTO,
     ReviewQueueBulkSubmitDTO,
@@ -45,6 +39,7 @@ from app.modules.context_memory.contracts import (
 from app.modules.context_memory.models import WordProgressModel
 from app.modules.context_memory.recommendation_scoring_service import recommendation_scoring_service
 from app.modules.context_memory.repository import context_repository
+from app.modules.context_memory.review_status import build_review_status, matches_review_status_filter
 from app.modules.context_memory.schemas import (
     ReviewQueueBulkSubmitRequest,
     ReviewQueueSubmitRequest,
@@ -104,42 +99,6 @@ class ContextMemoryApplicationService:
             raise HTTPException(status_code=404, detail="User not found")
         return user
 
-    def get_recommendations(
-        self,
-        *,
-        db: Session,
-        user_id: int,
-        current_user_id: int,
-        limit: int,
-    ) -> ContextRecommendationsDTO:
-        self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
-
-        snapshot = recommendation_scoring_service.build_snapshot(
-            db=db,
-            user_id=user_id,
-            limit=limit,
-        )
-        words = snapshot.ranked_words(limit)
-
-        recent_error_words: list[str] = []
-        for word in snapshot.recent_error_words_stream:
-            if word not in recent_error_words:
-                recent_error_words.append(word)
-            if len(recent_error_words) >= limit:
-                break
-
-        return to_context_recommendations_dto(
-            user_id=user_id,
-            words=words,
-            recent_error_words=recent_error_words,
-            difficult_words=snapshot.difficult_words[:limit],
-            scores={word: round(snapshot.scores[word], 6) for word in words},
-            next_review_at={
-                word: snapshot.due_progress_map.get(word).next_review_at if snapshot.due_progress_map.get(word) else None
-                for word in words
-            },
-        )
-
     def get_review_queue(
         self,
         *,
@@ -163,30 +122,20 @@ class ContextMemoryApplicationService:
         current_user_id: int,
         payload: ReviewQueueSubmitRequest,
     ) -> WordProgressDTO:
-        user = self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
+        self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
 
         normalized_word = payload.word.strip().lower()
         if not _is_valid_review_word(normalized_word):
             raise HTTPException(status_code=400, detail="Word must be a single english token")
 
-        with application_transaction.boundary(db=db):
-            progress = context_repository.update_word_progress(
-                db,
-                user_id=user_id,
-                word=normalized_word,
-                is_correct=payload.is_correct,
-            )
-            if progress is None:
-                raise HTTPException(status_code=400, detail="Word is empty")
-
-            if not payload.is_correct:
-                context_repository.add_difficult_words(
-                    db,
-                    user_id=user_id,
-                    words=[normalized_word],
-                    default_cefr_level=user.cefr_level,
-                    auto_commit=False,
-                )
+        progress = context_repository.update_word_progress(
+            db,
+            user_id=user_id,
+            word=normalized_word,
+            is_correct=payload.is_correct,
+        )
+        if progress is None:
+            raise HTTPException(status_code=400, detail="Word is empty")
         db.refresh(progress)
         return self._to_word_progress_read(db=db, user_id=user_id, progress=progress)
 
@@ -198,39 +147,25 @@ class ContextMemoryApplicationService:
         current_user_id: int,
         payload: ReviewQueueBulkSubmitRequest,
     ) -> ReviewQueueBulkSubmitDTO:
-        user = self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
+        self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
 
         if not payload.items:
             return to_review_queue_bulk_submit_dto(user_id=user_id, updated=[])
 
-        with application_transaction.boundary(db=db):
-            incorrect_words: list[str] = []
-            updated_progress_rows: list[WordProgressModel] = []
-            for item in payload.items:
-                normalized_word = item.word.strip().lower()
-                if not _is_valid_review_word(normalized_word):
-                    continue
-                progress = context_repository.update_word_progress(
-                    db,
-                    user_id=user_id,
-                    word=normalized_word,
-                    is_correct=item.is_correct,
-                )
-                if progress is None:
-                    continue
-
-                if not item.is_correct:
-                    incorrect_words.append(normalized_word)
-                updated_progress_rows.append(progress)
-
-            if incorrect_words:
-                context_repository.add_difficult_words(
-                    db,
-                    user_id=user_id,
-                    words=incorrect_words,
-                    default_cefr_level=user.cefr_level,
-                    auto_commit=False,
-                )
+        updated_progress_rows: list[WordProgressModel] = []
+        for item in payload.items:
+            normalized_word = item.word.strip().lower()
+            if not _is_valid_review_word(normalized_word):
+                continue
+            progress = context_repository.update_word_progress(
+                db,
+                user_id=user_id,
+                word=normalized_word,
+                is_correct=item.is_correct,
+            )
+            if progress is None:
+                continue
+            updated_progress_rows.append(progress)
         updated = self._to_word_progress_reads(
             db=db,
             user_id=user_id,
@@ -321,14 +256,10 @@ class ContextMemoryApplicationService:
         word: str,
     ) -> WordProgressDeleteDTO:
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
-        with application_transaction.boundary(db=db):
-            progress_deleted = context_repository.delete_word_progress(db, user_id=user_id, word=word)
-            removed_from_difficult_words = context_repository.remove_difficult_word(db, user_id=user_id, word=word)
         return to_word_progress_delete_dto(
             user_id=user_id,
             word=word.strip().lower(),
-            progress_deleted=progress_deleted,
-            removed_from_difficult_words=removed_from_difficult_words,
+            progress_deleted=context_repository.delete_word_progress(db, user_id=user_id, word=word),
         )
 
     def get_review_plan(
@@ -366,27 +297,6 @@ class ContextMemoryApplicationService:
             recommended_words=snapshot.ranked_words(limit),
         )
 
-    def cleanup_context_garbage(
-        self,
-        *,
-        db: Session,
-        user_id: int,
-        current_user_id: int,
-    ) -> ContextGarbageCleanupDTO:
-        self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
-        with application_transaction.boundary(db=db):
-            vocabulary_words = self._list_vocabulary_review_words(db=db, user_id=user_id)
-            removed_word_progress, removed_difficult_words = context_repository.cleanup_user_garbage(
-                db,
-                user_id=user_id,
-                vocabulary_words=vocabulary_words,
-            )
-        return to_context_garbage_cleanup_dto(
-            user_id=user_id,
-            removed_word_progress=removed_word_progress,
-            removed_difficult_words=removed_difficult_words,
-        )
-
     def get_review_summary(
         self,
         *,
@@ -419,8 +329,8 @@ class ContextMemoryApplicationService:
         user_id: int,
         fallback_cefr: str,
     ) -> str:
-        context = context_repository.get_by_user_id(db, user_id)
-        return context.cefr_level if context is not None else fallback_cefr
+        user = users_public_api.get_by_id(db, user_id)
+        return user.cefr_level if user is not None else fallback_cefr
 
     def ensure_word_progress_entry(
         self,
@@ -439,28 +349,21 @@ class ContextMemoryApplicationService:
         user_cefr_level: str | None,
         updates: list[WordProgressUpdate],
     ) -> list[str]:
-        difficult_words_to_add: list[str] = []
+        updated_words: list[str] = []
 
         for update in updates:
             if not update.word:
                 continue
-            context_repository.update_word_progress(
+            progress = context_repository.update_word_progress(
                 db,
                 user_id=user_id,
                 word=update.word,
                 is_correct=update.is_correct,
             )
-            if update.mark_difficult:
-                difficult_words_to_add.append(update.word)
+            if progress is not None:
+                updated_words.append(progress.word)
 
-        context_repository.add_difficult_words(
-            db,
-            user_id=user_id,
-            words=difficult_words_to_add,
-            default_cefr_level=user_cefr_level,
-            auto_commit=False,
-        )
-        return difficult_words_to_add
+        return _dedupe_keep_order(updated_words)
 
     def get_progress_snapshot(
         self,
@@ -499,6 +402,11 @@ class ContextMemoryApplicationService:
                 next_review_at=row.next_review_at,
                 error_count=row.error_count,
                 correct_streak=row.correct_streak,
+                status=build_review_status(
+                    error_count=row.error_count,
+                    correct_streak=row.correct_streak,
+                    next_review_at=row.next_review_at,
+                ).status,
             )
             for row in rows
             if _is_valid_review_word(row.word)
@@ -521,6 +429,11 @@ class ContextMemoryApplicationService:
                 error_count=row.error_count,
                 correct_streak=row.correct_streak,
                 next_review_at=row.next_review_at,
+                status=build_review_status(
+                    error_count=row.error_count,
+                    correct_streak=row.correct_streak,
+                    next_review_at=row.next_review_at,
+                ).status,
             )
             for row in progress_rows
         ]
@@ -544,6 +457,11 @@ class ContextMemoryApplicationService:
             error_count=progress.error_count,
             correct_streak=progress.correct_streak,
             next_review_at=progress.next_review_at,
+            status=build_review_status(
+                error_count=progress.error_count,
+                correct_streak=progress.correct_streak,
+                next_review_at=progress.next_review_at,
+            ).status,
         )
 
     def _build_srs_review_session(
@@ -617,6 +535,11 @@ class ContextMemoryApplicationService:
                 next_review_at=progress_map[word].next_review_at if word in progress_map else None,
                 error_count=progress_map[word].error_count if word in progress_map else 0,
                 correct_streak=progress_map[word].correct_streak if word in progress_map else 0,
+                status=build_review_status(
+                    error_count=progress_map[word].error_count if word in progress_map else 0,
+                    correct_streak=progress_map[word].correct_streak if word in progress_map else 0,
+                    next_review_at=progress_map[word].next_review_at if word in progress_map else datetime.utcnow(),
+                ).status,
             )
             for word in words
         ]
@@ -628,18 +551,29 @@ class ContextMemoryApplicationService:
         user_id: int,
         params: _WordProgressListParams,
     ) -> list[WordProgressModel]:
-        return context_repository.list_word_progress(
+        rows = context_repository.list_word_progress(
             db,
             user_id=user_id,
-            limit=params.limit,
-            offset=params.offset,
-            status=params.status,
+            limit=10000,
+            offset=0,
             q=params.q,
             sort_by=params.sort_by,
             sort_order=params.sort_order,
-            min_streak=params.min_streak,
-            min_errors=params.min_errors,
         )
+        if params.status == "all":
+            return rows[params.offset:params.offset + params.limit]
+        filtered = [
+            row for row in rows
+            if matches_review_status_filter(
+                status_filter=params.status,
+                error_count=row.error_count,
+                correct_streak=row.correct_streak,
+                next_review_at=row.next_review_at,
+                min_streak=params.min_streak,
+                min_errors=params.min_errors,
+            )
+        ]
+        return filtered[params.offset:params.offset + params.limit]
 
     def _count_word_progress_rows(
         self,
@@ -648,26 +582,27 @@ class ContextMemoryApplicationService:
         user_id: int,
         params: _WordProgressListParams,
     ) -> int:
-        return context_repository.count_word_progress(
+        rows = context_repository.list_word_progress(
             db,
             user_id=user_id,
-            status=params.status,
+            limit=10000,
+            offset=0,
             q=params.q,
-            min_streak=params.min_streak,
-            min_errors=params.min_errors,
         )
-
-    def _list_vocabulary_review_words(
-        self,
-        *,
-        db: Session,
-        user_id: int,
-    ) -> set[str]:
-        return {
-            item.english_lemma.strip().lower()
-            for item in vocabulary_public_api.list_items(db, user_id=user_id)
-            if _is_valid_review_word(item.english_lemma)
-        }
+        if params.status == "all":
+            return len(rows)
+        return sum(
+            1
+            for row in rows
+            if matches_review_status_filter(
+                status_filter=params.status,
+                error_count=row.error_count,
+                correct_streak=row.correct_streak,
+                next_review_at=row.next_review_at,
+                min_streak=params.min_streak,
+                min_errors=params.min_errors,
+            )
+        )
 
     def _build_review_summary_counters(
         self,
@@ -677,40 +612,31 @@ class ContextMemoryApplicationService:
         min_streak: int,
         min_errors: int,
     ) -> _ReviewSummaryCounters:
-        vocabulary_words = vocabulary_public_api.list_english_lemmas(db, user_id=user_id)
-        if not vocabulary_words:
+        rows = context_repository.list_word_progress(
+            db,
+            user_id=user_id,
+            limit=10000,
+            offset=0,
+            q=None,
+            sort_by="next_review_at",
+            sort_order="asc",
+        )
+        if not rows:
             return _ReviewSummaryCounters(total_tracked=0, due_now=0, mastered=0, troubled=0)
-
-        base_stmt = select(WordProgressModel).where(
-            WordProgressModel.user_id == user_id,
-            WordProgressModel.word.in_(vocabulary_words),
-        )
-        total_tracked = int(db.scalar(select(func.count()).select_from(base_stmt.subquery())) or 0)
-        now_utc = datetime.utcnow()
-        due_now = int(
-            db.scalar(
-                select(func.count()).select_from(
-                    base_stmt.where(WordProgressModel.next_review_at <= now_utc).subquery()
-                )
+        snapshots = [
+            build_review_status(
+                error_count=row.error_count,
+                correct_streak=row.correct_streak,
+                next_review_at=row.next_review_at,
+                min_streak=min_streak,
+                min_errors=min_errors,
             )
-            or 0
-        )
-        mastered = int(
-            db.scalar(
-                select(func.count()).select_from(
-                    base_stmt.where(WordProgressModel.correct_streak >= min_streak).subquery()
-                )
-            )
-            or 0
-        )
-        troubled = int(
-            db.scalar(
-                select(func.count()).select_from(
-                    base_stmt.where(WordProgressModel.error_count >= min_errors).subquery()
-                )
-            )
-            or 0
-        )
+            for row in rows
+        ]
+        total_tracked = len(rows)
+        due_now = sum(1 for item in snapshots if item.status == "due")
+        mastered = sum(1 for item in snapshots if item.status == "mastered")
+        troubled = sum(1 for item in snapshots if item.status == "troubled")
         return _ReviewSummaryCounters(
             total_tracked=total_tracked,
             due_now=due_now,

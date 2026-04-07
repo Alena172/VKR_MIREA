@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class SessionAnswer(BaseModel):
     exercise_id: int = Field(ge=1)
+    exercise_type: str | None = Field(default=None, max_length=64)
+    target_word: str | None = Field(default=None, max_length=200)
     prompt: str | None = Field(default=None, max_length=2000)
     expected_answer: str | None = Field(default=None, max_length=1000)
     user_answer: str = Field(min_length=1, max_length=1000)
@@ -51,6 +53,8 @@ class SessionAnswerRead(BaseModel):
     id: int
     session_id: int
     exercise_id: int
+    exercise_type: str | None = None
+    target_word: str | None = None
     prompt: str | None = None
     expected_answer: str | None = None
     user_answer: str

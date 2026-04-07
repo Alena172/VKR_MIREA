@@ -11,8 +11,6 @@ from app.core.application import AsyncTaskResponse, application_access, applicat
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import ai_service
 from app.modules.base_lexicon.public_api import base_lexicon_public_api
-from app.modules.capture.public_api import capture_public_api
-from app.modules.capture.schemas import CaptureCreate
 from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.learning_graph.public_api import learning_graph_public_api
 from app.modules.vocabulary.assembler import (
@@ -188,16 +186,6 @@ class VocabularyApplicationService:
         )
 
         with application_transaction.boundary(db=db):
-            capture = capture_public_api.create(
-                db,
-                CaptureCreate(
-                    user_id=user_id,
-                    selected_text=selected_text,
-                    source_url=normalized_url,
-                    source_sentence=normalized_sentence,
-                ),
-                auto_commit=False,
-            )
             english_lemma = self._normalize_english_lemma(selected_text)
 
             existing = vocabulary_repository.get_latest_by_lemma(
@@ -245,7 +233,6 @@ class VocabularyApplicationService:
             db.refresh(vocabulary_item)
 
         return to_vocabulary_from_capture_result_dto(
-            capture=capture,
             vocabulary=to_vocabulary_item_dto(vocabulary_item),
             translation_note=translation_note,
             created_new_vocabulary_item=created_new,

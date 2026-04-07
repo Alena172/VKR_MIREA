@@ -28,13 +28,6 @@ def _vocabulary_item_result_to_dict(item) -> dict:
 
 def _capture_to_vocabulary_result_to_dict(result) -> dict:
     return {
-        "capture": {
-            "id": result.capture.id,
-            "user_id": result.capture.user_id,
-            "selected_text": result.capture.selected_text,
-            "source_url": result.capture.source_url,
-            "source_sentence": result.capture.source_sentence,
-        },
         "vocabulary": _vocabulary_item_result_to_dict(result.vocabulary),
         "translation_note": result.translation_note,
         "created_new_vocabulary_item": result.created_new_vocabulary_item,

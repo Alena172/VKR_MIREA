@@ -3,35 +3,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
-class UserContextUpsert(BaseModel):
-    cefr_level: str = Field(pattern="^(A1|A2|B1|B2|C1|C2)$")
-    goals: list[str] = Field(default_factory=list, max_length=10)
-    difficult_words: list[str] = Field(default_factory=list, max_length=200)
-
-
-class UserContext(BaseModel):
-    user_id: int
-    cefr_level: str
-    goals: list[str]
-    difficult_words: list[str]
-
-
-class ContextRecommendations(BaseModel):
-    user_id: int
-    words: list[str]
-    recent_error_words: list[str]
-    difficult_words: list[str]
-    scores: dict[str, float]
-    next_review_at: dict[str, datetime | None]
-
-
 class ReviewQueueItem(BaseModel):
     word: str
     russian_translation: str | None = None
     next_review_at: datetime
     error_count: int
     correct_streak: int
+    status: Literal["due", "upcoming", "mastered", "troubled"]
 
 
 class ReviewQueueResponse(BaseModel):
@@ -61,6 +39,7 @@ class WordProgressRead(BaseModel):
     error_count: int
     correct_streak: int
     next_review_at: datetime
+    status: Literal["due", "upcoming", "mastered", "troubled"]
 
 
 class WordProgressListResponse(BaseModel):
@@ -97,6 +76,7 @@ class ReviewSessionItem(BaseModel):
     next_review_at: datetime | None = None
     error_count: int = 0
     correct_streak: int = 0
+    status: Literal["due", "upcoming", "mastered", "troubled"]
 
 
 class ReviewSessionStartResponse(BaseModel):
@@ -110,13 +90,6 @@ class WordProgressDeleteResponse(BaseModel):
     user_id: int
     word: str
     progress_deleted: bool
-    removed_from_difficult_words: bool
-
-
-class ContextGarbageCleanupResponse(BaseModel):
-    user_id: int
-    removed_word_progress: int
-    removed_difficult_words: int
 
 
 class ProgressSnapshot(BaseModel):

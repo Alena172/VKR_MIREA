@@ -28,6 +28,7 @@ class ExerciseItem(BaseModel):
     prompt: str
     answer: str
     exercise_type: str
+    target_word: str | None = None
     options: list[str] = Field(default_factory=list)
 
 

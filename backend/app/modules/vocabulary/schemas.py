@@ -1,7 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.capture.schemas import CaptureItem
-
 
 class VocabularyItemCreate(BaseModel):
     user_id: int | None = Field(default=None, ge=1)
@@ -60,7 +58,6 @@ class VocabularyFromCaptureRequestMe(BaseModel):
 
 
 class VocabularyFromCaptureResponse(BaseModel):
-    capture: CaptureItem
     vocabulary: VocabularyItem
     translation_note: str
     created_new_vocabulary_item: bool

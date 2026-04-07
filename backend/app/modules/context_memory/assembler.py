@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 from app.modules.context_memory.contracts import (
-    ContextGarbageCleanupDTO,
-    ContextRecommendationsDTO,
-    EffectiveCefrDTO,
     LearningProgressUpdateResultDTO,
     MasteredLemmaDTO,
     ProgressSnapshotDTO,
@@ -21,10 +18,6 @@ from app.modules.context_memory.contracts import (
 )
 
 
-def to_effective_cefr_dto(cefr_level: str) -> EffectiveCefrDTO:
-    return EffectiveCefrDTO(cefr_level=cefr_level)
-
-
 def to_word_progress_tracking_dto(*, word: str, tracked: bool) -> WordProgressTrackingDTO:
     return WordProgressTrackingDTO(
         word=word,
@@ -34,9 +27,9 @@ def to_word_progress_tracking_dto(*, word: str, tracked: bool) -> WordProgressTr
 
 def to_learning_progress_update_result_dto(
     *,
-    difficult_words_added: list[str],
+    updated_words: list[str],
 ) -> LearningProgressUpdateResultDTO:
-    return LearningProgressUpdateResultDTO(difficult_words_added=list(difficult_words_added))
+    return LearningProgressUpdateResultDTO(updated_words=list(updated_words))
 
 
 def to_mastered_lemma_dtos(words: set[str]) -> list[MasteredLemmaDTO]:
@@ -73,25 +66,6 @@ def to_review_summary_dto(
     )
 
 
-def to_context_recommendations_dto(
-    *,
-    user_id: int,
-    words: list[str],
-    recent_error_words: list[str],
-    difficult_words: list[str],
-    scores: dict[str, float],
-    next_review_at: dict[str, object],
-) -> ContextRecommendationsDTO:
-    return ContextRecommendationsDTO(
-        user_id=user_id,
-        words=list(words),
-        recent_error_words=list(recent_error_words),
-        difficult_words=list(difficult_words),
-        scores=dict(scores),
-        next_review_at=dict(next_review_at),
-    )
-
-
 def to_review_queue_item_dto(
     *,
     word: str,
@@ -99,6 +73,7 @@ def to_review_queue_item_dto(
     next_review_at,
     error_count: int,
     correct_streak: int,
+    status,
 ) -> ReviewQueueItemDTO:
     return ReviewQueueItemDTO(
         word=word,
@@ -106,6 +81,7 @@ def to_review_queue_item_dto(
         next_review_at=next_review_at,
         error_count=error_count,
         correct_streak=correct_streak,
+        status=status,
     )
 
 
@@ -130,6 +106,7 @@ def to_word_progress_dto(
     error_count: int,
     correct_streak: int,
     next_review_at,
+    status,
 ) -> WordProgressDTO:
     return WordProgressDTO(
         user_id=user_id,
@@ -138,6 +115,7 @@ def to_word_progress_dto(
         error_count=error_count,
         correct_streak=correct_streak,
         next_review_at=next_review_at,
+        status=status,
     )
 
 
@@ -177,6 +155,7 @@ def to_review_session_item_dto(
     next_review_at,
     error_count: int,
     correct_streak: int,
+    status,
 ) -> ReviewSessionItemDTO:
     return ReviewSessionItemDTO(
         word=word,
@@ -185,6 +164,7 @@ def to_review_session_item_dto(
         next_review_at=next_review_at,
         error_count=error_count,
         correct_streak=correct_streak,
+        status=status,
     )
 
 
@@ -208,13 +188,11 @@ def to_word_progress_delete_dto(
     user_id: int,
     word: str,
     progress_deleted: bool,
-    removed_from_difficult_words: bool,
 ) -> WordProgressDeleteDTO:
     return WordProgressDeleteDTO(
         user_id=user_id,
         word=word,
         progress_deleted=progress_deleted,
-        removed_from_difficult_words=removed_from_difficult_words,
     )
 
 
@@ -234,17 +212,4 @@ def to_review_plan_dto(
         due_now=list(due_now),
         upcoming=list(upcoming),
         recommended_words=list(recommended_words),
-    )
-
-
-def to_context_garbage_cleanup_dto(
-    *,
-    user_id: int,
-    removed_word_progress: int,
-    removed_difficult_words: int,
-) -> ContextGarbageCleanupDTO:
-    return ContextGarbageCleanupDTO(
-        user_id=user_id,
-        removed_word_progress=removed_word_progress,
-        removed_difficult_words=removed_difficult_words,
     )

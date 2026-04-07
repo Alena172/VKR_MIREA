@@ -7,8 +7,6 @@ from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
 from app.modules.learning_graph.application_service import learning_graph_application_service
 from app.modules.learning_graph.contracts import (
-    LearningGraphObservabilityDTO,
-    LearningGraphOverviewDTO,
     RecommendationsResultDTO,
     SemanticUpsertResultDTO,
     SenseAnchorsDTO,
@@ -17,14 +15,10 @@ from app.modules.learning_graph.contracts import (
 from app.modules.learning_graph.schemas import (
     InterestUpsertRequest,
     InterestItem,
-    LearningGraphObservabilityResponse,
-    LearningGraphOverviewResponse,
     RecommendationsResponse,
     SemanticUpsertRequest,
     SemanticUpsertResponse,
     SenseAnchorsResponse,
-    StrategyDistributionMetric,
-    StrategyLatencyMetric,
     TopicClusterRead,
     UserInterestsResponse,
     WordSenseRead,
@@ -40,20 +34,6 @@ def _to_user_interests_response(result: UserInterestsDTO) -> UserInterestsRespon
             InterestItem(interest=item.interest, weight=item.weight)
             for item in result.interests
         ],
-    )
-
-
-def _to_overview_response(result: LearningGraphOverviewDTO) -> LearningGraphOverviewResponse:
-    return LearningGraphOverviewResponse(
-        user_id=result.user_id,
-        interests_count=result.interests_count,
-        topic_clusters_count=result.topic_clusters_count,
-        word_senses_count=result.word_senses_count,
-        mistake_events_count=result.mistake_events_count,
-        graph_edges_count=result.graph_edges_count,
-        top_interests=result.top_interests,
-        top_clusters=result.top_clusters,
-        top_mistake_tags=result.top_mistake_tags,
     )
 
 
@@ -105,40 +85,6 @@ def _to_recommendations_response(result: RecommendationsResultDTO) -> Recommenda
     )
 
 
-def _to_observability_response(result: LearningGraphObservabilityDTO) -> LearningGraphObservabilityResponse:
-    return LearningGraphObservabilityResponse(
-        user_id=result.user_id,
-        generated_at=result.generated_at,
-        last_updated=result.last_updated,
-        total_requests=result.total_requests,
-        empty_recommendations_share=result.empty_recommendations_share,
-        weak_recommendations_share=result.weak_recommendations_share,
-        avg_items_per_response=result.avg_items_per_response,
-        avg_top_score=result.avg_top_score,
-        avg_mean_score=result.avg_mean_score,
-        weak_score_threshold=result.weak_score_threshold,
-        strategy_latency=[
-            StrategyLatencyMetric(
-                strategy=item.strategy,
-                calls=item.calls,
-                avg_ms=item.avg_ms,
-                p95_ms=item.p95_ms,
-                max_ms=item.max_ms,
-                last_ms=item.last_ms,
-            )
-            for item in result.strategy_latency
-        ],
-        primary_strategy_distribution=[
-            StrategyDistributionMetric(
-                strategy=item.strategy,
-                count=item.count,
-                share=item.share,
-            )
-            for item in result.primary_strategy_distribution
-        ],
-    )
-
-
 def _to_sense_anchors_response(result: SenseAnchorsDTO) -> SenseAnchorsResponse:
     return SenseAnchorsResponse(
         user_id=result.user_id,
@@ -156,17 +102,6 @@ def _to_sense_anchors_response(result: SenseAnchorsDTO) -> SenseAnchorsResponse:
             for item in result.anchors
         ],
     )
-
-
-@router.get("/me/overview", response_model=LearningGraphOverviewResponse)
-def get_learning_graph_overview_me(
-    current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-) -> LearningGraphOverviewResponse:
-    return _to_overview_response(learning_graph_application_service.get_overview(
-        db=db,
-        current_user_id=current_user_id,
-    ))
 
 
 @router.get("/me/interests", response_model=UserInterestsResponse)
@@ -217,17 +152,6 @@ def get_recommendations_me(
         db=db,
         mode=mode,
         limit=limit,
-        current_user_id=current_user_id,
-    ))
-
-
-@router.get("/me/observability", response_model=LearningGraphObservabilityResponse)
-def get_observability_me(
-    current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-) -> LearningGraphObservabilityResponse:
-    return _to_observability_response(learning_graph_application_service.get_observability(
-        db=db,
         current_user_id=current_user_id,
     ))
 

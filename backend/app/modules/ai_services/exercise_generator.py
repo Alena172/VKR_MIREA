@@ -169,6 +169,7 @@ class ExerciseGenerator:
             prompt=f"Translate sentence into Russian: {sentence_en}",
             answer=sentence_ru,
             exercise_type="sentence_translation_full",
+            target_word=normalized_word,
             options=[],
         )
 
@@ -382,6 +383,7 @@ class ExerciseGenerator:
                     prompt=f"Translate sentence into Russian: {sentence_en}",
                     answer=sentence_ru,
                     exercise_type="sentence_translation_full",
+                    target_word=seed.english_lemma.strip().lower(),
                     options=[],
                 )
 
@@ -391,6 +393,7 @@ class ExerciseGenerator:
             prompt=f"Translate sentence into Russian: {sentence_en}",
             answer=sentence_ru,
             exercise_type="sentence_translation_full",
+            target_word=seed.english_lemma.strip().lower(),
             options=[],
         )
 
@@ -437,6 +440,7 @@ class ExerciseGenerator:
             prompt=f"Match each word with its definition: {prompt_words}",
             answer=json.dumps(pairs, ensure_ascii=False),
             exercise_type="word_definition_match",
+            target_word=None,
             options=definitions,
         )
 
@@ -453,6 +457,7 @@ class ExerciseGenerator:
             prompt=f"Assemble the word from letters. Translation hint: {seed.russian_translation}",
             answer=normalized_answer,
             exercise_type="word_scramble",
+            target_word=normalized_answer,
             options=letters,
         )
 
@@ -517,6 +522,7 @@ class ExerciseGenerator:
             answer = str(item.get("answer", "")).strip()
             exercise_type = str(item.get("exercise_type", "translation")).strip() or "translation"
             raw_options = item.get("options", [])
+            target_word = item.get("target_word")
             options = [str(opt).strip() for opt in raw_options if str(opt).strip()] if isinstance(raw_options, list) else []
             if not prompt or not answer:
                 continue
@@ -548,6 +554,7 @@ class ExerciseGenerator:
                     prompt=prompt,
                     answer=answer,
                     exercise_type=exercise_type,
+                    target_word=str(target_word).strip().lower() if isinstance(target_word, str) and target_word.strip() else None,
                     options=options,
                 )
             )

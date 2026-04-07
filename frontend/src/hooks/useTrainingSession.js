@@ -66,8 +66,7 @@ export function useTrainingSession({ onError }) {
   }
 
   async function submitSession(answersPayload, signal) {
-    const requestAnswers = answersPayload.map(({ exercise_type, ...answer }) => answer);
-    const result = await api.submitSession({ answers: requestAnswers }, { signal });
+    const result = await api.submitSession({ answers: answersPayload }, { signal });
     setSessionResult(result);
   }
 
@@ -130,11 +129,12 @@ export function useTrainingSession({ onError }) {
       ...submittedAnswers,
       {
         exercise_id: currentIndex + 1,
+        exercise_type: currentExercise.exercise_type,
+        target_word: currentExercise.target_word || null,
         prompt: currentExercise.prompt,
         expected_answer: currentExercise.answer,
         user_answer: (currentAnswer || "-").trim() || "-",
         is_correct: false,
-        exercise_type: currentExercise.exercise_type,
       },
     ];
     setSubmittedAnswers(nextAnswers);

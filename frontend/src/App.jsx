@@ -173,7 +173,6 @@ function HomePage({ onError }) {
       setLoading(true);
       const controller = registerController();
       try {
-        await api.cleanupContextGarbage({ signal: controller.signal });
         const [vocabulary, reviewSummary, sessions] = await Promise.all([
           api.listVocabularyMe({ signal: controller.signal }),
           api.reviewSummary({ signal: controller.signal }),

@@ -3,18 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.modules.context_memory.review_status import ReviewStatus
+
 
 @dataclass(frozen=True)
 class WordProgressUpdate:
     word: str
     is_correct: bool
-    mark_difficult: bool = False
-
-
-@dataclass(frozen=True)
-class EffectiveCefrDTO:
-    cefr_level: str
-
 
 @dataclass(frozen=True)
 class WordProgressTrackingDTO:
@@ -24,7 +19,7 @@ class WordProgressTrackingDTO:
 
 @dataclass(frozen=True)
 class LearningProgressUpdateResultDTO:
-    difficult_words_added: list[str]
+    updated_words: list[str]
 
 
 @dataclass(frozen=True)
@@ -49,22 +44,13 @@ class ReviewSummaryDTO:
 
 
 @dataclass(frozen=True)
-class ContextRecommendationsDTO:
-    user_id: int
-    words: list[str]
-    recent_error_words: list[str]
-    difficult_words: list[str]
-    scores: dict[str, float]
-    next_review_at: dict[str, datetime | None]
-
-
-@dataclass(frozen=True)
 class ReviewQueueItemDTO:
     word: str
     russian_translation: str | None
     next_review_at: datetime
     error_count: int
     correct_streak: int
+    status: ReviewStatus
 
 
 @dataclass(frozen=True)
@@ -82,6 +68,7 @@ class WordProgressDTO:
     error_count: int
     correct_streak: int
     next_review_at: datetime
+    status: ReviewStatus
 
 
 @dataclass(frozen=True)
@@ -107,6 +94,7 @@ class ReviewSessionItemDTO:
     next_review_at: datetime | None
     error_count: int
     correct_streak: int
+    status: ReviewStatus
 
 
 @dataclass(frozen=True)
@@ -122,7 +110,6 @@ class WordProgressDeleteDTO:
     user_id: int
     word: str
     progress_deleted: bool
-    removed_from_difficult_words: bool
 
 
 @dataclass(frozen=True)
@@ -133,10 +120,3 @@ class ReviewPlanDTO:
     due_now: list[ReviewQueueItemDTO]
     upcoming: list[ReviewQueueItemDTO]
     recommended_words: list[str]
-
-
-@dataclass(frozen=True)
-class ContextGarbageCleanupDTO:
-    user_id: int
-    removed_word_progress: int
-    removed_difficult_words: int

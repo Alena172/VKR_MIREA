@@ -182,12 +182,15 @@ Backend не считает LLM универсальным решением дл
 
 ### Review и SRS
 
-- `GET /api/v1/context/me/recommendations`
 - `GET /api/v1/context/me/review-queue`
 - `POST /api/v1/context/me/review-queue/submit`
 - `POST /api/v1/context/me/review-queue/submit-bulk`
 - `GET /api/v1/context/me/word-progress`
+- `GET /api/v1/context/me/word-progress/{word}`
+- `DELETE /api/v1/context/me/word-progress/{word}`
+- `POST /api/v1/context/me/review-session/start`
 - `GET /api/v1/context/me/review-plan`
+- `GET /api/v1/context/me/progress`
 - `GET /api/v1/context/me/review-summary`
 
 ### Learning graph
@@ -197,8 +200,6 @@ Backend не считает LLM универсальным решением дл
 - `POST /api/v1/learning-graph/me/semantic-upsert`
 - `GET /api/v1/learning-graph/me/recommendations`
 - `GET /api/v1/learning-graph/me/anchors`
-- `GET /api/v1/learning-graph/me/overview`
-- `GET /api/v1/learning-graph/me/observability`
 
 ## Проверки и тесты
 

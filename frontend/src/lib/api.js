@@ -241,13 +241,11 @@ export const api = {
   listWordProgressMe: (params = {}, options = {}) => request(`/context/me/word-progress${toQuery(params)}`, options),
 
   reviewPlan: (limit = 10, options = {}) => request(`/context/me/review-plan?limit=${limit}&horizon_hours=24`, options),
-  cleanupContextGarbage: (options = {}) => request("/context/me/cleanup-garbage", { method: "POST", ...options }),
   reviewSummary: (options = {}) => request("/context/me/review-summary", options),
   learningGraphRecommendations: (mode = "mixed", limit = 10, options = {}) =>
     request(`/learning-graph/me/recommendations?mode=${encodeURIComponent(mode)}&limit=${limit}`, options),
   learningGraphAnchors: (englishLemma, limit = 5, options = {}) =>
     request(`/learning-graph/me/anchors?english_lemma=${encodeURIComponent(englishLemma)}&limit=${limit}`, options),
-  learningGraphObservability: (options = {}) => request("/learning-graph/me/observability", options),
 
   translateMe: (payload, options = {}) => request("/translate/me", { method: "POST", body: JSON.stringify(payload), ...options }),
   generateExercisesMe: (payload, options = {}) =>

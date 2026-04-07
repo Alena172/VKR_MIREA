@@ -8,12 +8,14 @@ def to_exercise_item_dto(
     prompt: str,
     answer: str,
     exercise_type: str,
+    target_word: str | None,
     options: list[str],
 ) -> ExerciseItemDTO:
     return ExerciseItemDTO(
         prompt=prompt,
         answer=answer,
         exercise_type=exercise_type,
+        target_word=target_word,
         options=list(options),
     )
 

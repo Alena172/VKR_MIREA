@@ -51,6 +51,7 @@ class GeneratedExerciseItem(BaseModel):
     prompt: str
     answer: str
     exercise_type: str
+    target_word: str | None = Field(default=None, max_length=200)
     options: list[str] = Field(default_factory=list)
 
 

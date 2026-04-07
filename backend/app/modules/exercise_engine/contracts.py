@@ -8,6 +8,7 @@ class ExerciseItemDTO:
     prompt: str
     answer: str
     exercise_type: str
+    target_word: str | None
     options: list[str]
 
 

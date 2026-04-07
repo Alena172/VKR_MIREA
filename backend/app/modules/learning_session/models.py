@@ -23,6 +23,8 @@ class LearningSessionAnswerModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("learning_sessions.id"), nullable=False, index=True)
     exercise_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    exercise_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_word: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
     prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     expected_answer: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     user_answer: Mapped[str] = mapped_column(String(1000), nullable=False)

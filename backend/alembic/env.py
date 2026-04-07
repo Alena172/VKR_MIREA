@@ -7,8 +7,6 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.core.db import Base
-from app.modules.capture.models import CaptureItemModel
-from app.modules.context_memory.models import UserContextModel
 from app.modules.learning_graph.models import (
     MistakeEventModel,
     TopicClusterModel,
@@ -24,9 +22,7 @@ from app.modules.vocabulary.models import VocabularyItemModel
 _ = (
     UserModel,
     VocabularyItemModel,
-    CaptureItemModel,
     LearningSessionModel,
-    UserContextModel,
     UserInterestModel,
     TopicClusterModel,
     WordSenseModel,

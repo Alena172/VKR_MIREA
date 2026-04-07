@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.modules.capture.contracts import CaptureItemDTO
-
-
 @dataclass(frozen=True)
 class VocabularyItemDTO:
     id: int
@@ -21,7 +18,6 @@ class VocabularyItemDTO:
 
 @dataclass(frozen=True)
 class VocabularyFromCaptureResultDTO:
-    capture: CaptureItemDTO
     vocabulary: VocabularyItemDTO
     translation_note: str
     created_new_vocabulary_item: bool

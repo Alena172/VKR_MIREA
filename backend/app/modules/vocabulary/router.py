@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from app.core.application import AsyncTaskResponse
 from app.core.db import get_db
 from app.modules.auth.dependencies import get_current_user_id
-from app.modules.capture.schemas import CaptureItem
 from app.modules.vocabulary.application_service import vocabulary_application_service
 from app.modules.vocabulary.contracts import VocabularyFromCaptureResultDTO, VocabularyItemDTO
 from app.modules.vocabulary.schemas import (
@@ -37,13 +36,6 @@ def _to_vocabulary_response(item: VocabularyItemDTO) -> VocabularyItem:
 
 def _to_vocabulary_from_capture_response(result: VocabularyFromCaptureResultDTO) -> VocabularyFromCaptureResponse:
     return VocabularyFromCaptureResponse(
-        capture=CaptureItem(
-            id=result.capture.id,
-            user_id=result.capture.user_id,
-            selected_text=result.capture.selected_text,
-            source_url=result.capture.source_url,
-            source_sentence=result.capture.source_sentence,
-        ),
         vocabulary=_to_vocabulary_response(result.vocabulary),
         translation_note=result.translation_note,
         created_new_vocabulary_item=result.created_new_vocabulary_item,

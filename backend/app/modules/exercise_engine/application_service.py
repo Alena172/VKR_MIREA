@@ -8,7 +8,6 @@ from app.celery_app import enqueue_task
 from app.core.application import AsyncTaskResponse, application_access
 from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
-from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.exercise_engine.assembler import (
     to_exercise_generate_result_dto,
     to_exercise_item_dto,
@@ -82,11 +81,7 @@ class ExerciseEngineApplicationService:
             vocabulary_ids=vocabulary_ids,
             mode=mode,
         )
-        cefr_level = context_memory_public_api.get_effective_cefr_dto(
-            db=db,
-            user_id=user_id,
-            fallback_cefr=user.cefr_level,
-        ).cefr_level
+        cefr_level = user.cefr_level
 
         required_count = size - len(prefetched)
         server_prefetch_extra = self._PREFETCH_EXTRA if use_prefetch and not fast_start and not incremental else 0
@@ -237,6 +232,7 @@ class ExerciseEngineApplicationService:
                             prompt=item.prompt,
                             answer=item.answer,
                             exercise_type=item.exercise_type,
+                            target_word=item.target_word,
                             options=item.options,
                         )
                         for item in response.exercises
@@ -262,6 +258,7 @@ class ExerciseEngineApplicationService:
                 prompt=item.prompt,
                 answer=item.answer,
                 exercise_type=item.exercise_type,
+                target_word=item.target_word,
                 options=item.options,
             )
             for item in response.exercises

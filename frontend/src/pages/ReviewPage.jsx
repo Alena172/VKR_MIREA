@@ -60,8 +60,8 @@ function getTimingMeta(nextReviewAt) {
   };
 }
 
-function getDifficultyMeta(errorCount, correctStreak) {
-  if (errorCount >= 3) {
+function getDifficultyMeta(status, errorCount, correctStreak) {
+  if (status === "troubled") {
     return {
       label: "Трудное слово",
       toneClass: "bg-red-100 text-red-700",
@@ -69,7 +69,7 @@ function getDifficultyMeta(errorCount, correctStreak) {
     };
   }
 
-  if (correctStreak >= 3) {
+  if (status === "mastered") {
     return {
       label: "Закрепляется",
       toneClass: "bg-emerald-100 text-emerald-700",
@@ -122,7 +122,7 @@ export default function ReviewPage({ onError }) {
   const progressPercent = getSessionProgress(currentIndex, sessionItems.length);
   const currentTimingMeta = currentItem ? getTimingMeta(currentItem.next_review_at) : null;
   const currentDifficultyMeta = currentItem
-    ? getDifficultyMeta(currentItem.error_count, currentItem.correct_streak)
+    ? getDifficultyMeta(currentItem.status, currentItem.error_count, currentItem.correct_streak)
     : null;
 
   useEffect(() => {

@@ -37,6 +37,10 @@ function getExerciseTypeFromPrompt(prompt) {
   return "unknown";
 }
 
+function getExerciseType(answer) {
+  return answer.exercise_type || getExerciseTypeFromPrompt(answer.prompt);
+}
+
 function normalizeWord(value) {
   return (value || "").trim().toLowerCase();
 }
@@ -54,6 +58,14 @@ function findVocabularyWordInPrompt(prompt, vocabularyWords) {
     }
   }
   return null;
+}
+
+function findTrackedWord(answer, vocabularyWords) {
+  const explicitWord = normalizeWord(answer.target_word);
+  if (explicitWord) {
+    return explicitWord;
+  }
+  return findVocabularyWordInPrompt(answer.prompt, vocabularyWords);
 }
 
 function buildAnalytics({ sessions, answersBySessionId, vocabularyWords }) {
@@ -95,7 +107,7 @@ function buildAnalytics({ sessions, answersBySessionId, vocabularyWords }) {
         return;
       }
 
-      const exerciseType = getExerciseTypeFromPrompt(answer.prompt);
+      const exerciseType = getExerciseType(answer);
       const formatStats = weakFormats.get(exerciseType) || {
         exerciseType,
         label: EXERCISE_LABELS[exerciseType] || EXERCISE_LABELS.unknown,
@@ -108,7 +120,7 @@ function buildAnalytics({ sessions, answersBySessionId, vocabularyWords }) {
         return;
       }
 
-      const matchedWord = findVocabularyWordInPrompt(answer.prompt, vocabularyWords);
+      const matchedWord = findTrackedWord(answer, vocabularyWords);
       if (!matchedWord) {
         return;
       }

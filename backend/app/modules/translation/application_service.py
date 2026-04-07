@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.application import application_access
 from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.service import TranslationProviderUnavailableError, ai_service
-from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.translation.assembler import to_translation_result_dto
 from app.modules.translation.contracts import TranslationResultDTO
 from app.modules.users.public_api import users_public_api
@@ -36,11 +35,7 @@ class TranslationApplicationService:
     ) -> TranslationResultDTO:
         user = users_public_api.get_or_404(db=db, user_id=user_id)
 
-        cefr_level = context_memory_public_api.get_effective_cefr_dto(
-            db=db,
-            user_id=user_id,
-            fallback_cefr=user.cefr_level,
-        ).cefr_level
+        cefr_level = user.cefr_level
         vocabulary_items = vocabulary_public_api.list_items(db, user_id=user_id)[:50]
 
         try:

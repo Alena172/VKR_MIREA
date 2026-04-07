@@ -3,22 +3,20 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.modules.context_memory.assembler import (
-    to_effective_cefr_dto,
     to_learning_progress_update_result_dto,
     to_mastered_lemma_dtos,
     to_word_progress_tracking_dto,
 )
 from app.modules.context_memory.contracts import (
-    EffectiveCefrDTO,
     LearningProgressUpdateResultDTO,
     MasteredLemmaDTO,
     WordProgressTrackingDTO,
     WordProgressUpdate,
 )
 from app.modules.context_memory.repository import context_repository
+from app.modules.context_memory.review_status import build_review_status
 
 __all__ = [
-    "EffectiveCefrDTO",
     "LearningProgressUpdateResultDTO",
     "MasteredLemmaDTO",
     "WordProgressTrackingDTO",
@@ -28,18 +26,6 @@ __all__ = [
 
 
 class ContextMemoryPublicApi:
-    @staticmethod
-    def get_effective_cefr_dto(*, db: Session, user_id: int, fallback_cefr: str) -> EffectiveCefrDTO:
-        from app.modules.context_memory.application_service import context_memory_application_service
-
-        return to_effective_cefr_dto(
-            context_memory_application_service.get_effective_cefr_level(
-                db=db,
-                user_id=user_id,
-                fallback_cefr=fallback_cefr,
-            )
-        )
-
     @staticmethod
     def ensure_word_progress_entry(
         *,
@@ -67,7 +53,7 @@ class ContextMemoryPublicApi:
         from app.modules.context_memory.application_service import context_memory_application_service
 
         return to_learning_progress_update_result_dto(
-            difficult_words_added=context_memory_application_service.update_learning_progress(
+            updated_words=context_memory_application_service.update_learning_progress(
                 db=db,
                 user_id=user_id,
                 user_cefr_level=user_cefr_level,
@@ -88,17 +74,22 @@ class ContextMemoryPublicApi:
             user_id=user_id,
             limit=10000,
             offset=0,
-            status="all",
             q=None,
             sort_by="correct_streak",
             sort_order="desc",
-            min_streak=min_streak,
-            min_errors=max_errors,
         )
         return to_mastered_lemma_dtos({
             row.word.strip().lower()
             for row in rows
-            if row.word and row.correct_streak >= min_streak and row.error_count <= max_errors
+            if row.word
+            and build_review_status(
+                error_count=row.error_count,
+                correct_streak=row.correct_streak,
+                next_review_at=row.next_review_at,
+                min_streak=min_streak,
+                min_errors=max_errors + 1,
+            ).status == "mastered"
+            and row.error_count <= max_errors
         })
 
 

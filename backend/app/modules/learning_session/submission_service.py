@@ -37,9 +37,14 @@ def _normalize_text_fragment(value: str | None) -> str:
 
 def _detect_simple_exercise_type(
     *,
+    exercise_type: str | None,
     prompt: str | None,
     expected_answer: str | None,
 ) -> str | None:
+    normalized_type = _normalize_text_fragment(exercise_type)
+    if normalized_type in {"word_scramble", "word_definition_match"}:
+        return normalized_type
+
     normalized_prompt = _normalize_text_fragment(prompt)
     if normalized_prompt.startswith(_SCRAMBLE_PROMPT_PREFIX):
         return "word_scramble"
@@ -124,10 +129,15 @@ def _normalize_word_candidate(value: str | None) -> str | None:
 
 def _extract_progress_word(
     *,
+    target_word: str | None,
     prompt: str | None,
     expected_answer: str | None,
     vocabulary_words: set[str],
 ) -> str | None:
+    normalized_target = _normalize_word_candidate(target_word)
+    if normalized_target and (not vocabulary_words or normalized_target in vocabulary_words):
+        return normalized_target
+
     normalized_answer = _normalize_word_candidate(expected_answer)
     if normalized_answer and (not vocabulary_words or normalized_answer in vocabulary_words):
         return normalized_answer
@@ -146,13 +156,14 @@ def _extract_progress_word(
 @dataclass
 class EvaluatedAnswer:
     exercise_id: int
+    exercise_type: str | None
+    target_word: str | None
     prompt: str | None
     expected_answer: str | None
     user_answer: str
     is_correct: bool
     explanation_ru: str | None
     progress_word: str | None
-    add_to_difficult_words: bool
     incorrect_feedback: SessionAnswerFeedback | None
     advice_feedback: SessionAnswerFeedback | None
 
@@ -226,6 +237,7 @@ class LearningSessionSubmissionService:
 
     async def _evaluate_answer(self, answer: SessionAnswer) -> EvaluatedAnswer:
         simple_exercise_type = _detect_simple_exercise_type(
+            exercise_type=answer.exercise_type,
             prompt=answer.prompt,
             expected_answer=answer.expected_answer,
         )
@@ -244,6 +256,7 @@ class LearningSessionSubmissionService:
                 )
 
             progress_word = _extract_progress_word(
+                target_word=answer.target_word,
                 prompt=answer.prompt,
                 expected_answer=answer.expected_answer,
                 vocabulary_words=set(),
@@ -251,13 +264,14 @@ class LearningSessionSubmissionService:
 
             return EvaluatedAnswer(
                 exercise_id=answer.exercise_id,
+                exercise_type=answer.exercise_type or simple_exercise_type,
+                target_word=answer.target_word,
                 prompt=answer.prompt,
                 expected_answer=answer.expected_answer,
                 user_answer=answer.user_answer,
                 is_correct=evaluated_is_correct,
                 explanation_ru=explanation_ru,
                 progress_word=progress_word,
-                add_to_difficult_words=bool(progress_word and not evaluated_is_correct),
                 incorrect_feedback=incorrect_feedback,
                 advice_feedback=None,
             )
@@ -337,6 +351,7 @@ class LearningSessionSubmissionService:
             )
 
         progress_word = _extract_progress_word(
+            target_word=answer.target_word,
             prompt=answer.prompt,
             expected_answer=answer.expected_answer,
             vocabulary_words=set(),
@@ -344,13 +359,14 @@ class LearningSessionSubmissionService:
 
         return EvaluatedAnswer(
             exercise_id=answer.exercise_id,
+            exercise_type=answer.exercise_type,
+            target_word=answer.target_word,
             prompt=answer.prompt,
             expected_answer=answer.expected_answer,
             user_answer=answer.user_answer,
             is_correct=evaluated_is_correct,
             explanation_ru=explanation_ru,
             progress_word=progress_word,
-            add_to_difficult_words=bool(progress_word and not evaluated_is_correct),
             incorrect_feedback=incorrect_feedback,
             advice_feedback=advice_feedback,
         )
@@ -378,7 +394,7 @@ class LearningSessionSubmissionService:
         user_id: int,
         user_cefr_level: str | None,
         evaluated_answers: list[EvaluatedAnswer],
-    ) -> list[str]:
+    ) -> None:
         progress_updates: list[WordProgressUpdate] = []
         for item in evaluated_answers:
             if item.progress_word:
@@ -386,11 +402,10 @@ class LearningSessionSubmissionService:
                     WordProgressUpdate(
                         word=item.progress_word,
                         is_correct=item.is_correct,
-                        mark_difficult=item.add_to_difficult_words,
                     )
                 )
 
-            if item.add_to_difficult_words and item.progress_word:
+            if item.progress_word and not item.is_correct:
                 learning_graph_public_api.register_mistake(
                     db=db,
                     user_id=user_id,
@@ -400,13 +415,12 @@ class LearningSessionSubmissionService:
                     user_answer=item.user_answer,
                 )
 
-        result = context_memory_public_api.update_learning_progress(
+        context_memory_public_api.update_learning_progress(
             db=db,
             user_id=user_id,
             user_cefr_level=user_cefr_level,
             updates=progress_updates,
         )
-        return result.difficult_words_added
 
     def persist_session(
         self,
@@ -426,6 +440,8 @@ class LearningSessionSubmissionService:
             answers=[
                 AnswerPersistPayload(
                     exercise_id=item.exercise_id,
+                    exercise_type=item.exercise_type,
+                    target_word=item.target_word,
                     prompt=item.prompt,
                     expected_answer=item.expected_answer,
                     user_answer=item.user_answer,

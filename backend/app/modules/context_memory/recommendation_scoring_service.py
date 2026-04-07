@@ -7,6 +7,7 @@ import re
 from sqlalchemy.orm import Session
 
 from app.modules.context_memory.repository import context_repository
+from app.modules.context_memory.review_status import matches_review_status_filter
 from app.modules.learning_graph.public_api import learning_graph_public_api
 from app.modules.learning_session.public_api import learning_session_public_api
 
@@ -23,7 +24,6 @@ def _is_valid_review_word(value: str | None) -> bool:
 class RecommendationScoreSnapshot:
     scores: dict[str, float]
     recent_error_words_stream: list[str]
-    difficult_words: list[str]
     due_progress_map: dict
 
     def ranked_words(self, limit: int) -> list[str]:
@@ -61,18 +61,32 @@ class RecommendationScoringService:
         user_id: int,
         limit: int,
     ) -> RecommendationScoreSnapshot:
-        context = context_repository.get_by_user_id(db, user_id)
-        difficult_words = [
-            word.strip().lower()
-            for word in (context.difficult_words if context is not None else [])
-            if _is_valid_review_word(word)
-        ]
         recent_error_words_stream = learning_session_public_api.list_recent_incorrect_words(
             db,
             user_id=user_id,
             limit=limit * 5,
             unique=False,
         )
+        candidate_rows = context_repository.list_word_progress(
+            db,
+            user_id=user_id,
+            limit=max(limit * 3, 10),
+            offset=0,
+            q=None,
+            sort_by="error_count",
+            sort_order="desc",
+        )
+        troubled_rows = [
+            row for row in candidate_rows
+            if matches_review_status_filter(
+                status_filter="troubled",
+                error_count=row.error_count,
+                correct_streak=row.correct_streak,
+                next_review_at=row.next_review_at,
+                min_streak=3,
+                min_errors=2,
+            )
+        ]
 
         scores: dict[str, float] = {}
         for idx, word in enumerate(recent_error_words_stream):
@@ -80,7 +94,10 @@ class RecommendationScoringService:
                 continue
             scores[word] = scores.get(word, 0.0) + (1.0 / (idx + 1))
 
-        for word in difficult_words:
+        for row in troubled_rows:
+            word = row.word.strip().lower()
+            if not _is_valid_review_word(word):
+                continue
             scores[word] = scores.get(word, 0.0) + 0.75
 
         due_progress_map = context_repository.get_word_progress_map(
@@ -103,7 +120,6 @@ class RecommendationScoringService:
         return RecommendationScoreSnapshot(
             scores=scores,
             recent_error_words_stream=recent_error_words_stream,
-            difficult_words=difficult_words,
             due_progress_map=due_progress_map,
         )
 

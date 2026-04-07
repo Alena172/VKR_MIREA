@@ -10,6 +10,8 @@ from app.modules.learning_session.models import LearningSessionAnswerModel, Lear
 @dataclass
 class AnswerPersistPayload:
     exercise_id: int
+    exercise_type: str | None
+    target_word: str | None
     prompt: str | None
     expected_answer: str | None
     user_answer: str
@@ -137,6 +139,8 @@ class LearningSessionRepository:
                 LearningSessionAnswerModel(
                     session_id=session_row.id,
                     exercise_id=answer.exercise_id,
+                    exercise_type=answer.exercise_type,
+                    target_word=answer.target_word,
                     prompt=answer.prompt,
                     expected_answer=answer.expected_answer,
                     user_answer=answer.user_answer,
@@ -160,7 +164,10 @@ class LearningSessionRepository:
         unique: bool = True,
     ) -> list[str]:
         stmt = (
-            select(LearningSessionAnswerModel.prompt)
+            select(
+                LearningSessionAnswerModel.target_word,
+                LearningSessionAnswerModel.prompt,
+            )
             .join(
                 LearningSessionModel,
                 LearningSessionModel.id == LearningSessionAnswerModel.session_id,
@@ -168,19 +175,20 @@ class LearningSessionRepository:
             .where(
                 LearningSessionModel.user_id == user_id,
                 LearningSessionAnswerModel.is_correct.is_(False),
-                LearningSessionAnswerModel.prompt.is_not(None),
             )
             .order_by(LearningSessionAnswerModel.id.desc())
             .limit(limit)
         )
-        prompts = list(db.scalars(stmt))
+        rows = list(db.execute(stmt))
 
         words: list[str] = []
-        for prompt in prompts:
-            prompt_text = (prompt or "").strip()
-            if not prompt_text:
-                continue
-            word = prompt_text.split(":", maxsplit=1)[-1].strip().lower()
+        for target_word, prompt in rows:
+            word = (target_word or "").strip().lower()
+            if not word:
+                prompt_text = (prompt or "").strip()
+                if not prompt_text:
+                    continue
+                word = prompt_text.split(":", maxsplit=1)[-1].strip().lower()
             if not word:
                 continue
             if unique:

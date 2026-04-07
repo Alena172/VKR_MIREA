@@ -1192,32 +1192,6 @@ def test_capture_and_study_flow_me_endpoints_are_user_scoped(client):
     create_user(client, "capture-me-2@example.com", "Capture Me 2", "B1")
     headers_2 = auth_headers(client, "capture-me-2@example.com")
 
-    capture_1 = client.post(
-        "/api/v1/capture/me",
-        json={"selected_text": "apple", "source_sentence": "I eat an apple"},
-        headers=headers_1,
-    )
-    assert capture_1.status_code == 200
-
-    capture_2 = client.post(
-        "/api/v1/capture/me",
-        json={"selected_text": "pear", "source_sentence": "I eat a pear"},
-        headers=headers_2,
-    )
-    assert capture_2.status_code == 200
-
-    list_1 = client.get("/api/v1/capture/me", headers=headers_1)
-    assert list_1.status_code == 200
-    words_1 = [item["selected_text"] for item in list_1.json()]
-    assert "apple" in words_1
-    assert "pear" not in words_1
-
-    list_2 = client.get("/api/v1/capture/me", headers=headers_2)
-    assert list_2.status_code == 200
-    words_2 = [item["selected_text"] for item in list_2.json()]
-    assert "pear" in words_2
-    assert "apple" not in words_2
-
     flow_1 = client.post(
         "/api/v1/vocabulary/me/from-capture",
         json={"selected_text": "through", "source_sentence": "walk through the park"},
@@ -1239,13 +1213,10 @@ def test_me_endpoints_require_auth_token(client):
     no_auth_calls = [
         client.get("/api/v1/vocabulary/me"),
         client.post("/api/v1/vocabulary/me", json={"english_lemma": "apple", "russian_translation": "яблоко"}),
-        client.get("/api/v1/capture/me"),
-        client.post("/api/v1/capture/me", json={"selected_text": "apple"}),
         client.post("/api/v1/translate/me", json={"text": "apple"}),
         client.post("/api/v1/exercises/me/generate", json={"size": 1, "vocabulary_ids": []}),
         client.get("/api/v1/sessions/me"),
         client.get("/api/v1/sessions/me/1/answers"),
-        client.get("/api/v1/context/me"),
         client.get("/api/v1/context/me/review-queue"),
         client.get("/api/v1/context/me/progress"),
         client.get("/api/v1/context/me/review-summary"),

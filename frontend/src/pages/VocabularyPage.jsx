@@ -32,9 +32,7 @@ function getVocabularyState(item, progress) {
     };
   }
 
-  const nextReviewAt = progress.next_review_at ? new Date(progress.next_review_at) : null;
-  const isDue = nextReviewAt && nextReviewAt.getTime() <= Date.now();
-  if (progress.error_count >= 3) {
+  if (progress.status === "troubled") {
     return {
       key: "troubled",
       label: "Трудное",
@@ -43,7 +41,7 @@ function getVocabularyState(item, progress) {
       priority: 5,
     };
   }
-  if (isDue) {
+  if (progress.status === "due") {
     return {
       key: "due",
       label: "Пора повторять",
@@ -52,7 +50,7 @@ function getVocabularyState(item, progress) {
       priority: 4,
     };
   }
-  if (progress.correct_streak >= 3) {
+  if (progress.status === "mastered") {
     return {
       key: "mastered",
       label: "Закрепляется",
