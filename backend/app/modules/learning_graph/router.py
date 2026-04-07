@@ -19,7 +19,6 @@ from app.modules.learning_graph.schemas import (
     SemanticUpsertRequest,
     SemanticUpsertResponse,
     SenseAnchorsResponse,
-    TopicClusterRead,
     UserInterestsResponse,
     WordSenseRead,
 )
@@ -38,30 +37,15 @@ def _to_user_interests_response(result: UserInterestsDTO) -> UserInterestsRespon
 
 
 def _to_semantic_upsert_response(result: SemanticUpsertResultDTO) -> SemanticUpsertResponse:
-    cluster = None
-    if result.cluster is not None:
-        cluster = TopicClusterRead(
-            id=result.cluster.id,
-            key=result.cluster.key,
-            name=result.cluster.name,
-            description=result.cluster.description,
-        )
     return SemanticUpsertResponse(
         user_id=result.user_id,
         created_new_sense=result.created_new_sense,
-        semantic_duplicate_of_id=result.semantic_duplicate_of_id,
         sense=WordSenseRead(
             id=result.sense.id,
             english_lemma=result.sense.english_lemma,
             semantic_key=result.sense.semantic_key,
             russian_translation=result.sense.russian_translation,
-            context_definition_ru=result.sense.context_definition_ru,
-            source_sentence=result.sense.source_sentence,
-            source_url=result.sense.source_url,
-            topic_cluster_id=result.sense.topic_cluster_id,
-            created_at=result.sense.created_at,
         ),
-        cluster=cluster,
     )
 
 
@@ -73,12 +57,10 @@ def _to_recommendations_response(result: RecommendationsResultDTO) -> Recommenda
             {
                 "english_lemma": item.english_lemma,
                 "russian_translation": item.russian_translation,
-                "topic_cluster": item.topic_cluster,
                 "score": item.score,
                 "reasons": item.reasons,
                 "strategy_sources": item.strategy_sources,
                 "primary_strategy": item.primary_strategy,
-                "mistake_count": item.mistake_count,
             }
             for item in result.items
         ],
@@ -91,13 +73,10 @@ def _to_sense_anchors_response(result: SenseAnchorsDTO) -> SenseAnchorsResponse:
         english_lemma=result.english_lemma,
         anchors=[
             {
-                "word_sense_id": item.word_sense_id,
                 "english_lemma": item.english_lemma,
                 "russian_translation": item.russian_translation,
-                "semantic_key": item.semantic_key,
                 "relation_type": item.relation_type,
                 "score": item.score,
-                "topic_cluster": item.topic_cluster,
             }
             for item in result.anchors
         ],

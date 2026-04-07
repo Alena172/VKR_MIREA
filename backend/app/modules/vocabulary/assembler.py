@@ -25,13 +25,7 @@ def to_vocabulary_item_dto(item: VocabularyItemModel) -> VocabularyItemDTO:
 def to_vocabulary_from_capture_result_dto(
     *,
     vocabulary: VocabularyItemDTO,
-    translation_note: str,
-    created_new_vocabulary_item: bool,
-    queued_for_review: bool,
 ) -> VocabularyFromCaptureResultDTO:
     return VocabularyFromCaptureResultDTO(
         vocabulary=vocabulary,
-        translation_note=translation_note,
-        created_new_vocabulary_item=created_new_vocabulary_item,
-        queued_for_review=queued_for_review,
     )

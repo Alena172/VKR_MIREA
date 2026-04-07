@@ -59,6 +59,3 @@ class VocabularyFromCaptureRequestMe(BaseModel):
 
 class VocabularyFromCaptureResponse(BaseModel):
     vocabulary: VocabularyItem
-    translation_note: str
-    created_new_vocabulary_item: bool
-    queued_for_review: bool

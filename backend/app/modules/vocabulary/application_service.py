@@ -168,7 +168,7 @@ class VocabularyApplicationService:
 
         (
             russian_translation,
-            translation_note,
+            _translation_note,
             semantic_sentence,
         ) = await self._generate_capture_ai_data(
             selected_text=selected_text,
@@ -214,11 +214,11 @@ class VocabularyApplicationService:
             else:
                 vocabulary_item = existing
 
-            queued_for_review = context_memory_public_api.ensure_word_progress_entry(
+            context_memory_public_api.ensure_word_progress_entry(
                 db=db,
                 user_id=user_id,
                 word=english_lemma,
-            ).tracked
+            )
             learning_graph_public_api.register_vocabulary_semantics(
                 db=db,
                 user_id=user_id,
@@ -234,9 +234,6 @@ class VocabularyApplicationService:
 
         return to_vocabulary_from_capture_result_dto(
             vocabulary=to_vocabulary_item_dto(vocabulary_item),
-            translation_note=translation_note,
-            created_new_vocabulary_item=created_new,
-            queued_for_review=queued_for_review,
         )
 
     def update_item(

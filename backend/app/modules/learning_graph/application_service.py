@@ -6,8 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.application import application_access, application_transaction
 from app.modules.context_memory.public_api import context_memory_public_api
 from app.modules.learning_graph.assembler import (
-    to_learning_graph_observability_dto,
-    to_learning_graph_overview_dto,
     to_recommendations_result_dto,
     to_registered_vocabulary_sense_dto,
     to_semantic_upsert_result_dto,
@@ -15,8 +13,6 @@ from app.modules.learning_graph.assembler import (
     to_user_interests_dto,
 )
 from app.modules.learning_graph.contracts import (
-    LearningGraphObservabilityDTO,
-    LearningGraphOverviewDTO,
     RecommendationsResultDTO,
     RegisteredVocabularySenseDTO,
     SemanticUpsertResultDTO,
@@ -31,16 +27,6 @@ from app.modules.learning_graph.schemas import (
 
 
 class LearningGraphApplicationService:
-    def get_overview(
-        self,
-        *,
-        db: Session,
-        current_user_id: int,
-    ) -> LearningGraphOverviewDTO:
-        application_access.ensure_user_exists(db=db, user_id=current_user_id)
-        overview = learning_graph_repository.get_overview(db, user_id=current_user_id)
-        return to_learning_graph_overview_dto(user_id=current_user_id, overview=overview)
-
     def list_interests(
         self,
         *,
@@ -217,19 +203,6 @@ class LearningGraphApplicationService:
             db,
             user_id=user_id,
             vocabulary_item_id=vocabulary_item_id,
-        )
-
-    def get_observability(
-        self,
-        *,
-        db: Session,
-        current_user_id: int,
-    ) -> LearningGraphObservabilityDTO:
-        application_access.ensure_user_exists(db=db, user_id=current_user_id)
-        snapshot = learning_graph_repository.get_observability(user_id=current_user_id)
-        return to_learning_graph_observability_dto(
-            user_id=current_user_id,
-            snapshot=snapshot,
         )
 
     def get_anchors(

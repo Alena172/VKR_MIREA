@@ -37,9 +37,6 @@ def _to_vocabulary_response(item: VocabularyItemDTO) -> VocabularyItem:
 def _to_vocabulary_from_capture_response(result: VocabularyFromCaptureResultDTO) -> VocabularyFromCaptureResponse:
     return VocabularyFromCaptureResponse(
         vocabulary=_to_vocabulary_response(result.vocabulary),
-        translation_note=result.translation_note,
-        created_new_vocabulary_item=result.created_new_vocabulary_item,
-        queued_for_review=result.queued_for_review,
     )
 
 

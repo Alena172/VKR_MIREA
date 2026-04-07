@@ -4,12 +4,10 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Literal
 import re
-from time import perf_counter
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.modules.learning_graph.observability import learning_graph_observability
 from app.modules.learning_graph.models import (
     MistakeEventModel,
     SenseRelationModel,
@@ -280,13 +278,6 @@ class LearningGraphRepository:
                 )
             )
         )
-        clusters = {
-            row.id: row.name
-            for row in db.scalars(
-                select(TopicClusterModel).where(TopicClusterModel.user_id == user_id)
-            )
-        }
-
         anchors: list[SenseAnchorItem] = []
         for candidate in candidates:
             relation_type, score = self._infer_semantic_relation(
@@ -299,17 +290,14 @@ class LearningGraphRepository:
                 continue
             anchors.append(
                 SenseAnchorItem(
-                    word_sense_id=candidate.id,
                     english_lemma=candidate.english_lemma,
                     russian_translation=candidate.russian_translation,
-                    semantic_key=candidate.semantic_key,
                     relation_type=relation_type,
                     score=round(score, 4),
-                    topic_cluster=clusters.get(candidate.topic_cluster_id) if candidate.topic_cluster_id else None,
                 )
             )
 
-        anchors.sort(key=lambda row: (row.score, row.word_sense_id), reverse=True)
+        anchors.sort(key=lambda row: (row.score, row.english_lemma), reverse=True)
         deduped: list[SenseAnchorItem] = []
         seen_lemmas: set[str] = set()
         for anchor in anchors:
@@ -645,82 +633,6 @@ class LearningGraphRepository:
             db.flush()
         return len(rows)
 
-    def get_overview(
-        self,
-        db: Session,
-        *,
-        user_id: int,
-    ) -> dict[str, int | list[str]]:
-        interests_count = int(
-            db.scalar(select(func.count(UserInterestModel.id)).where(UserInterestModel.user_id == user_id)) or 0
-        )
-        clusters_count = int(
-            db.scalar(select(func.count(TopicClusterModel.id)).where(TopicClusterModel.user_id == user_id)) or 0
-        )
-        senses_count = int(
-            db.scalar(select(func.count(WordSenseModel.id)).where(WordSenseModel.user_id == user_id)) or 0
-        )
-        mistakes_count = int(
-            db.scalar(select(func.count(MistakeEventModel.id)).where(MistakeEventModel.user_id == user_id)) or 0
-        )
-        links_count = int(
-            db.scalar(
-                select(func.count(VocabularySenseLinkModel.id)).where(VocabularySenseLinkModel.user_id == user_id)
-            )
-            or 0
-        )
-        relations_count = int(
-            db.scalar(
-                select(func.count(SenseRelationModel.id)).where(SenseRelationModel.user_id == user_id)
-            )
-            or 0
-        )
-        graph_edges_count = links_count + mistakes_count + relations_count
-
-        top_interests_rows = list(
-            db.execute(
-                select(UserInterestModel.display_name)
-                .where(UserInterestModel.user_id == user_id)
-                .order_by(UserInterestModel.weight.desc(), UserInterestModel.id.asc())
-                .limit(5)
-            )
-        )
-        top_interests = [row[0] for row in top_interests_rows]
-
-        top_clusters_rows = list(
-            db.execute(
-                select(TopicClusterModel.name, func.count(WordSenseModel.id))
-                .join(WordSenseModel, WordSenseModel.topic_cluster_id == TopicClusterModel.id)
-                .where(TopicClusterModel.user_id == user_id, WordSenseModel.user_id == user_id)
-                .group_by(TopicClusterModel.id)
-                .order_by(func.count(WordSenseModel.id).desc(), TopicClusterModel.id.asc())
-                .limit(5)
-            )
-        )
-        top_clusters = [row[0] for row in top_clusters_rows]
-
-        top_tags_rows = list(
-            db.execute(
-                select(MistakeEventModel.mistake_tag, func.count(MistakeEventModel.id))
-                .where(MistakeEventModel.user_id == user_id)
-                .group_by(MistakeEventModel.mistake_tag)
-                .order_by(func.count(MistakeEventModel.id).desc(), MistakeEventModel.mistake_tag.asc())
-                .limit(5)
-            )
-        )
-        top_tags = [row[0] for row in top_tags_rows]
-
-        return {
-            "interests_count": interests_count,
-            "topic_clusters_count": clusters_count,
-            "word_senses_count": senses_count,
-            "mistake_events_count": mistakes_count,
-            "graph_edges_count": graph_edges_count,
-            "top_interests": top_interests,
-            "top_clusters": top_clusters,
-            "top_mistake_tags": top_tags,
-        }
-
     def get_recommendations(
         self,
         db: Session,
@@ -738,11 +650,6 @@ class LearningGraphRepository:
             )
         )
         if not senses:
-            learning_graph_observability.record_recommendation_call(
-                user_id=user_id,
-                items=[],
-                strategy_latencies_ms={},
-            )
             return []
 
         clusters = {
@@ -793,9 +700,7 @@ class LearningGraphRepository:
         weak_source_ids = known_sense_ids or mistake_source_ids
 
         strategy_signals: dict[str, dict[str, float]] = {}
-        strategy_latencies_ms: dict[str, float] = {}
         for strategy in self._strategies:
-            started_at = perf_counter()
             strategy_signals[strategy.name] = strategy.compute(
                 senses=senses,
                 clusters=clusters,
@@ -807,7 +712,6 @@ class LearningGraphRepository:
                 adjacency=adjacency,
                 mistake_counter=mistake_counter,
             )
-            strategy_latencies_ms[strategy.name] = (perf_counter() - started_at) * 1000.0
 
         strategy_weights_by_mode: dict[str, dict[str, float]] = {
             "interest": {
@@ -876,7 +780,6 @@ class LearningGraphRepository:
             sense = primary_sense_by_lemma.get(lemma)
             if sense is None:
                 continue
-            cluster = clusters.get(sense.topic_cluster_id) if sense.topic_cluster_id else None
             strategy_sources = sorted(strategy_sources_by_lemma.get(lemma, set()))
             if not strategy_sources:
                 continue
@@ -909,23 +812,15 @@ class LearningGraphRepository:
                 RecommendationItem(
                     english_lemma=lemma,
                     russian_translation=sense.russian_translation,
-                    topic_cluster=cluster.name if cluster is not None else None,
                     score=round(float(total_score), 4),
                     reasons=reasons_unique,
                     strategy_sources=strategy_sources,
                     primary_strategy=primary_strategy,
-                    mistake_count=int(mistake_counter.get(lemma, 0)),
                 )
             )
 
-        items.sort(key=lambda row: (row.score, row.mistake_count, row.english_lemma), reverse=True)
-        limited = items[:limit]
-        learning_graph_observability.record_recommendation_call(
-            user_id=user_id,
-            items=limited,
-            strategy_latencies_ms=strategy_latencies_ms,
-        )
-        return limited
+        items.sort(key=lambda row: (row.score, row.english_lemma), reverse=True)
+        return items[:limit]
 
     def list_anchors(
         self,
@@ -992,13 +887,6 @@ class LearningGraphRepository:
                 )
             )
         }
-        clusters = {
-            row.id: row.name
-            for row in db.scalars(
-                select(TopicClusterModel).where(TopicClusterModel.user_id == user_id)
-            )
-        }
-
         anchors: list[SenseAnchorItem] = []
         for relation in relations:
             if relation.relation_type == "topic_cluster" and relation.score <= 0.35:
@@ -1011,17 +899,14 @@ class LearningGraphRepository:
                 continue
             anchors.append(
                 SenseAnchorItem(
-                    word_sense_id=neighbor.id,
                     english_lemma=neighbor.english_lemma,
                     russian_translation=neighbor.russian_translation,
-                    semantic_key=neighbor.semantic_key,
                     relation_type=relation.relation_type,
                     score=round(relation.score, 4),
-                    topic_cluster=clusters.get(neighbor.topic_cluster_id) if neighbor.topic_cluster_id else None,
                 )
             )
 
-        anchors.sort(key=lambda row: (row.score, row.word_sense_id), reverse=True)
+        anchors.sort(key=lambda row: (row.score, row.english_lemma), reverse=True)
         if anchors:
             return anchors[:limit]
         return self._infer_anchor_candidates(
@@ -1030,9 +915,4 @@ class LearningGraphRepository:
             source_sense=source_sense,
             limit=limit,
         )
-
-    def get_observability(self, *, user_id: int) -> dict[str, object]:
-        return learning_graph_observability.get_snapshot(user_id)
-
-
 learning_graph_repository = LearningGraphRepository()

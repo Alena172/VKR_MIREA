@@ -19,6 +19,3 @@ class VocabularyItemDTO:
 @dataclass(frozen=True)
 class VocabularyFromCaptureResultDTO:
     vocabulary: VocabularyItemDTO
-    translation_note: str
-    created_new_vocabulary_item: bool
-    queued_for_review: bool

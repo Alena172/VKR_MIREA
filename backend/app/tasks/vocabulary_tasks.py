@@ -29,9 +29,6 @@ def _vocabulary_item_result_to_dict(item) -> dict:
 def _capture_to_vocabulary_result_to_dict(result) -> dict:
     return {
         "vocabulary": _vocabulary_item_result_to_dict(result.vocabulary),
-        "translation_note": result.translation_note,
-        "created_new_vocabulary_item": result.created_new_vocabulary_item,
-        "queued_for_review": result.queued_for_review,
     }
 
 
