@@ -1,0 +1,63 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.core.db import get_db
+from app.modules.identity.auth.dependencies import get_current_user_id
+from app.modules.identity.auth.schemas import (
+    LoginOrRegisterRequest,
+    LoginOrRegisterResponse,
+    TokenIdentityResponse,
+    TokenRequest,
+    TokenResponse,
+    TokenVerifyRequest,
+    TokenVerifyResponse,
+)
+from app.modules.identity.auth.service import auth_service
+from app.modules.identity.users.public_api import users_public_api
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/token", response_model=TokenResponse)
+def token(payload: TokenRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    user = users_public_api.get_by_email(db, payload.email)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    token_value = auth_service.create_access_token(user.id)
+    return TokenResponse(access_token=token_value, user_id=user.id)
+
+
+@router.post("/login-or-register", response_model=LoginOrRegisterResponse)
+def login_or_register(
+    payload: LoginOrRegisterRequest,
+    db: Session = Depends(get_db),
+) -> LoginOrRegisterResponse:
+    result = users_public_api.find_or_create(
+        db=db,
+        email=payload.email,
+        full_name=payload.full_name,
+        cefr_level=payload.cefr_level,
+    )
+
+    token_value = auth_service.create_access_token(result.user.id)
+    return LoginOrRegisterResponse(
+        access_token=token_value,
+        user_id=result.user.id,
+        is_new_user=result.is_new_user,
+    )
+
+
+@router.post("/verify", response_model=TokenVerifyResponse)
+def verify(payload: TokenVerifyRequest) -> TokenVerifyResponse:
+    user_id = auth_service.verify_token(payload.token)
+    return TokenVerifyResponse(valid=user_id is not None, user_id=user_id)
+
+
+@router.get("/me", response_model=TokenIdentityResponse)
+def me(user_id: int = Depends(get_current_user_id)) -> TokenIdentityResponse:
+    return TokenIdentityResponse(user_id=user_id)
+
+
+@router.get("/ping")
+def ping() -> dict[str, str]:
+    return {"module": "auth", "status": "ok"}

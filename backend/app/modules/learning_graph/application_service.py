@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.application import application_access, application_transaction
-from app.modules.context_memory.public_api import context_memory_public_api
+from app.modules.learning.review.public_api import context_memory_public_api
 from app.modules.learning_graph.assembler import (
     to_recommendations_result_dto,
     to_registered_vocabulary_sense_dto,

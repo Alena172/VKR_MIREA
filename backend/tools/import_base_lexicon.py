@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from app.core.db import SessionLocal
-from app.modules.base_lexicon.public_api import base_lexicon_public_api
+from app.modules.vocabulary.base_lexicon.public_api import base_lexicon_public_api
 
 
 def _load_json(path: Path) -> list[tuple[str, str]]:

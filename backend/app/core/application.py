@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.modules.users.repository import users_repository
+from app.modules.identity.users.repository import users_repository
 
 
 class AsyncTaskResponse(BaseModel):

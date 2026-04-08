@@ -14,9 +14,9 @@ from app.modules.learning_graph.models import (
     VocabularySenseLinkModel,
     WordSenseModel,
 )
-from app.modules.learning_session.models import LearningSessionModel
-from app.modules.users.models import UserModel
-from app.modules.vocabulary.models import VocabularyItemModel
+from app.modules.learning.session.models import LearningSessionModel
+from app.modules.identity.users.models import UserModel
+from app.modules.vocabulary.items.models import VocabularyItemModel
 
 # Register models for metadata discovery.
 _ = (

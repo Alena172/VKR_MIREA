@@ -5,7 +5,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.core.api import api_router
 from app.core.config import get_settings
 from app.core.db import SessionLocal
-from app.modules.base_lexicon.public_api import base_lexicon_public_api
+from app.modules.vocabulary.base_lexicon.public_api import base_lexicon_public_api
 
 settings = get_settings()
 

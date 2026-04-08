@@ -402,7 +402,6 @@ class LearningGraphRepository:
             user_id=user_id,
             cluster_key=cluster_key,
             name=self._cluster_display_name(cluster_key),
-            description=f"Auto cluster for '{cluster_key}' context.",
         )
         db.add(row)
         db.flush()

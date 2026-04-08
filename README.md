@@ -77,7 +77,6 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 Сейчас самый зрелый рекомендательный сценарий в проекте связан именно с повторением уже известных слов:
 
 - recent mistakes
-- difficult words
 - due words по SRS
 - дополнительные сигналы от графа
 

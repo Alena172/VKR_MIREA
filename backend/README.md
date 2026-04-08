@@ -1,6 +1,6 @@
 # Backend
 
-Backend - это FastAPI-модульный монолит, который отвечает за аутентификацию, словарь, перевод, генерацию упражнений, поток повторения и API фоновых задач.
+Backend - это FastAPI-модульный монолит, организованный вокруг укрупненных модулей `identity`, `vocabulary`, `learning`, `learning_graph`, `ai_services` и инфраструктурного слоя `tasks`.
 
 ## Технологический стек
 
@@ -118,7 +118,7 @@ Backend не считает LLM универсальным решением дл
 
 Текущее поведение гибридное:
 
-- локальные эвристики и `base_lexicon` обрабатывают простые случаи перевода
+- локальные эвристики и подмодуль `vocabulary/base_lexicon` обрабатывают простые случаи перевода
 - внешний AI используется для семантической неоднозначности, генерации предложений и поясняющего feedback там, где от этого есть реальная польза
 - для `context_definition` используется стратегия `reuse-first, LLM-fallback`
 
@@ -142,7 +142,6 @@ Backend не считает LLM универсальным решением дл
 Тяжелые операции выполняются через Celery:
 
 - создание словарных элементов с AI
-- оркестрация для capture -> vocabulary
 - генерация упражнений
 
 Статус задачи доступен через `/api/v1/tasks/{task_id}`.
@@ -154,7 +153,7 @@ Backend не считает LLM универсальным решением дл
 
 ## Основные API-группы
 
-### Auth
+### Identity / auth
 
 - `POST /api/v1/auth/token`
 - `POST /api/v1/auth/login-or-register`
@@ -169,18 +168,18 @@ Backend не считает LLM универсальным решением дл
 - `DELETE /api/v1/vocabulary/me/{item_id}`
 - `POST /api/v1/vocabulary/me/from-capture`
 
-### Translation
+### Vocabulary / translation
 
 - `POST /api/v1/translate/me`
 
-### Exercises и sessions
+### Learning / exercises и sessions
 
 - `POST /api/v1/exercises/me/generate`
 - `POST /api/v1/sessions/submit`
 - `GET /api/v1/sessions/me`
 - `GET /api/v1/sessions/me/{session_id}/answers`
 
-### Review и SRS
+### Learning / review и SRS
 
 - `GET /api/v1/context/me/review-queue`
 - `POST /api/v1/context/me/review-queue/submit`
@@ -224,7 +223,7 @@ pytest -q
 
 ## Импорт данных
 
-В проекте есть `base_lexicon` seed для быстрого локального перевода частотных слов.
+В проекте есть seed для `vocabulary/base_lexicon`, который используется для быстрого локального перевода частотных слов.
 
 Импорт:
 

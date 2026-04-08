@@ -53,12 +53,12 @@ def add_word_with_ai(
     frontend can use it directly after polling.
     """
     from app.core.db import SessionLocal
-    from app.modules.vocabulary.application_service import vocabulary_application_service
+    from app.modules.vocabulary.flows.study_flow_service import vocabulary_study_flow_service
 
     db = SessionLocal()
     try:
         item = asyncio.run(
-            vocabulary_application_service.create_item_with_ai(
+            vocabulary_study_flow_service.create_item_with_ai(
                 db=db,
                 user_id=user_id,
                 english_lemma=english_lemma,
@@ -95,12 +95,12 @@ def study_flow_capture_to_vocabulary(
     Returns a dict matching CaptureToVocabularyResponse schema.
     """
     from app.core.db import SessionLocal
-    from app.modules.vocabulary.application_service import vocabulary_application_service
+    from app.modules.vocabulary.flows.study_flow_service import vocabulary_study_flow_service
 
     db = SessionLocal()
     try:
         result = asyncio.run(
-            vocabulary_application_service.capture_to_vocabulary(
+            vocabulary_study_flow_service.capture_to_vocabulary(
                 db=db,
                 user_id=user_id,
                 selected_text=selected_text,

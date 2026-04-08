@@ -34,17 +34,22 @@ Other API clients -----/            |
 
 ## Основные домены backend
 
-- `auth`: выпуск и проверка JWT
-- `users`: профиль пользователя и уровень CEFR
-- `vocabulary`: сохраненные леммы, переводы, контекстные определения, capture flow
-- `capture`: история захваченного текста из расширения
-- `translation`: перевод EN -> RU для текущего пользователя
-- `exercise_engine`: генерация упражнений и async exercise jobs
-- `learning_session`: отправка ответов, проверка корректности, feedback
-- `context_memory`: SRS, review queue, review plan, review summary
+- `identity`
+  - `auth`: выпуск и проверка JWT
+  - `users`: профиль пользователя и уровень CEFR
+- `vocabulary`
+  - сохраненные леммы, переводы и контекстные определения
+  - внутренний flow `from-capture`
+  - подмодули `translation` и `base_lexicon`
+- `learning`
+  - `exercise_engine`: генерация упражнений и async exercise jobs
+  - `session`: отправка ответов, проверка корректности, feedback
+  - `review`: SRS, review queue, review plan, review summary
 - `learning_graph`: интересы, semantic senses, anchors, graph-based signals
 - `ai_services`: централизованный AI facade и fallback logic
-- `tasks`: polling статуса фоновых задач
+- `infrastructure/tasks`: polling статуса фоновых задач
+
+Для крупных модулей используется единая иерархическая схема: корень модуля является контейнером, содержит `api/` и набор подмодулей, а основная предметная логика размещается внутри подмодулей. В текущей реализации это правило применяется для `identity`, `learning` и `vocabulary`.
 
 ## Важные архитектурные решения
 
@@ -81,10 +86,9 @@ Backend специально не разделен на микросервисы
 
 Сейчас главный recommendation-сценарий в проекте связан не с поиском новых слов, а с тем, какие уже известные слова нужно повторять сейчас.
 
-Рекомендации `context_memory` строятся из:
+Рекомендации `learning/review` строятся из:
 
 - recent mistakes
-- difficult words
 - due words
 - дополнительных boost-сигналов от `learning_graph`
 
@@ -100,7 +104,6 @@ Backend специально не разделен на микросервисы
 - semantic sense upsert
 - anchor-связи между senses
 - graph-based recommendation signals
-- observability для recommendation strategies
 
 Но базовый продуктовый цикл должен оставаться ценным и без дальнейшего разрастания этого слоя.
 
@@ -144,7 +147,7 @@ Backend специально не разделен на микросервисы
 
 1. Пользователь выделяет текст в браузере
 2. Расширение отправляет выделение и исходное предложение
-3. Backend переводит лемму
+3. Backend через `vocabulary/translation` переводит лемму
 4. Backend получает определение, соответствующее контексту
 5. Элемент словаря создается или переиспользуется
 6. Инициализируется SRS-прогресс
@@ -154,7 +157,7 @@ Backend специально не разделен на микросервисы
 
 1. Frontend запрашивает генерацию упражнений
 2. Backend ставит задачу в очередь
-3. Frontend опрашивает `/tasks/{task_id}`
+3. Frontend опрашивает `/tasks/{task_id}` через инфраструктурный task API
 4. Сгенерированные упражнения показываются в UI
 5. Пользователь отправляет ответы
 6. Backend проверяет ответы и сохраняет сессию
