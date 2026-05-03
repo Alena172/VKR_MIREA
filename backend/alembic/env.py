@@ -3,7 +3,7 @@ from __future__ import annotations
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from app.core.config import get_settings
 from app.core.db import Base
@@ -40,6 +40,23 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def ensure_alembic_version_column_width(connection) -> None:
+    # Older databases may have alembic_version.version_num limited to varchar(32),
+    # while our revision identifiers are longer. Widen it before Alembic updates
+    # the version row during migration.
+    if connection.dialect.name != "postgresql":
+        return
+
+    connection.execute(
+        text(
+            """
+            ALTER TABLE IF EXISTS alembic_version
+            ALTER COLUMN version_num TYPE VARCHAR(128)
+            """
+        )
+    )
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -62,6 +79,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        ensure_alembic_version_column_width(connection)
         context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
 
         with context.begin_transaction():

@@ -1,7 +1,7 @@
 """remove capture table and context list fields
 
-Revision ID: 0008_remove_capture_and_context_lists
-Revises: 0007_learning_session_answer_metadata
+Revision ID: 0008_rm_capture_ctx_lists
+Revises: 0007_session_answer_meta
 Create Date: 2026-04-07 00:30:00
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "0008_remove_capture_and_context_lists"
-down_revision: Union[str, None] = "0007_learning_session_answer_metadata"
+revision: str = "0008_rm_capture_ctx_lists"
+down_revision: Union[str, None] = "0007_session_answer_meta"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -45,4 +45,3 @@ def downgrade() -> None:
     with op.batch_alter_table("user_contexts") as batch_op:
         batch_op.add_column(sa.Column("goals", sa.Text(), nullable=False, server_default="[]"))
         batch_op.add_column(sa.Column("difficult_words", sa.Text(), nullable=False, server_default="[]"))
-

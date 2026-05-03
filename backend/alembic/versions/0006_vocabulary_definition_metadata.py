@@ -1,6 +1,6 @@
 """add vocabulary definition metadata
 
-Revision ID: 0006_vocabulary_definition_metadata
+Revision ID: 0006_vocab_def_meta
 Revises: 0005_base_lexicon
 Create Date: 2026-04-04 00:00:00
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "0006_vocabulary_definition_metadata"
+revision: str = "0006_vocab_def_meta"
 down_revision: Union[str, None] = "0005_base_lexicon"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

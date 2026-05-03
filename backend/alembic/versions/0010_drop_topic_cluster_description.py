@@ -1,6 +1,6 @@
 """drop topic cluster description
 
-Revision ID: 0010_drop_topic_cluster_description
+Revision ID: 0010_drop_cluster_desc
 Revises: 0009_drop_user_contexts
 Create Date: 2026-04-07 02:10:00
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "0010_drop_topic_cluster_description"
+revision: str = "0010_drop_cluster_desc"
 down_revision: Union[str, None] = "0009_drop_user_contexts"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

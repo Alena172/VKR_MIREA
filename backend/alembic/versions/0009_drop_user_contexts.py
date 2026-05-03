@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "0009_drop_user_contexts"
-down_revision: Union[str, None] = "0008_remove_capture_and_context_lists"
+down_revision: Union[str, None] = "0008_rm_capture_ctx_lists"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
