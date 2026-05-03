@@ -4,6 +4,13 @@ import { clearReviewFocus, loadReviewFocus } from "../lib/studyPresets";
 
 const PROFILE_SIGNAL_LABELS = {
   InterestProfile: "Профиль интересов",
+  SameInterest: "Та же тема",
+  Polysemy: "Другой смысл слова",
+};
+
+const ANCHOR_RELATION_LABELS = {
+  same_interest: "та же тема",
+  polysemy_variant: "другой смысл",
 };
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
@@ -94,7 +101,6 @@ export default function ReviewPage({ onError }) {
   const {
     currentIndex,
     currentItem,
-    graphAnchorsByLemma,
     isFlipped,
     isSessionActive,
     interestWords,
@@ -110,6 +116,7 @@ export default function ReviewPage({ onError }) {
     sessionSize,
     setIsFlipped,
     setSessionSize,
+    semanticAnchorsByLemma,
     startSession,
     starting,
     submitting,
@@ -229,8 +236,8 @@ export default function ReviewPage({ onError }) {
                 <p className="text-sm font-semibold text-gray-900">Слова из профиля интересов</p>
                 <div className="space-y-2">
                   {interestWords.map((item) => {
-                    const signalLabel = PROFILE_SIGNAL_LABELS[item.primary_strategy] || item.primary_strategy || "Профиль интересов";
-                    const anchors = graphAnchorsByLemma[item.english_lemma] || [];
+                    const signalLabel = PROFILE_SIGNAL_LABELS[item.primary_signal] || item.primary_signal || "Профиль интересов";
+                    const anchors = semanticAnchorsByLemma[item.english_lemma] || [];
                     return (
                       <div key={`interest-word-${item.english_lemma}`} className="rounded-lg border border-blue-100 bg-white p-2">
                         <p className="text-sm font-semibold text-gray-900">
@@ -241,7 +248,13 @@ export default function ReviewPage({ onError }) {
                         </p>
                         {anchors.length ? (
                           <p className="mt-1 text-xs text-gray-600">
-                            Связанные смыслы: {anchors.map((anchor) => `${anchor.english_lemma} (${anchor.russian_translation})`).join(", ")}
+                            Связанные смыслы:{" "}
+                            {anchors
+                              .map((anchor) => {
+                                const relationLabel = ANCHOR_RELATION_LABELS[anchor.relation_type] || anchor.relation_type;
+                                return `${anchor.english_lemma} (${anchor.russian_translation}, ${relationLabel})`;
+                              })
+                              .join(", ")}
                           </p>
                         ) : null}
                       </div>

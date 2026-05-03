@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 from app.modules.learning_graph.assembler import (
-    to_recommendation_item_dto,
     to_word_anchor_dto,
 )
 from app.modules.learning_graph.contracts import (
-    RecommendationItemDTO,
     RegisteredVocabularySenseDTO,
     WordAnchorDTO,
 )
 from app.modules.learning_graph.application_service import learning_graph_application_service
 
 __all__ = [
-    "RecommendationItemDTO",
     "RegisteredVocabularySenseDTO",
     "WordAnchorDTO",
     "learning_graph_public_api",
@@ -21,22 +18,6 @@ __all__ = [
 
 class LearningGraphPublicApi:
     register_mistake = staticmethod(learning_graph_application_service.register_mistake)
-
-    @staticmethod
-    def list_recommendation_items(
-        db,
-        *,
-        user_id: int,
-        mode: str,
-        limit: int,
-    ) -> list[RecommendationItemDTO]:
-        items = learning_graph_application_service.list_recommendation_items(
-            db=db,
-            user_id=user_id,
-            mode=mode,
-            limit=limit,
-        )
-        return [to_recommendation_item_dto(item) for item in items]
 
     @staticmethod
     def register_vocabulary_semantics(

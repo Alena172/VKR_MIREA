@@ -12,7 +12,7 @@
 - `word_progress`
 - `learning_sessions`
 - `learning_session_answers`
-- `mistake_events` как trace ошибок на уровне смысла слова
+- `sense_error_events` как trace ошибок на уровне смысла слова
 
 Семантическое обогащение:
 
@@ -204,7 +204,7 @@ erDiagram
         TIMESTAMP created_at
     }
 
-    mistake_events {
+    sense_error_events {
         BIGINT id PK
         BIGINT user_id FK
         BIGINT session_id FK
@@ -225,7 +225,7 @@ erDiagram
     users ||--o{ word_senses : has
     users ||--o{ vocabulary_sense_links : has
     users ||--o{ sense_relations : has
-    users ||--o{ mistake_events : has
+    users ||--o{ sense_error_events : has
 
     learning_sessions ||--o{ learning_session_answers : contains
     topic_clusters ||--o{ word_senses : groups
@@ -233,6 +233,6 @@ erDiagram
     word_senses ||--o{ vocabulary_sense_links : maps
     word_senses ||--o{ sense_relations : left_side
     word_senses ||--o{ sense_relations : right_side
-    learning_sessions ||--o{ mistake_events : records
-    word_senses ||--o{ mistake_events : classifies
+    learning_sessions ||--o{ sense_error_events : records
+    word_senses ||--o{ sense_error_events : classifies
 ```

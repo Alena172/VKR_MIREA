@@ -150,7 +150,7 @@ CREATE INDEX ix_sense_relations_user_id ON sense_relations(user_id);
 CREATE INDEX ix_sense_relations_left_sense_id ON sense_relations(left_sense_id);
 CREATE INDEX ix_sense_relations_right_sense_id ON sense_relations(right_sense_id);
 
-CREATE TABLE mistake_events (
+CREATE TABLE sense_error_events (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id),
     session_id INTEGER REFERENCES learning_sessions(id),
@@ -163,9 +163,9 @@ CREATE TABLE mistake_events (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX ix_mistake_events_user_id ON mistake_events(user_id);
-CREATE INDEX ix_mistake_events_session_id ON mistake_events(session_id);
-CREATE INDEX ix_mistake_events_english_lemma ON mistake_events(english_lemma);
-CREATE INDEX ix_mistake_events_word_sense_id ON mistake_events(word_sense_id);
-CREATE INDEX ix_mistake_events_mistake_tag ON mistake_events(mistake_tag);
-CREATE INDEX ix_mistake_events_created_at ON mistake_events(created_at);
+CREATE INDEX ix_sense_error_events_user_id ON sense_error_events(user_id);
+CREATE INDEX ix_sense_error_events_session_id ON sense_error_events(session_id);
+CREATE INDEX ix_sense_error_events_english_lemma ON sense_error_events(english_lemma);
+CREATE INDEX ix_sense_error_events_word_sense_id ON sense_error_events(word_sense_id);
+CREATE INDEX ix_sense_error_events_mistake_tag ON sense_error_events(mistake_tag);
+CREATE INDEX ix_sense_error_events_created_at ON sense_error_events(created_at);

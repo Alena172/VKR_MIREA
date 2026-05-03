@@ -469,7 +469,7 @@ def test_recommendations_rank_by_frequency_and_recency(client):
     assert data["next_review_at"]["pear"] is not None
 
 
-def test_context_recommendations_include_learning_graph_neighbors(client):
+def test_learning_graph_interest_words_are_based_on_semantic_profile(client):
     create_user(client, "context-graph@example.com", "Context Graph User", "B1")
     headers = auth_headers(client, "context-graph@example.com")
 
@@ -512,9 +512,9 @@ def test_context_recommendations_include_learning_graph_neighbors(client):
     )
     assert mistake_session.status_code == 200
 
-    rec_resp = client.get("/api/v1/context/me/recommendations?limit=10", headers=headers)
+    rec_resp = client.get("/api/v1/learning-graph/me/interest-words?limit=10", headers=headers)
     assert rec_resp.status_code == 200
-    words = rec_resp.json()["words"]
+    words = [item["english_lemma"] for item in rec_resp.json()["items"]]
     assert "acquire" in words
     assert "obtain" in words
 
@@ -1416,9 +1416,9 @@ def test_learning_graph_keeps_polysemy_and_exposes_anchors(client):
     assert any(item["relation_type"] == "polysemy_variant" for item in anchors_payload["anchors"])
 
 
-def test_learning_graph_uses_semantic_edges_in_recommendations(client):
-    create_user(client, "graph-reco@example.com", "Graph Reco User", "B1")
-    headers = auth_headers(client, "graph-reco@example.com")
+def test_learning_graph_uses_semantic_profile_for_interest_words(client):
+    create_user(client, "graph-interest@example.com", "Graph Interest User", "B1")
+    headers = auth_headers(client, "graph-interest@example.com")
 
     first = client.post(
         "/api/v1/learning-graph/me/semantic-upsert",
@@ -1464,77 +1464,16 @@ def test_learning_graph_uses_semantic_edges_in_recommendations(client):
     )
     assert mistake.status_code == 200
 
-    recommendations = client.get(
-        "/api/v1/learning-graph/me/recommendations?mode=weakness&limit=10",
+    interest_words = client.get(
+        "/api/v1/learning-graph/me/interest-words?limit=10",
         headers=headers,
     )
-    assert recommendations.status_code == 200
-    items = recommendations.json()["items"]
+    assert interest_words.status_code == 200
+    items = interest_words.json()["items"]
     obtain_item = next((item for item in items if item["english_lemma"] == "obtain"), None)
     assert obtain_item is not None
-    assert "semantic_neighbor" in obtain_item["reasons"]
-    assert "WeakNodeReinforcement" in obtain_item["strategy_sources"]
-    assert obtain_item["primary_strategy"] in {
-        "NeighborExpansion",
-        "ClusterDeepening",
-        "WeakNodeReinforcement",
-    }
-
-
-def test_learning_graph_observability_collects_metrics(client):
-    create_user(client, "graph-observability@example.com", "Graph Observability", "B1")
-    headers = auth_headers(client, "graph-observability@example.com")
-
-    first = client.post(
-        "/api/v1/learning-graph/me/semantic-upsert",
-        json={
-            "english_lemma": "acquire",
-            "russian_translation": "получать",
-            "source_sentence": "Teams acquire knowledge by solving real tasks.",
-        },
-        headers=headers,
-    )
-    assert first.status_code == 200
-
-    second = client.post(
-        "/api/v1/learning-graph/me/semantic-upsert",
-        json={
-            "english_lemma": "obtain",
-            "russian_translation": "получать",
-            "source_sentence": "Students obtain knowledge from practice.",
-        },
-        headers=headers,
-    )
-    assert second.status_code == 200
-
-    client.get("/api/v1/learning-graph/me/recommendations?mode=mixed&limit=10", headers=headers)
-    client.get("/api/v1/learning-graph/me/recommendations?mode=weakness&limit=10", headers=headers)
-
-    snapshot = client.get("/api/v1/learning-graph/me/observability", headers=headers)
-    assert snapshot.status_code == 200
-    payload = snapshot.json()
-    assert payload["total_requests"] >= 2
-    assert isinstance(payload["strategy_latency"], list)
-    assert len(payload["strategy_latency"]) >= 1
-    assert 0 <= payload["empty_recommendations_share"] <= 1
-    assert 0 <= payload["weak_recommendations_share"] <= 1
-
-
-def test_learning_graph_observability_tracks_empty_recommendations(client):
-    create_user(client, "graph-empty-observability@example.com", "Graph Empty", "A2")
-    headers = auth_headers(client, "graph-empty-observability@example.com")
-
-    recommendations = client.get(
-        "/api/v1/learning-graph/me/recommendations?mode=mixed&limit=10",
-        headers=headers,
-    )
-    assert recommendations.status_code == 200
-    assert recommendations.json()["items"] == []
-
-    snapshot = client.get("/api/v1/learning-graph/me/observability", headers=headers)
-    assert snapshot.status_code == 200
-    payload = snapshot.json()
-    assert payload["total_requests"] >= 1
-    assert payload["empty_recommendations_share"] > 0
+    assert "interest_profile" in obtain_item["reasons"]
+    assert obtain_item["profile_signals"] == ["InterestProfile"]
+    assert obtain_item["primary_signal"] == "InterestProfile"
 
 

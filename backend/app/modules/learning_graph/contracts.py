@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+
 @dataclass(frozen=True)
 class InterestItemDTO:
     interest: str
@@ -8,13 +10,13 @@ class InterestItemDTO:
 
 
 @dataclass(frozen=True)
-class RecommendationItemDTO:
+class InterestWordItemDTO:
     english_lemma: str
     russian_translation: str
     score: float
     reasons: list[str]
-    strategy_sources: list[str]
-    primary_strategy: str | None
+    profile_signals: list[str]
+    primary_signal: str | None
 
 
 @dataclass(frozen=True)
@@ -57,10 +59,12 @@ class SemanticUpsertResultDTO:
 
 
 @dataclass(frozen=True)
-class RecommendationsResultDTO:
+class InterestWordsDTO:
     user_id: int
     mode: str
-    items: list[RecommendationItemDTO]
+    items: list[InterestWordItemDTO]
+
+
 @dataclass(frozen=True)
 class SenseAnchorsDTO:
     user_id: int

@@ -3,20 +3,19 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import re
-from typing import Literal
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.learning_graph.models import (
-    MistakeEventModel,
+    SenseErrorEventModel,
     SenseRelationModel,
     TopicClusterModel,
     UserInterestModel,
     VocabularySenseLinkModel,
     WordSenseModel,
 )
-from app.modules.learning_graph.schemas import InterestItem, RecommendationItem, SenseAnchorItem
+from app.modules.learning_graph.schemas import InterestItem, InterestWordItem, SenseAnchorItem
 
 
 @dataclass
@@ -126,11 +125,15 @@ class LearningGraphRepository:
         return key.replace("-", " ").title()
 
     def _tokens(self, value: str | None) -> set[str]:
-        return {
+        tokens = {
             token.lower()
             for token in self._TAG_WORD_RE.findall(value or "")
             if len(token) >= 3 and token.lower() not in self._STOPWORDS
         }
+        for token in list(tokens):
+            if token.endswith("s") and len(token) > 4:
+                tokens.add(token[:-1])
+        return tokens
 
     def _semantic_key(
         self,
@@ -412,7 +415,7 @@ class LearningGraphRepository:
             cluster=cluster,
         )
 
-    def add_mistake_event(
+    def add_sense_error_event(
         self,
         db: Session,
         *,
@@ -422,7 +425,7 @@ class LearningGraphRepository:
         expected_answer: str | None,
         user_answer: str | None,
         session_id: int | None = None,
-    ) -> MistakeEventModel | None:
+    ) -> SenseErrorEventModel | None:
         """Keep a lightweight compatibility record.
 
         Mistake scheduling and repetition are handled by learning/review; this
@@ -436,7 +439,7 @@ class LearningGraphRepository:
             .where(WordSenseModel.user_id == user_id, WordSenseModel.english_lemma == lemma)
             .order_by(WordSenseModel.id.desc())
         )
-        row = MistakeEventModel(
+        row = SenseErrorEventModel(
             user_id=user_id,
             session_id=session_id,
             english_lemma=lemma,
@@ -465,15 +468,14 @@ class LearningGraphRepository:
             db.flush()
         return len(rows)
 
-    def get_recommendations(
+    def list_interest_words(
         self,
         db: Session,
         *,
         user_id: int,
-        mode: Literal["interest", "weakness", "mixed"],
         limit: int,
         known_lemmas: set[str] | None = None,
-    ) -> list[RecommendationItem]:
+    ) -> list[InterestWordItem]:
         interests = {
             row.interest_key: row.weight
             for row in db.scalars(select(UserInterestModel).where(UserInterestModel.user_id == user_id))
@@ -486,7 +488,7 @@ class LearningGraphRepository:
             for row in db.scalars(select(TopicClusterModel).where(TopicClusterModel.user_id == user_id))
         }
         known_lemmas = known_lemmas or set()
-        best_by_lemma: dict[str, RecommendationItem] = {}
+        best_by_lemma: dict[str, InterestWordItem] = {}
         for sense in db.scalars(select(WordSenseModel).where(WordSenseModel.user_id == user_id)):
             lemma = sense.english_lemma.strip().lower()
             if not lemma:
@@ -500,13 +502,13 @@ class LearningGraphRepository:
             if lemma in known_lemmas:
                 score *= 0.35
                 reasons.append("already_saved")
-            item = RecommendationItem(
+            item = InterestWordItem(
                 english_lemma=lemma,
                 russian_translation=sense.russian_translation,
                 score=round(score, 4),
                 reasons=reasons,
-                strategy_sources=["InterestProfile"],
-                primary_strategy="InterestProfile",
+                profile_signals=["InterestProfile"],
+                primary_signal="InterestProfile",
             )
             current = best_by_lemma.get(lemma)
             if current is None or item.score > current.score:

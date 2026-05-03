@@ -1,5 +1,3 @@
-from typing import Literal
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -7,16 +5,14 @@ from app.core.db import get_db
 from app.modules.identity.auth.dependencies import get_current_user_id
 from app.modules.learning_graph.application_service import learning_graph_application_service
 from app.modules.learning_graph.contracts import (
-    RecommendationsResultDTO,
+    InterestWordsDTO,
     SemanticUpsertResultDTO,
     SenseAnchorsDTO,
     UserInterestsDTO,
 )
 from app.modules.learning_graph.schemas import (
-    InterestUpsertRequest,
     InterestItem,
     InterestWordsResponse,
-    RecommendationsResponse,
     SemanticUpsertRequest,
     SemanticUpsertResponse,
     SenseAnchorsResponse,
@@ -50,25 +46,7 @@ def _to_semantic_upsert_response(result: SemanticUpsertResultDTO) -> SemanticUps
     )
 
 
-def _to_recommendations_response(result: RecommendationsResultDTO) -> RecommendationsResponse:
-    return RecommendationsResponse(
-        user_id=result.user_id,
-        mode=result.mode,
-        items=[
-            {
-                "english_lemma": item.english_lemma,
-                "russian_translation": item.russian_translation,
-                "score": item.score,
-                "reasons": item.reasons,
-                "strategy_sources": item.strategy_sources,
-                "primary_strategy": item.primary_strategy,
-            }
-            for item in result.items
-        ],
-    )
-
-
-def _to_interest_words_response(result: RecommendationsResultDTO) -> InterestWordsResponse:
+def _to_interest_words_response(result: InterestWordsDTO) -> InterestWordsResponse:
     return InterestWordsResponse(
         user_id=result.user_id,
         items=[
@@ -77,8 +55,8 @@ def _to_interest_words_response(result: RecommendationsResultDTO) -> InterestWor
                 "russian_translation": item.russian_translation,
                 "score": item.score,
                 "reasons": item.reasons,
-                "strategy_sources": item.strategy_sources,
-                "primary_strategy": item.primary_strategy,
+                "profile_signals": item.profile_signals,
+                "primary_signal": item.primary_signal,
             }
             for item in result.items
         ],
@@ -112,19 +90,6 @@ def list_interests_me(
     ))
 
 
-@router.put("/me/interests", response_model=UserInterestsResponse)
-def upsert_interests_me(
-    payload: InterestUpsertRequest,
-    current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-) -> UserInterestsResponse:
-    return _to_user_interests_response(learning_graph_application_service.upsert_interests(
-        db=db,
-        payload=payload,
-        current_user_id=current_user_id,
-    ))
-
-
 @router.post("/me/semantic-upsert", response_model=SemanticUpsertResponse)
 def semantic_upsert_me(
     payload: SemanticUpsertRequest,
@@ -138,30 +103,14 @@ def semantic_upsert_me(
     ))
 
 
-@router.get("/me/recommendations", response_model=RecommendationsResponse)
-def get_recommendations_me(
-    mode: Literal["interest", "weakness", "mixed"] = Query(default="mixed"),
-    limit: int = Query(default=10, ge=1, le=100),
-    current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-) -> RecommendationsResponse:
-    return _to_recommendations_response(learning_graph_application_service.get_recommendations(
-        db=db,
-        mode=mode,
-        limit=limit,
-        current_user_id=current_user_id,
-    ))
-
-
 @router.get("/me/interest-words", response_model=InterestWordsResponse)
 def get_interest_words_me(
     limit: int = Query(default=10, ge=1, le=100),
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> InterestWordsResponse:
-    return _to_interest_words_response(learning_graph_application_service.get_recommendations(
+    return _to_interest_words_response(learning_graph_application_service.get_interest_words(
         db=db,
-        mode="interest",
         limit=limit,
         current_user_id=current_user_id,
     ))

@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 
@@ -40,24 +38,18 @@ class SemanticUpsertResponse(BaseModel):
     sense: WordSenseRead
 
 
-class RecommendationItem(BaseModel):
+class InterestWordItem(BaseModel):
     english_lemma: str
     russian_translation: str
     score: float
     reasons: list[str]
-    strategy_sources: list[str] = Field(default_factory=list)
-    primary_strategy: str | None = None
-
-
-class RecommendationsResponse(BaseModel):
-    user_id: int
-    mode: Literal["interest", "weakness", "mixed"]
-    items: list[RecommendationItem]
+    profile_signals: list[str] = Field(default_factory=list)
+    primary_signal: str | None = None
 
 
 class InterestWordsResponse(BaseModel):
     user_id: int
-    items: list[RecommendationItem]
+    items: list[InterestWordItem]
 
 
 class SenseAnchorItem(BaseModel):

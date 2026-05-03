@@ -6,14 +6,14 @@ from sqlalchemy.orm import Session
 from app.core.application import application_access, application_transaction
 from app.modules.learning.review.public_api import context_memory_public_api
 from app.modules.learning_graph.assembler import (
-    to_recommendations_result_dto,
+    to_interest_words_dto,
     to_registered_vocabulary_sense_dto,
     to_semantic_upsert_result_dto,
     to_sense_anchors_dto,
     to_user_interests_dto,
 )
 from app.modules.learning_graph.contracts import (
-    RecommendationsResultDTO,
+    InterestWordsDTO,
     RegisteredVocabularySenseDTO,
     SemanticUpsertResultDTO,
     SenseAnchorsDTO,
@@ -82,14 +82,13 @@ class LearningGraphApplicationService:
         db.refresh(result.sense)
         return to_semantic_upsert_result_dto(user_id=current_user_id, result=result)
 
-    def get_recommendations(
+    def get_interest_words(
         self,
         *,
         db: Session,
-        mode: str,
         limit: int,
         current_user_id: int,
-    ) -> RecommendationsResultDTO:
+    ) -> InterestWordsDTO:
         application_access.ensure_user_exists(db=db, user_id=current_user_id)
         known_lemmas = {
             item.word
@@ -98,40 +97,16 @@ class LearningGraphApplicationService:
                 user_id=current_user_id,
             )
         }
-        items = learning_graph_repository.get_recommendations(
+        items = learning_graph_repository.list_interest_words(
             db,
             user_id=current_user_id,
-            mode=mode,
             limit=limit,
             known_lemmas=known_lemmas,
         )
-        return to_recommendations_result_dto(
+        return to_interest_words_dto(
             user_id=current_user_id,
-            mode=mode,
+            mode="interest",
             items=items,
-        )
-
-    def list_recommendation_items(
-        self,
-        *,
-        db: Session,
-        user_id: int,
-        mode: str,
-        limit: int,
-    ):
-        known_lemmas = {
-            item.word
-            for item in context_memory_public_api.list_mastered_lemma_dtos(
-                db=db,
-                user_id=user_id,
-            )
-        }
-        return learning_graph_repository.get_recommendations(
-            db,
-            user_id=user_id,
-            mode=mode,
-            limit=limit,
-            known_lemmas=known_lemmas,
         )
 
     def register_vocabulary_semantics(
@@ -168,7 +143,7 @@ class LearningGraphApplicationService:
         expected_answer: str | None,
         user_answer: str | None,
     ) -> None:
-        learning_graph_repository.add_mistake_event(
+        learning_graph_repository.add_sense_error_event(
             db,
             user_id=user_id,
             english_lemma=english_lemma,

@@ -71,8 +71,8 @@ class SenseRelationModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
-class MistakeEventModel(Base):
-    __tablename__ = "mistake_events"
+class SenseErrorEventModel(Base):
+    __tablename__ = "sense_error_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)

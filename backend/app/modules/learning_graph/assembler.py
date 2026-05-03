@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from app.modules.learning_graph.contracts import (
     InterestItemDTO,
-    RecommendationItemDTO,
-    RecommendationsResultDTO,
+    InterestWordItemDTO,
+    InterestWordsDTO,
     RegisteredVocabularySenseDTO,
     SemanticUpsertResultDTO,
     SenseAnchorsDTO,
@@ -14,7 +14,7 @@ from app.modules.learning_graph.contracts import (
 from app.modules.learning_graph.repository import SemanticUpsertResult
 from app.modules.learning_graph.schemas import (
     InterestItem,
-    RecommendationItem,
+    InterestWordItem,
     SenseAnchorItem,
 )
 
@@ -24,6 +24,8 @@ def to_interest_item_dto(item: InterestItem) -> InterestItemDTO:
         interest=item.interest,
         weight=item.weight,
     )
+
+
 def to_word_sense_dto(
     *,
     id: int,
@@ -39,14 +41,14 @@ def to_word_sense_dto(
     )
 
 
-def to_recommendation_item_dto(item: RecommendationItem) -> RecommendationItemDTO:
-    return RecommendationItemDTO(
+def to_interest_word_item_dto(item: InterestWordItem) -> InterestWordItemDTO:
+    return InterestWordItemDTO(
         english_lemma=item.english_lemma,
         russian_translation=item.russian_translation,
         score=item.score,
         reasons=list(item.reasons),
-        strategy_sources=list(item.strategy_sources),
-        primary_strategy=item.primary_strategy,
+        profile_signals=list(item.profile_signals),
+        primary_signal=item.primary_signal,
     )
 
 
@@ -94,16 +96,16 @@ def to_semantic_upsert_result_dto(
     )
 
 
-def to_recommendations_result_dto(
+def to_interest_words_dto(
     *,
     user_id: int,
     mode: str,
-    items: list[RecommendationItem],
-) -> RecommendationsResultDTO:
-    return RecommendationsResultDTO(
+    items: list[InterestWordItem],
+) -> InterestWordsDTO:
+    return InterestWordsDTO(
         user_id=user_id,
         mode=mode,
-        items=[to_recommendation_item_dto(item) for item in items],
+        items=[to_interest_word_item_dto(item) for item in items],
     )
 
 

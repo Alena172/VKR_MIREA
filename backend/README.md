@@ -195,7 +195,6 @@ Backend использует LLM как специализированный и�
 ### Learning graph
 
 - `GET /api/v1/learning-graph/me/interests`
-- `PUT /api/v1/learning-graph/me/interests`
 - `POST /api/v1/learning-graph/me/semantic-upsert`
 - `GET /api/v1/learning-graph/me/interest-words`
 - `GET /api/v1/learning-graph/me/anchors`

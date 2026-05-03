@@ -14,7 +14,7 @@ export function useReviewSession({ onError }) {
   const [plan, setPlan] = useState(null);
   const [summary, setSummary] = useState(null);
   const [interestWords, setInterestWords] = useState([]);
-  const [graphAnchorsByLemma, setGraphAnchorsByLemma] = useState({});
+  const [semanticAnchorsByLemma, setSemanticAnchorsByLemma] = useState({});
   const [sessionSize, setSessionSize] = useState(20);
   const [sessionMode, setSessionMode] = useState(null);
   const [sessionItems, setSessionItems] = useState([]);
@@ -42,7 +42,7 @@ export function useReviewSession({ onError }) {
 
       const topForAnchors = items.slice(0, 3);
       if (!topForAnchors.length) {
-        setGraphAnchorsByLemma({});
+        setSemanticAnchorsByLemma({});
         return;
       }
       const anchorResults = await Promise.allSettled(
@@ -55,7 +55,7 @@ export function useReviewSession({ onError }) {
           anchorsMap[item.english_lemma] = result.value?.anchors || [];
         }
       });
-      setGraphAnchorsByLemma(anchorsMap);
+      setSemanticAnchorsByLemma(anchorsMap);
     } catch (error) {
       if (!isAbortError(error)) {
         onError(getErrorMessage(error));
@@ -152,7 +152,6 @@ export function useReviewSession({ onError }) {
   return {
     currentIndex,
     currentItem,
-    graphAnchorsByLemma,
     interestWords,
     isFlipped,
     isSessionActive,
@@ -173,5 +172,6 @@ export function useReviewSession({ onError }) {
     submitting,
     submitAnswer,
     summary,
+    semanticAnchorsByLemma,
   };
 }

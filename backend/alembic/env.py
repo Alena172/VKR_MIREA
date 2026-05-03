@@ -8,7 +8,7 @@ from sqlalchemy import engine_from_config, pool, text
 from app.core.config import get_settings
 from app.core.db import Base
 from app.modules.learning_graph.models import (
-    MistakeEventModel,
+    SenseErrorEventModel,
     TopicClusterModel,
     UserInterestModel,
     VocabularySenseLinkModel,
@@ -27,7 +27,7 @@ _ = (
     TopicClusterModel,
     WordSenseModel,
     VocabularySenseLinkModel,
-    MistakeEventModel,
+    SenseErrorEventModel,
 )
 
 config = context.config
