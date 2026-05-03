@@ -1,7 +1,6 @@
--- Practical database schema aligned with the current simplified implementation.
--- Capture is handled inside the vocabulary flow, review stores only factual progress,
--- and learning session answers keep structured exercise metadata instead of
--- recovering behavior from prompt text.
+-- Практическая схема БД, согласованная с текущей упрощенной реализацией.
+-- Захват слова обрабатывается внутри vocabulary flow, review хранит фактический прогресс,
+-- а learning_session_answers хранит структурированные метаданные упражнения.
 
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,

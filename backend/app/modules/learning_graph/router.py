@@ -15,6 +15,7 @@ from app.modules.learning_graph.contracts import (
 from app.modules.learning_graph.schemas import (
     InterestUpsertRequest,
     InterestItem,
+    InterestWordsResponse,
     RecommendationsResponse,
     SemanticUpsertRequest,
     SemanticUpsertResponse,
@@ -53,6 +54,23 @@ def _to_recommendations_response(result: RecommendationsResultDTO) -> Recommenda
     return RecommendationsResponse(
         user_id=result.user_id,
         mode=result.mode,
+        items=[
+            {
+                "english_lemma": item.english_lemma,
+                "russian_translation": item.russian_translation,
+                "score": item.score,
+                "reasons": item.reasons,
+                "strategy_sources": item.strategy_sources,
+                "primary_strategy": item.primary_strategy,
+            }
+            for item in result.items
+        ],
+    )
+
+
+def _to_interest_words_response(result: RecommendationsResultDTO) -> InterestWordsResponse:
+    return InterestWordsResponse(
+        user_id=result.user_id,
         items=[
             {
                 "english_lemma": item.english_lemma,
@@ -130,6 +148,20 @@ def get_recommendations_me(
     return _to_recommendations_response(learning_graph_application_service.get_recommendations(
         db=db,
         mode=mode,
+        limit=limit,
+        current_user_id=current_user_id,
+    ))
+
+
+@router.get("/me/interest-words", response_model=InterestWordsResponse)
+def get_interest_words_me(
+    limit: int = Query(default=10, ge=1, le=100),
+    current_user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> InterestWordsResponse:
+    return _to_interest_words_response(learning_graph_application_service.get_recommendations(
+        db=db,
+        mode="interest",
         limit=limit,
         current_user_id=current_user_id,
     ))

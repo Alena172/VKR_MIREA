@@ -2,10 +2,8 @@ import { useEffect, useState } from "react";
 import { useReviewSession } from "../hooks/useReviewSession";
 import { clearReviewFocus, loadReviewFocus } from "../lib/studyPresets";
 
-const STRATEGY_LABELS = {
-  NeighborExpansion: "Соседние связи",
-  ClusterDeepening: "Углубление кластера",
-  WeakNodeReinforcement: "Усиление слабых узлов",
+const PROFILE_SIGNAL_LABELS = {
+  InterestProfile: "Профиль интересов",
 };
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
@@ -97,9 +95,9 @@ export default function ReviewPage({ onError }) {
     currentIndex,
     currentItem,
     graphAnchorsByLemma,
-    graphRecommendations,
     isFlipped,
     isSessionActive,
+    interestWords,
     loadReviewMeta,
     plan,
     resetSession,
@@ -226,24 +224,24 @@ export default function ReviewPage({ onError }) {
               </div>
             ) : null}
 
-            {graphRecommendations.length ? (
+            {interestWords.length ? (
               <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/50 p-3">
-                <p className="text-sm font-semibold text-gray-900">Рекомендации из learning graph</p>
+                <p className="text-sm font-semibold text-gray-900">Слова из профиля интересов</p>
                 <div className="space-y-2">
-                  {graphRecommendations.map((item) => {
-                    const strategyLabel = STRATEGY_LABELS[item.primary_strategy] || item.primary_strategy || "Без стратегии";
+                  {interestWords.map((item) => {
+                    const signalLabel = PROFILE_SIGNAL_LABELS[item.primary_strategy] || item.primary_strategy || "Профиль интересов";
                     const anchors = graphAnchorsByLemma[item.english_lemma] || [];
                     return (
-                      <div key={`graph-rec-${item.english_lemma}`} className="rounded-lg border border-blue-100 bg-white p-2">
+                      <div key={`interest-word-${item.english_lemma}`} className="rounded-lg border border-blue-100 bg-white p-2">
                         <p className="text-sm font-semibold text-gray-900">
                           {item.english_lemma} - {item.russian_translation}
                         </p>
                         <p className="mt-1 text-xs text-gray-600">
-                          Strategy source: <span className="font-semibold text-blue-700">{strategyLabel}</span>
+                          Сигнал: <span className="font-semibold text-blue-700">{signalLabel}</span>
                         </p>
                         {anchors.length ? (
                           <p className="mt-1 text-xs text-gray-600">
-                            Anchors: {anchors.map((anchor) => `${anchor.english_lemma} (${anchor.russian_translation})`).join(", ")}
+                            Связанные смыслы: {anchors.map((anchor) => `${anchor.english_lemma} (${anchor.russian_translation})`).join(", ")}
                           </p>
                         ) : null}
                       </div>
@@ -453,7 +451,7 @@ function ReviewPlanColumn({ title, emptyText, items }) {
 }
 
 function ReviewPlanItemCard({ item }) {
-  const difficultyMeta = getDifficultyMeta(item.error_count, item.correct_streak);
+  const difficultyMeta = getDifficultyMeta(item.status, item.error_count, item.correct_streak);
   const timingMeta = getTimingMeta(item.next_review_at);
 
   return (

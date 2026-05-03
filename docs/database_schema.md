@@ -1,34 +1,37 @@
-# Database Schema
+# Схема базы данных
 
-## Current simplified model
+## Текущая упрощенная модель
 
-After the simplification pass, the practical schema is intentionally closer to the real product loop and less overloaded with future-facing links.
+Практическая схема БД приведена к основному продуктовому циклу: пользователь сохраняет слово, система определяет его смысл, формирует упражнения и обновляет прогресс повторения.
 
-Core entities:
+Основные сущности:
+
 - `users`
 - `base_lexicon_entries`
 - `vocabulary_items`
 - `word_progress`
 - `learning_sessions`
 - `learning_session_answers`
-- `mistake_events`
+- `mistake_events` как trace ошибок на уровне смысла слова
 
-Semantic enrichment:
+Семантическое обогащение:
+
 - `user_interests`
 - `topic_clusters`
 - `word_senses`
 - `vocabulary_sense_links`
 - `sense_relations`
 
-## Main simplifications
+## Основные упрощения
 
-### 1. Capture is now an internal step of the vocabulary flow
+### 1. Захват слова стал частью vocabulary flow
 
-Selected text is processed immediately inside the vocabulary scenario and is no longer persisted as a standalone table. The main business entity remains `vocabulary_items`.
+Выделенный текст сразу обрабатывается внутри сценария словаря. Основной бизнес-сущностью остается `vocabulary_items`.
 
-### 2. `learning_session_answers` stores structured exercise metadata
+### 2. `learning_session_answers` хранит структурированные метаданные упражнения
 
-The table keeps:
+Таблица хранит:
+
 - `exercise_id`
 - `exercise_type`
 - `target_word`
@@ -38,61 +41,57 @@ The table keeps:
 - `is_correct`
 - `explanation_ru`
 
-This removes the previous dependence on parsing `prompt` text to understand what kind of exercise was shown and which word it was about.
+Благодаря этому система понимает тип упражнения и целевое слово по явным полям.
 
-### 3. Review uses one source of truth
+### 3. Review использует один источник состояния
 
-The review layer now uses only `word_progress` as its state storage. User profile data such as CEFR remains in `users`, and review-specific facts remain in `word_progress`.
+Слой повторения хранит состояние в `word_progress`. Данные профиля пользователя, например CEFR, остаются в `users`, а факты повторения остаются в `word_progress`.
 
-### 4. Review keeps facts, not derived states
+### 4. Review хранит факты, а статусы вычисляются
 
-The current review layer uses `word_progress` and stores only factual values:
+Текущий review-слой хранит фактические значения:
+
 - `error_count`
 - `correct_streak`
 - `last_reviewed_at`
 - `next_review_at`
 
-Statuses such as "due", "mastered" or "troubled" are derived from these fields in application logic and UI. They are not stored separately.
+Статусы `due`, `mastered` и `troubled` вычисляются в application logic и UI.
 
-### 5. `learning_graph` is preserved as an enrichment layer
+### 5. `learning_graph` формирует semantic profile пользователя
 
-The semantic module still stores interests, senses, sense links and relations, but its public API was reduced to the parts that affect the user flow:
-- interests
+Семантический модуль хранит интересы, смыслы слов, связи словаря со смыслами и связи между смыслами. Его публичный API покрывает пользовательский поток:
+
+- интересы
 - semantic upsert
-- recommendations
+- слова из профиля интересов
 - anchors
 
-Auxiliary observability endpoints were removed from the public surface.
+### 6. `context_memory` сфокусирован на повторении
 
-### 6. `context_memory` is focused on review flow
+Публичная часть модуля покрывает:
 
-The public part of the module now focuses on:
 - review queue
-- review session start
-- review progress updates
-- word progress listing
+- запуск review session
+- обновление прогресса повторения
+- список word progress
 - review plan
 - progress snapshot
 - review summary
 
-Cleanup and secondary context-management scenarios are no longer part of the main public flow.
+## Почему эта версия лучше подходит для диплома
 
-## Why this version is better
+Упрощенная схема сохраняет ключевые возможности проекта:
 
-The simplified schema still remains strong enough for the graduation project because it preserves:
-- personal vocabulary storage with contextual definitions;
-- learning sessions with answer history;
-- spaced repetition based on user performance;
-- AI-supported exercise generation and feedback;
-- semantic enrichment through the learning graph.
+- персональный словарь с контекстными определениями
+- учебные сессии с историей ответов
+- интервальные повторения на основе результатов пользователя
+- AI-assisted генерацию упражнений и feedback
+- semantic profile через `learning_graph`
 
-At the same time, it removes several sources of accidental complexity:
-- prompt-based heuristics instead of structured metadata;
-- public endpoints that were useful mainly for debugging or compensation;
-- review fields that can be derived instead of stored;
-- excessive emphasis on capture as a standalone product module.
+При этом схема остается ближе к демонстрируемому пользовательскому циклу и проще объясняется на защите.
 
-## Mermaid ER diagram
+## Mermaid ER-диаграмма
 
 ```mermaid
 erDiagram

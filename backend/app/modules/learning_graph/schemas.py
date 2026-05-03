@@ -55,6 +55,11 @@ class RecommendationsResponse(BaseModel):
     items: list[RecommendationItem]
 
 
+class InterestWordsResponse(BaseModel):
+    user_id: int
+    items: list[RecommendationItem]
+
+
 class SenseAnchorItem(BaseModel):
     english_lemma: str
     russian_translation: str

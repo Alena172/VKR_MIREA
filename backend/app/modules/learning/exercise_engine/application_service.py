@@ -110,7 +110,7 @@ class ExerciseEngineApplicationService:
         incremental_note = "incremental; " if incremental else ""
         return to_exercise_generate_result_dto(
             exercises=immediate_items[:size],
-            note=f"{note_prefix}{fast_start_note}{incremental_note}{provider_note}; graph_anchors_used={anchors_used_count}",
+            note=f"{note_prefix}{fast_start_note}{incremental_note}{provider_note}; semantic_context_used={anchors_used_count}",
         )
 
     def _resolve_vocabulary_items(

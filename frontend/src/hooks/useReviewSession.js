@@ -13,7 +13,7 @@ function wait(ms) {
 export function useReviewSession({ onError }) {
   const [plan, setPlan] = useState(null);
   const [summary, setSummary] = useState(null);
-  const [graphRecommendations, setGraphRecommendations] = useState([]);
+  const [interestWords, setInterestWords] = useState([]);
   const [graphAnchorsByLemma, setGraphAnchorsByLemma] = useState({});
   const [sessionSize, setSessionSize] = useState(20);
   const [sessionMode, setSessionMode] = useState(null);
@@ -30,15 +30,15 @@ export function useReviewSession({ onError }) {
   async function loadReviewMeta() {
     const controller = registerController();
     try {
-      const [planData, summaryData, graphData] = await Promise.all([
+      const [planData, summaryData, interestData] = await Promise.all([
         api.reviewPlan(10, { signal: controller.signal }),
         api.reviewSummary({ signal: controller.signal }),
-        api.learningGraphRecommendations("mixed", 5, { signal: controller.signal }),
+        api.learningGraphInterestWords(5, { signal: controller.signal }),
       ]);
       setPlan(planData);
       setSummary(summaryData);
-      const items = graphData?.items || [];
-      setGraphRecommendations(items);
+      const items = interestData?.items || [];
+      setInterestWords(items);
 
       const topForAnchors = items.slice(0, 3);
       if (!topForAnchors.length) {
@@ -153,7 +153,7 @@ export function useReviewSession({ onError }) {
     currentIndex,
     currentItem,
     graphAnchorsByLemma,
-    graphRecommendations,
+    interestWords,
     isFlipped,
     isSessionActive,
     loadReviewMeta,
