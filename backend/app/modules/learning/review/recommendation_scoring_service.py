@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.modules.learning.review.repository import context_repository
 from app.modules.learning.review.review_status import matches_review_status_filter
-from app.modules.learning_graph.public_api import learning_graph_public_api
 from app.modules.learning.session.public_api import learning_session_public_api
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
@@ -31,29 +30,6 @@ class RecommendationScoreSnapshot:
 
 
 class RecommendationScoringService:
-    def _apply_learning_graph_boost(
-        self,
-        *,
-        db: Session,
-        user_id: int,
-        scores: dict[str, float],
-        limit: int,
-    ) -> None:
-        graph_items = learning_graph_public_api.list_recommendation_items(
-            db=db,
-            user_id=user_id,
-            mode="mixed",
-            limit=max(limit * 3, 10),
-        )
-        for rank, item in enumerate(graph_items):
-            word = item.english_lemma.strip().lower()
-            if not _is_valid_review_word(word):
-                continue
-            rank_decay = 1.0 / (rank + 1)
-            graph_signal = min(6.0, max(0.0, float(item.score)))
-            boost = 0.75 * rank_decay + 0.08 * graph_signal
-            scores[word] = scores.get(word, 0.0) + boost
-
     def build_snapshot(
         self,
         *,
@@ -109,13 +85,6 @@ class RecommendationScoringService:
         for word, progress in due_progress_map.items():
             if progress.next_review_at <= now:
                 scores[word] = scores.get(word, 0.0) + 1.25
-
-        self._apply_learning_graph_boost(
-            db=db,
-            user_id=user_id,
-            scores=scores,
-            limit=limit,
-        )
 
         return RecommendationScoreSnapshot(
             scores=scores,
