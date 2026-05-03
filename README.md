@@ -70,21 +70,22 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 - асинхронная генерация упражнений
 - отправка учебных сессий с проверкой ответов и feedback
 - SRS review queue, review plan и review summary
-- learning graph для автоматического профиля интересов и различения смыслов многозначных слов
+- semantic profile для автоматического профиля интересов и различения смыслов многозначных слов
 
-## Текущая модель рекомендаций
+## Текущая модель выбора слов
 
-Сейчас самый зрелый рекомендательный сценарий в проекте связан именно с повторением уже известных слов:
+Основной сценарий выбора слов связан с повторением уже известных слов:
 
 - recent mistakes
 - due words по SRS
-- дополнительные сигналы интересов и смысла слова
+- semantic profile помогает объяснять интересы пользователя и смысл слова
 
-Подбор совершенно новой лексики из внешнего пула кандидатов остается направлением для дальнейшего развития.
+В дальнейшем semantic profile можно использовать для подбора новой лексики из внешнего пула кандидатов.
 
 ## Куда читать дальше
 
 - [ARCHITECTURE.md](/d:/VKR/VKR_V3_Curs/ARCHITECTURE.md)
+- [docs/module_structure.md](/d:/VKR/VKR_V3_Curs/docs/module_structure.md)
 - [backend/README.md](/d:/VKR/VKR_V3_Curs/backend/README.md)
 - [backend/ARCHITECTURE.md](/d:/VKR/VKR_V3_Curs/backend/ARCHITECTURE.md)
 - [frontend/README.md](/d:/VKR/VKR_V3_Curs/frontend/README.md)

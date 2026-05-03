@@ -8,10 +8,10 @@
 - `02_vocabulary_module_sequence.mmd`
 - `03_learning_module_sequence.mmd`
 - `04_learning_graph_module_sequence.mmd`
-- `05_ai_services_module_sequence.mmd`
+- `05_ai_services_module_sequence.mmd` как AI adapter
 - `06_tasks_infrastructure_sequence.mmd`
 
-Они соответствуют той же укрупненной архитектуре, что и `PlantUML`-файлы из каталога `docs/diagrams/backend_module_sequences`.
+Они соответствуют той же укрупненной архитектуре, что и `PlantUML`-файлы из каталога `docs/diagrams/backend_module_sequences`: четыре доменных модуля, AI adapter и task infrastructure.
 
 Старые `.mmd`-файлы по подмодулям и детализированным сценариям сохранены как вспомогательный материал и могут использоваться как приложение.
 

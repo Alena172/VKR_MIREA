@@ -1,6 +1,6 @@
 # Backend
 
-Backend - это FastAPI-модульный монолит, организованный вокруг укрупненных модулей `identity`, `vocabulary`, `learning`, `learning_graph`, `ai_services` и инфраструктурного слоя `tasks`.
+Backend - это FastAPI-модульный монолит, организованный вокруг доменных модулей `identity`, `vocabulary`, `learning`, `learning_graph`, adapter-слоя `ai_services` и инфраструктурного слоя `tasks`.
 
 ## Технологический стек
 
@@ -104,7 +104,7 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 
 ## Настройка AI
 
-Весь доступ к AI централизован в `app.modules.ai_services`.
+Весь доступ к AI централизован в `app.modules.ai_services`. В архитектуре backend это adapter-слой: он скрывает детали внешнего провайдера и fallback-логики от доменных модулей.
 
 Поддерживаемые провайдеры:
 
@@ -203,7 +203,7 @@ Backend использует LLM как специализированный и�
 
 - интересы пользователя выводятся из сохраненной лексики и контекстов
 - `WordSense` отделяет разные значения одной леммы
-- anchors показывают связанные смыслы без сложного graph-ranking
+- anchors показывают связанные смыслы: полисемию и слова из той же темы
 - SRS-расписание и учет ошибок остаются в `learning/review` и `learning/session`
 
 ## Проверки и тесты

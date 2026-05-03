@@ -32,7 +32,9 @@ Other API clients -----/            |
                                      +--> AI provider facade
 ```
 
-## Основные домены backend
+## Основные части backend
+
+Доменные модули:
 
 - `identity`
   - `auth`: выпуск и проверка JWT
@@ -45,8 +47,11 @@ Other API clients -----/            |
   - `exercise_engine`: генерация упражнений и async exercise jobs
   - `session`: отправка ответов, проверка корректности, feedback
   - `review`: SRS, review queue, review plan, review summary
-- `learning_graph`: интересы, semantic senses, anchors, graph-based signals
-- `ai_services`: централизованный AI facade и fallback logic
+- `learning_graph`: semantic profile пользователя, интересы, `WordSense`, anchors
+
+Технические адаптеры и инфраструктура:
+
+- `ai_services`: централизованный adapter к AI-провайдерам, локальным fallback и генерации текста
 - `infrastructure/tasks`: polling статуса фоновых задач
 
 Для крупных модулей используется единая иерархическая схема: корень модуля является контейнером, содержит `api/` и набор подмодулей, а основная предметная логика размещается внутри подмодулей. В текущей реализации это правило применяется для `identity`, `learning` и `vocabulary`.
@@ -57,6 +62,13 @@ Other API clients -----/            |
 
 Backend построен как единое FastAPI-приложение в формате модульного монолита.
 
+Модульный монолит в проекте означает:
+
+- backend разворачивается как одно приложение
+- все модули используют одну базу данных и общий runtime
+- каждый доменный модуль владеет своей бизнес-логикой и таблицами
+- межмодульные вызовы проходят через `public_api.py` и DTO из `contracts.py`
+
 Границы модулей поддерживаются через:
 
 - `public_api.py` для межмодульного доступа
@@ -66,9 +78,9 @@ Backend построен как единое FastAPI-приложение в ф�
 
 Прямые импорты чужих `repository`, `models` или `application_service` считаются архитектурным нарушением.
 
-### 2. AI используется централизованно и гибридно
+### 2. AI вынесен в adapter-слой
 
-Все AI-сценарии проходят через `app.modules.ai_services`.
+Все AI-сценарии проходят через `app.modules.ai_services`. В архитектурной модели это технический adapter, а не отдельный домен продукта.
 
 Платформа использует гибридный подход к языковым операциям:
 
@@ -82,15 +94,15 @@ Backend построен как единое FastAPI-приложение в ф�
 - при отсутствии надежного кандидата вызывается AI
 - вместе с определением сохраняются метаданные об источнике, confidence и reuse
 
-### 3. Основной recommendation-flow построен вокруг SRS
+### 3. Основной review-flow построен вокруг SRS
 
-Сейчас главный recommendation-сценарий в проекте связан с выбором уже известных слов, которые нужно повторять сейчас.
+Главный сценарий выбора слов связан с повторением уже известных слов, которые нужно повторять сейчас.
 
-Рекомендации `learning/review` строятся из:
+`learning/review` строит review plan из:
 
 - recent mistakes
 - due words
-- дополнительных boost-сигналов от `learning_graph`
+- состояния `word_progress`
 
 Именно этот поток сейчас наиболее важен для продукта.
 
@@ -166,7 +178,7 @@ Backend построен как единое FastAPI-приложение в ф�
 
 1. Frontend загружает review summary и review plan
 2. Backend строит очередь из due и upcoming слов
-3. Recommendation scoring поднимает приоритет известных слабых слов
+3. Review scoring поднимает приоритет известных слабых слов
 4. Пользователь проходит SRS или random review session
 5. После каждого ответа обновляется прогресс слова
 
@@ -175,5 +187,6 @@ Backend построен как единое FastAPI-приложение в ф�
 - [README.md](/d:/VKR/VKR_V3_Curs/README.md): обзор проекта и быстрый старт
 - [backend/README.md](/d:/VKR/VKR_V3_Curs/backend/README.md): запуск и эксплуатация backend
 - [backend/ARCHITECTURE.md](/d:/VKR/VKR_V3_Curs/backend/ARCHITECTURE.md): границы backend-модулей и технические ограничения
+- [docs/module_structure.md](/d:/VKR/VKR_V3_Curs/docs/module_structure.md): рекомендуемая слоистость backend-модулей
 - [frontend/README.md](/d:/VKR/VKR_V3_Curs/frontend/README.md): запуск frontend и текущее состояние UI
 - [extension/README.md](/d:/VKR/VKR_V3_Curs/extension/README.md): настройка браузерного расширения
