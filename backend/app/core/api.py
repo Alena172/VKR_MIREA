@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 
-from app.modules.ai_services.router import router as ai_services_router
+from app.modules.ai_services.api.router import router as ai_services_router
 from app.modules.identity.api.router import router as identity_router
 from app.modules.learning.api.router import router as learning_router
-from app.modules.learning_graph.router import router as learning_graph_router
+from app.modules.learning_graph.api.router import router as learning_graph_router
 from app.infrastructure.tasks.router import router as tasks_router
 from app.modules.vocabulary.api.router import router as vocabulary_router
 

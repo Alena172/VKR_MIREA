@@ -71,6 +71,16 @@ module_or_submodule/
   public_api.py
 ```
 
+Для каждого модуля верхнего уровня используется единая HTTP-точка входа:
+
+```text
+module/
+  api/
+    router.py
+```
+
+`api/router.py` собирает или переэкспортирует router модуля. Благодаря этому `core/api.py` подключает все top-level модули одинаково.
+
 Назначение слоев:
 
 - `router.py` принимает HTTP-запрос, получает текущего пользователя и вызывает application service.
@@ -161,6 +171,7 @@ learning/
 
 ```text
 learning_graph/
+  api/
   router.py
   schemas.py
   application_service.py
@@ -179,6 +190,7 @@ learning_graph/
 
 ```text
 ai_services/
+  api/
   router.py
   service.py
   chat_client.py
