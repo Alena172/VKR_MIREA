@@ -114,7 +114,7 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 
 ### Текущая философия использования AI
 
-Backend не считает LLM универсальным решением для всех задач.
+Backend использует LLM как специализированный инструмент для задач, где важна семантика или генерация текста.
 
 Текущее поведение гибридное:
 
@@ -200,6 +200,13 @@ Backend не считает LLM универсальным решением дл
 - `GET /api/v1/learning-graph/me/recommendations`
 - `GET /api/v1/learning-graph/me/anchors`
 
+В текущей версии `learning_graph` используется как компактный semantic profile:
+
+- интересы пользователя выводятся из сохраненной лексики и контекстов
+- `WordSense` отделяет разные значения одной леммы
+- anchors показывают связанные смыслы без сложного graph-ranking
+- SRS-расписание и учет ошибок остаются в `learning/review` и `learning/session`
+
 ## Проверки и тесты
 
 ### Проверка границ модулей
@@ -211,7 +218,7 @@ python tools/check_module_boundaries.py
 Эта проверка подтверждает, что:
 
 - межмодульные импорты проходят через `public_api` или явные фасады
-- `application_service.py` не возвращает response schema из web-слоя
+- `application_service.py` возвращает DTO/contracts, а web response schema остается в router-слое
 
 ### Тесты
 

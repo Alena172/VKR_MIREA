@@ -49,6 +49,9 @@ coverage/
 *.plantuml
 *.pu
 
+# Mermaid
+*.mmd
+
 # Env files (keep only examples)
 .env
 .env.*
