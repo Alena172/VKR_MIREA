@@ -1,6 +1,6 @@
-# Backend
+# Серверная часть
 
-Backend - это FastAPI-модульный монолит, организованный вокруг доменных модулей `identity`, `vocabulary`, `learning`, `learning_graph`, adapter-слоя `ai_services` и инфраструктурного слоя `tasks`.
+Серверная часть представляет собой FastAPI-модульный монолит, организованный вокруг доменных модулей `identity`, `vocabulary`, `learning`, `learning_graph`, слоя адаптера `ai_services` и инфраструктурного слоя `tasks`.
 
 ## Технологический стек
 
@@ -68,7 +68,7 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Backend будет доступен по адресу `http://localhost:8000`.
+Серверная часть будет доступна по адресу `http://localhost:8000`.
 
 ## Полный запуск через Docker
 
@@ -80,16 +80,16 @@ docker compose up -d --build
 
 Сервисы:
 
-- backend: `http://localhost:8000`
-- frontend: `http://localhost:5173`
-- gateway: `http://localhost:8080`
+- серверная часть: `http://localhost:8000`
+- клиентское приложение: `http://localhost:5173`
+- единая локальная точка входа: `http://localhost:8080`
 - Flower: `http://localhost:5555`
 - PostgreSQL: `localhost:15432`
 - Redis: `localhost:6379`
 
 ## Режим разработки
 
-Для autoreload и bind mount:
+Для автоматической перезагрузки и подключения локального кода в контейнер:
 
 ```bash
 docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
@@ -97,36 +97,36 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 
 Этот режим:
 
-- монтирует backend-код в контейнер
+- подключает код серверной части в контейнер
 - запускает Alembic перед uvicorn
-- использует reload в uvicorn
-- поднимает Celery worker с dev-friendly solo pool
+- использует автоматическую перезагрузку uvicorn
+- поднимает рабочий процесс Celery в режиме, удобном для разработки
 
 ## Настройка AI
 
-Весь доступ к AI централизован в `app.modules.ai_services`. В архитектуре backend это adapter-слой: он скрывает детали внешнего провайдера и fallback-логики от доменных модулей.
+Весь доступ к AI централизован в `app.modules.ai_services`. В архитектуре серверной части это слой адаптера: он скрывает детали внешнего провайдера и резервной логики от доменных модулей.
 
 Поддерживаемые провайдеры:
 
 - `stub`: локальное детерминированное поведение
 - `openai_compatible`: внешний `/chat/completions`
-- `ollama`: локальный или удаленный endpoint, совместимый с Ollama
+- `ollama`: локальный или удаленный HTTP-адрес, совместимый с Ollama
 
 ### Текущая философия использования AI
 
-Backend использует LLM как специализированный инструмент для задач, где важна семантика или генерация текста.
+Серверная часть использует LLM как специализированный инструмент для задач, где важна семантика или генерация текста.
 
 Текущее поведение гибридное:
 
 - локальные эвристики и подмодуль `vocabulary/base_lexicon` обрабатывают простые случаи перевода
-- внешний AI используется для семантической неоднозначности, генерации предложений и поясняющего feedback там, где от этого есть реальная польза
-- для `context_definition` используется стратегия `reuse-first, LLM-fallback`
+- внешний AI используется для семантической неоднозначности, генерации предложений и поясняющей обратной связи там, где от этого есть реальная польза
+- для `context_definition` используется стратегия: сначала переиспользовать готовое определение, затем при необходимости обратиться к LLM
 
 ### Стратегия получения `context_definition`
 
 При создании элемента словаря:
 
-1. backend ищет уже существующие определения для той же леммы в словаре пользователя
+1. серверная часть ищет уже существующие определения для той же леммы в словаре пользователя
 2. кандидаты оцениваются по переводу и пересечению контекста
 3. если найден надежный кандидат, определение переиспользуется
 4. иначе вызывается AI и строится новое определение
@@ -172,14 +172,14 @@ Backend использует LLM как специализированный и�
 
 - `POST /api/v1/translate/me`
 
-### Learning / exercises и sessions
+### Learning / упражнения и сессии
 
 - `POST /api/v1/exercises/me/generate`
 - `POST /api/v1/sessions/submit`
 - `GET /api/v1/sessions/me`
 - `GET /api/v1/sessions/me/{session_id}/answers`
 
-### Learning / review и SRS
+### Learning / повторение и SRS
 
 - `GET /api/v1/context/me/review-queue`
 - `POST /api/v1/context/me/review-queue/submit`
@@ -199,11 +199,11 @@ Backend использует LLM как специализированный и�
 - `GET /api/v1/learning-graph/me/interest-words`
 - `GET /api/v1/learning-graph/me/anchors`
 
-В текущей версии `learning_graph` используется как компактный semantic profile:
+В текущей версии `learning_graph` используется как компактный семантический профиль:
 
 - интересы пользователя выводятся из сохраненной лексики и контекстов
 - `WordSense` отделяет разные значения одной леммы
-- anchors показывают связанные смыслы: полисемию и слова из той же темы
+- смысловые связи показывают полисемию и слова из той же темы
 - SRS-расписание и учет ошибок остаются в `learning/review` и `learning/session`
 
 ## Проверки и тесты
@@ -217,7 +217,7 @@ python tools/check_module_boundaries.py
 Эта проверка подтверждает, что:
 
 - межмодульные импорты проходят через `public_api` или явные фасады
-- `application_service.py` возвращает DTO/contracts, а web response schema остается в router-слое
+- `application_service.py` возвращает DTO/контракты, а схема HTTP-ответа остается в слое router
 
 ### Тесты
 
@@ -229,7 +229,7 @@ pytest -q
 
 ## Импорт данных
 
-В проекте есть seed для `vocabulary/base_lexicon`, который используется для быстрого локального перевода частотных слов.
+В проекте есть исходный набор данных для `vocabulary/base_lexicon`, который используется для быстрого локального перевода частотных слов.
 
 Импорт:
 
@@ -239,4 +239,4 @@ python tools/import_base_lexicon.py data/base_lexicon.seed.json
 
 ## Дополнительные материалы
 
-Подробности по слоям, границам модулей и runtime-ограничениям смотри в [ARCHITECTURE.md](/d:/VKR/VKR_V3_Curs/backend/ARCHITECTURE.md).
+Подробности по слоям, границам модулей и ограничениям среды выполнения смотри в [ARCHITECTURE.md](/d:/VKR/VKR_V3_Curs/backend/ARCHITECTURE.md).
