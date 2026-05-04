@@ -53,7 +53,7 @@ def add_word_with_ai(
     frontend can use it directly after polling.
     """
     from app.core.db import SessionLocal
-    from app.modules.vocabulary.flows.study_flow_service import vocabulary_study_flow_service
+    from app.modules.vocabulary.application.study_flow_service import vocabulary_study_flow_service
 
     db = SessionLocal()
     try:
@@ -95,7 +95,7 @@ def study_flow_capture_to_vocabulary(
     Returns a dict matching CaptureToVocabularyResponse schema.
     """
     from app.core.db import SessionLocal
-    from app.modules.vocabulary.flows.study_flow_service import vocabulary_study_flow_service
+    from app.modules.vocabulary.application.study_flow_service import vocabulary_study_flow_service
 
     db = SessionLocal()
     try:

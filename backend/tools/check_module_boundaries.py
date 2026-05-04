@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 MODULES_ROOT = Path(__file__).resolve().parents[1] / "app" / "modules"
-FORBIDDEN_CROSS_MODULE_LAYERS = {"repository", "application_service", "models"}
+FORBIDDEN_CROSS_MODULE_LAYERS = {"application", "adapters"}
 
 
 @dataclass(frozen=True)
@@ -92,11 +92,11 @@ def _find_violations(file_path: Path) -> list[BoundaryViolation]:
                 continue
 
             imported_module = parts[2]
-            imported_layer = parts[3]
+            imported_layer = ".".join(parts[3:])
 
             if imported_module == current_module:
                 continue
-            if imported_layer not in FORBIDDEN_CROSS_MODULE_LAYERS:
+            if not _is_forbidden_cross_module_import(parts):
                 continue
 
             violations.append(
@@ -113,8 +113,20 @@ def _find_violations(file_path: Path) -> list[BoundaryViolation]:
     return violations
 
 
+def _is_forbidden_cross_module_import(parts: list[str]) -> bool:
+    layer = parts[3]
+    if layer in FORBIDDEN_CROSS_MODULE_LAYERS:
+        return True
+    if layer == "domain" and len(parts) >= 5:
+        domain_file = parts[4]
+        return domain_file == "models" or domain_file.endswith("_models")
+    return False
+
+
 def _is_application_service(file_path: Path) -> bool:
-    return file_path.name == "application_service.py"
+    return "application" in file_path.parts and (
+        file_path.name.endswith("_service.py") or file_path.name == "service.py"
+    )
 
 
 def _extract_same_module_schema_imports(file_path: Path, tree: ast.AST) -> dict[str, int]:
@@ -122,11 +134,13 @@ def _extract_same_module_schema_imports(file_path: Path, tree: ast.AST) -> dict[
     if current_module is None:
         return {}
 
-    schema_module = f"app.modules.{current_module}.schemas"
+    schema_prefix = f"app.modules.{current_module}.api."
     imported_names: dict[str, int] = {}
 
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom) or node.module != schema_module:
+        if not isinstance(node, ast.ImportFrom) or node.module is None:
+            continue
+        if not node.module.startswith(schema_prefix) or not node.module.endswith("schemas"):
             continue
         for alias in node.names:
             imported_names[alias.asname or alias.name] = node.lineno

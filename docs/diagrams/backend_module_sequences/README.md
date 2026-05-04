@@ -7,7 +7,7 @@
 - `03_learning_module_sequence.puml` - модуль `learning`
 - `04_learning_graph_module_sequence.puml` - модуль `learning_graph`
 - `05_ai_services_module_sequence.puml` - AI-адаптер `ai_services`
-- `06_tasks_infrastructure_sequence.puml` - инфраструктурный слой `tasks`
+- `06_tasks_platform_sequence.puml` - технический слой `tasks`
 
 Дополнительно в каталоге сохранены более подробные сценарные диаграммы по подмодулям и отдельным потокам:
 

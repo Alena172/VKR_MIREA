@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from app.modules.learning_graph.assembler import (
+from app.modules.learning_graph.domain.assembler import (
     to_word_anchor_dto,
 )
-from app.modules.learning_graph.contracts import (
+from app.modules.learning_graph.domain.contracts import (
     RegisteredVocabularySenseDTO,
     WordAnchorDTO,
 )
-from app.modules.learning_graph.application_service import learning_graph_application_service
+from app.modules.learning_graph.application.service import learning_graph_application_service
 
 __all__ = [
     "RegisteredVocabularySenseDTO",

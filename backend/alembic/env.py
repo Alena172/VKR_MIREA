@@ -7,16 +7,16 @@ from sqlalchemy import engine_from_config, pool, text
 
 from app.core.config import get_settings
 from app.core.db import Base
-from app.modules.learning_graph.models import (
+from app.modules.learning_graph.domain.models import (
     SenseErrorEventModel,
     TopicClusterModel,
     UserInterestModel,
     VocabularySenseLinkModel,
     WordSenseModel,
 )
-from app.modules.learning.session.models import LearningSessionModel
-from app.modules.identity.users.models import UserModel
-from app.modules.vocabulary.items.models import VocabularyItemModel
+from app.modules.learning.domain.session_models import LearningSessionModel
+from app.modules.identity.domain.users_models import UserModel
+from app.modules.vocabulary.domain.items_models import VocabularyItemModel
 
 # Register models for metadata discovery.
 _ = (
