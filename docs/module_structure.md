@@ -21,7 +21,6 @@
 module/
   api/
     router.py
-    *_router.py
     *_schemas.py
   application/
     *_service.py

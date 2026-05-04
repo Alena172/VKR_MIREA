@@ -1,6 +1,16 @@
 from fastapi import APIRouter
 
-from app.modules.ai_services.api.ai_router import router as ai_services_router
+from app.modules.ai_services.domain.contracts import AIStatusResponse, ExplainErrorRequest, ExplainErrorResponse
+from app.modules.ai_services.application.service import ai_service
 
-router = APIRouter()
-router.include_router(ai_services_router)
+router = APIRouter(prefix="/ai", tags=["ai_services"])
+
+
+@router.post("/explain-error", response_model=ExplainErrorResponse)
+async def explain_error(payload: ExplainErrorRequest) -> ExplainErrorResponse:
+    return await ai_service.explain_error_async(payload)
+
+
+@router.get("/status", response_model=AIStatusResponse)
+def status() -> AIStatusResponse:
+    return ai_service.get_status()
