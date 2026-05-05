@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from app.modules.identity.domain.users_assembler import to_find_or_create_user_dto, to_user_dto
-from app.modules.identity.domain.users_contracts import FindOrCreateUserDTO, UserDTO
-from app.modules.identity.adapters.users_repository import users_repository
-from app.modules.identity.api.users_schemas import UserCreate
+from app.modules.identity.assemblers import to_find_or_create_user_dto, to_user_dto
+from app.modules.identity.contracts import FindOrCreateUserDTO, UserDTO
+from app.modules.identity.repositories.users_repository import users_repository
+from app.modules.identity.schemas.users_schemas import UserCreate
 
 __all__ = [
     "FindOrCreateUserDTO",

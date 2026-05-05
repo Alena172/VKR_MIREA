@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 MODULES_ROOT = Path(__file__).resolve().parents[1] / "app" / "modules"
-FORBIDDEN_CROSS_MODULE_LAYERS = {"application", "adapters"}
+FORBIDDEN_CROSS_MODULE_LAYERS = {"services", "repositories"}
 
 
 @dataclass(frozen=True)
@@ -124,7 +124,7 @@ def _is_forbidden_cross_module_import(parts: list[str]) -> bool:
 
 
 def _is_application_service(file_path: Path) -> bool:
-    return "application" in file_path.parts and (
+    return "services" in file_path.parts and (
         file_path.name.endswith("_service.py") or file_path.name == "service.py"
     )
 
@@ -134,7 +134,7 @@ def _extract_same_module_schema_imports(file_path: Path, tree: ast.AST) -> dict[
     if current_module is None:
         return {}
 
-    schema_prefix = f"app.modules.{current_module}.api."
+    schema_prefix = f"app.modules.{current_module}.schemas."
     imported_names: dict[str, int] = {}
 
     for node in ast.walk(tree):

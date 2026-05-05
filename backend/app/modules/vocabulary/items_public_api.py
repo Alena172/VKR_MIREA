@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from app.modules.vocabulary.domain.items_assembler import to_vocabulary_item_dto
-from app.modules.vocabulary.domain.items_contracts import VocabularyItemDTO
-from app.modules.vocabulary.adapters.items_repository import vocabulary_repository
+from app.modules.vocabulary.assemblers import to_vocabulary_item_dto
+from app.modules.vocabulary.contracts import VocabularyItemDTO
+from app.modules.vocabulary.repositories.items_repository import vocabulary_repository
 
 __all__ = [
     "VocabularyItemDTO",

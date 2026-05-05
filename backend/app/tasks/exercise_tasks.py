@@ -47,7 +47,7 @@ def generate_exercises_for_user(
     The result matches ExerciseGenerateResponse schema.
     """
     from app.core.db import SessionLocal
-    from app.modules.learning.application.exercise_service import exercise_engine_application_service
+    from app.modules.learning.services.exercise_service import exercise_engine_application_service
 
     db = SessionLocal()
     try:

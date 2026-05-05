@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.modules.learning.domain.review_assembler import (
+from app.modules.learning.assemblers import (
     to_learning_progress_update_result_dto,
     to_mastered_lemma_dtos,
     to_word_progress_tracking_dto,
 )
-from app.modules.learning.domain.review_contracts import (
+from app.modules.learning.contracts import (
     LearningProgressUpdateResultDTO,
     MasteredLemmaDTO,
     WordProgressTrackingDTO,
     WordProgressUpdate,
 )
-from app.modules.learning.adapters.review_repository import context_repository
-from app.modules.learning.domain.review_status import build_review_status
+from app.modules.learning.repositories.review_repository import context_repository
+from app.modules.learning.models.review_status import build_review_status
 
 __all__ = [
     "LearningProgressUpdateResultDTO",
@@ -33,7 +33,7 @@ class ContextMemoryPublicApi:
         user_id: int,
         word: str,
     ) -> WordProgressTrackingDTO:
-        from app.modules.learning.application.review_service import context_memory_application_service
+        from app.modules.learning.services.review_service import context_memory_application_service
 
         tracked = context_memory_application_service.ensure_word_progress_entry(
             db=db,
@@ -50,7 +50,7 @@ class ContextMemoryPublicApi:
         user_cefr_level: str | None,
         updates: list[WordProgressUpdate],
     ) -> LearningProgressUpdateResultDTO:
-        from app.modules.learning.application.review_service import context_memory_application_service
+        from app.modules.learning.services.review_service import context_memory_application_service
 
         return to_learning_progress_update_result_dto(
             updated_words=context_memory_application_service.update_learning_progress(

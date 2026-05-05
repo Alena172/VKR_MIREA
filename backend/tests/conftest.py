@@ -12,10 +12,10 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.db import Base, get_db
 from app.main import app
-from app.modules.vocabulary.domain.base_lexicon_models import BaseLexiconEntryModel
-from app.modules.learning.domain.session_models import LearningSessionModel
-from app.modules.identity.domain.users_models import UserModel
-from app.modules.vocabulary.domain.items_models import VocabularyItemModel
+from app.modules.vocabulary.models.base_lexicon_models import BaseLexiconEntryModel
+from app.modules.learning.models.session_models import LearningSessionModel
+from app.modules.identity.models.users_models import UserModel
+from app.modules.vocabulary.models.items_models import VocabularyItemModel
 
 # Keep imports for SQLAlchemy metadata registration.
 _ = (UserModel, VocabularyItemModel, LearningSessionModel, BaseLexiconEntryModel)

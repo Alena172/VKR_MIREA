@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from app.modules.learning.domain.session_assembler import to_learning_progress_dto
-from app.modules.learning.domain.session_contracts import LearningProgressDTO
-from app.modules.learning.adapters.session_repository import learning_session_repository
+from app.modules.learning.assemblers import to_learning_progress_dto
+from app.modules.learning.contracts import LearningProgressDTO
+from app.modules.learning.repositories.session_repository import learning_session_repository
 
 __all__ = [
     "LearningProgressDTO",

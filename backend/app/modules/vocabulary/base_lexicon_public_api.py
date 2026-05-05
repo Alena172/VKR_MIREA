@@ -1,4 +1,4 @@
-from app.modules.vocabulary.application.base_lexicon_service import base_lexicon_application_service
+from app.modules.vocabulary.services.base_lexicon_service import base_lexicon_application_service
 
 
 class BaseLexiconPublicApi:
