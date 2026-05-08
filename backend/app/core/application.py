@@ -27,11 +27,6 @@ class ApplicationAccess:
             raise HTTPException(status_code=403, detail="Forbidden")
         return target_user_id
 
-    def ensure_user_exists(self, *, db: Session, user_id: int) -> None:
-        user = users_repository.get_by_id(db, user_id)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-
     def get_user_or_404(self, *, db: Session, user_id: int):
         user = users_repository.get_by_id(db, user_id)
         if user is None:

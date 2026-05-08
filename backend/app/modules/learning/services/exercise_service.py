@@ -34,7 +34,7 @@ class ExerciseEngineApplicationService:
             requested_user_id=payload.user_id,
             current_user_id=current_user_id,
         )
-        application_access.ensure_user_exists(db=db, user_id=target_user_id)
+        application_access.get_user_or_404(db=db, user_id=target_user_id)
 
         from app.tasks.exercise_tasks import generate_exercises_for_user
 

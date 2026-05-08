@@ -43,7 +43,7 @@ class VocabularyStudyFlowService:
         source_sentence: str | None,
         source_url: str | None,
     ) -> VocabularyItemDTO:
-        application_access.ensure_user_exists(db=db, user_id=user_id)
+        application_access.get_user_or_404(db=db, user_id=user_id)
 
         normalized_lemma = english_lemma.strip().lower()
         normalized_translation = russian_translation.strip()

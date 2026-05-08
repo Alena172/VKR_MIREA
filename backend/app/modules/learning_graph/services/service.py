@@ -33,7 +33,7 @@ class LearningGraphApplicationService:
         db: Session,
         current_user_id: int,
     ) -> UserInterestsDTO:
-        application_access.ensure_user_exists(db=db, user_id=current_user_id)
+        application_access.get_user_or_404(db=db, user_id=current_user_id)
         return to_user_interests_dto(
             user_id=current_user_id,
             interests=learning_graph_repository.list_interests(db, current_user_id),
@@ -46,7 +46,7 @@ class LearningGraphApplicationService:
         payload: InterestUpsertRequest,
         current_user_id: int,
     ) -> UserInterestsDTO:
-        application_access.ensure_user_exists(db=db, user_id=current_user_id)
+        application_access.get_user_or_404(db=db, user_id=current_user_id)
         updated = learning_graph_repository.upsert_interests(
             db,
             user_id=current_user_id,
@@ -61,7 +61,7 @@ class LearningGraphApplicationService:
         payload: SemanticUpsertRequest,
         current_user_id: int,
     ) -> SemanticUpsertResultDTO:
-        application_access.ensure_user_exists(db=db, user_id=current_user_id)
+        application_access.get_user_or_404(db=db, user_id=current_user_id)
 
         try:
             with application_transaction.boundary(db=db):
@@ -89,7 +89,7 @@ class LearningGraphApplicationService:
         limit: int,
         current_user_id: int,
     ) -> InterestWordsDTO:
-        application_access.ensure_user_exists(db=db, user_id=current_user_id)
+        application_access.get_user_or_404(db=db, user_id=current_user_id)
         known_lemmas = {
             item.word
             for item in context_memory_public_api.list_mastered_lemma_dtos(
@@ -188,7 +188,7 @@ class LearningGraphApplicationService:
         limit: int,
         current_user_id: int,
     ) -> SenseAnchorsDTO:
-        application_access.ensure_user_exists(db=db, user_id=current_user_id)
+        application_access.get_user_or_404(db=db, user_id=current_user_id)
         anchors = learning_graph_repository.list_anchors(
             db,
             user_id=current_user_id,
