@@ -7,11 +7,11 @@ from app.modules.vocabulary.schemas.items_schemas import VocabularyItemCreate
 
 class VocabularyRepository:
     def list_items(self, db: Session, user_id: int | None) -> list[VocabularyItemModel]:
-        stmt = select(VocabularyItemModel)
+        query = select(VocabularyItemModel)
         if user_id is not None:
-            stmt = stmt.where(VocabularyItemModel.user_id == user_id)
-        stmt = stmt.order_by(VocabularyItemModel.id.desc())
-        return list(db.scalars(stmt))
+            query = query.where(VocabularyItemModel.user_id == user_id)
+        query = query.order_by(VocabularyItemModel.id.desc())
+        return list(db.scalars(query))
 
     def create(
         self,
@@ -40,7 +40,7 @@ class VocabularyRepository:
         normalized = english_lemma.strip().lower()
         if not normalized:
             return []
-        stmt = (
+        query = (
             select(VocabularyItemModel)
             .where(
                 VocabularyItemModel.user_id == user_id,
@@ -50,14 +50,14 @@ class VocabularyRepository:
             .order_by(VocabularyItemModel.id.desc())
             .limit(limit)
         )
-        return list(db.scalars(stmt))
+        return list(db.scalars(query))
 
     def get_by_id_for_user(self, db: Session, item_id: int, user_id: int) -> VocabularyItemModel | None:
-        stmt = select(VocabularyItemModel).where(
+        query = select(VocabularyItemModel).where(
             VocabularyItemModel.id == item_id,
             VocabularyItemModel.user_id == user_id,
         )
-        return db.scalar(stmt)
+        return db.scalar(query)
 
     def update(
         self,
@@ -99,7 +99,7 @@ class VocabularyRepository:
         if not normalized:
             return {}
 
-        stmt = (
+        query = (
             select(VocabularyItemModel)
             .where(
                 VocabularyItemModel.user_id == user_id,
@@ -107,7 +107,7 @@ class VocabularyRepository:
             )
             .order_by(VocabularyItemModel.id.desc())
         )
-        rows = list(db.scalars(stmt))
+        rows = list(db.scalars(query))
 
         result: dict[str, str] = {}
         for row in rows:
@@ -126,7 +126,7 @@ class VocabularyRepository:
         if not normalized:
             return {}
 
-        stmt = (
+        query = (
             select(VocabularyItemModel)
             .where(
                 VocabularyItemModel.user_id == user_id,
@@ -134,7 +134,7 @@ class VocabularyRepository:
             )
             .order_by(VocabularyItemModel.id.desc())
         )
-        rows = list(db.scalars(stmt))
+        rows = list(db.scalars(query))
 
         result: dict[str, str] = {}
         for row in rows:
@@ -152,7 +152,7 @@ class VocabularyRepository:
         normalized = english_lemma.strip().lower()
         if not normalized:
             return None
-        stmt = (
+        query = (
             select(VocabularyItemModel)
             .where(
                 VocabularyItemModel.user_id == user_id,
@@ -161,19 +161,19 @@ class VocabularyRepository:
             .order_by(VocabularyItemModel.id.desc())
             .limit(1)
         )
-        return db.scalar(stmt)
+        return db.scalar(query)
 
     def list_english_lemmas(
         self,
         db: Session,
         user_id: int,
     ) -> list[str]:
-        stmt = (
+        query = (
             select(VocabularyItemModel.english_lemma)
             .where(VocabularyItemModel.user_id == user_id)
             .order_by(VocabularyItemModel.id.desc())
         )
-        rows = list(db.scalars(stmt))
+        rows = list(db.scalars(query))
         result: list[str] = []
         seen: set[str] = set()
         for lemma in rows:

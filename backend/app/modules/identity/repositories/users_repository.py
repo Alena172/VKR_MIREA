@@ -7,15 +7,15 @@ from app.modules.identity.schemas.users_schemas import UserCreate
 
 class UsersRepository:
     def list_users(self, db: Session) -> list[UserModel]:
-        stmt = select(UserModel).order_by(UserModel.id.desc())
-        return list(db.scalars(stmt))
+        query = select(UserModel).order_by(UserModel.id.desc())
+        return list(db.scalars(query))
 
     def get_by_id(self, db: Session, user_id: int) -> UserModel | None:
         return db.get(UserModel, user_id)
 
     def get_by_email(self, db: Session, email: str) -> UserModel | None:
-        stmt = select(UserModel).where(UserModel.email == email)
-        return db.scalar(stmt)
+        query = select(UserModel).where(UserModel.email == email)
+        return db.scalar(query)
 
     def create(self, db: Session, payload: UserCreate) -> UserModel:
         user = UserModel(**payload.model_dump())

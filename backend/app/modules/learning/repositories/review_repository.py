@@ -121,11 +121,11 @@ class ContextMemoryRepository:
         if not normalized:
             return {}
 
-        stmt = select(WordProgressModel).where(
+        query = select(WordProgressModel).where(
             WordProgressModel.user_id == user_id,
             WordProgressModel.word.in_(normalized),
         )
-        rows = list(db.scalars(stmt))
+        rows = list(db.scalars(query))
         return {row.word: row for row in rows}
 
     def list_due_word_progress(
@@ -135,7 +135,7 @@ class ContextMemoryRepository:
         limit: int,
     ) -> list[WordProgressModel]:
         now = datetime.utcnow()
-        stmt = (
+        query = (
             select(WordProgressModel)
             .where(
                 WordProgressModel.user_id == user_id,
@@ -144,7 +144,7 @@ class ContextMemoryRepository:
             .order_by(WordProgressModel.next_review_at.asc(), WordProgressModel.error_count.desc())
             .limit(limit)
         )
-        return list(db.scalars(stmt))
+        return list(db.scalars(query))
 
     def count_due_word_progress(
         self,
@@ -152,11 +152,11 @@ class ContextMemoryRepository:
         user_id: int,
     ) -> int:
         now = datetime.utcnow()
-        stmt = select(func.count(WordProgressModel.id)).where(
+        query = select(func.count(WordProgressModel.id)).where(
             WordProgressModel.user_id == user_id,
             WordProgressModel.next_review_at <= now,
         )
-        return int(db.scalar(stmt) or 0)
+        return int(db.scalar(query) or 0)
 
     def list_upcoming_word_progress(
         self,
@@ -167,7 +167,7 @@ class ContextMemoryRepository:
     ) -> list[WordProgressModel]:
         now = datetime.utcnow()
         end = now + horizon
-        stmt = (
+        query = (
             select(WordProgressModel)
             .where(
                 WordProgressModel.user_id == user_id,
@@ -177,7 +177,7 @@ class ContextMemoryRepository:
             .order_by(WordProgressModel.next_review_at.asc(), WordProgressModel.error_count.desc())
             .limit(limit)
         )
-        return list(db.scalars(stmt))
+        return list(db.scalars(query))
 
     def list_word_progress(
         self,
@@ -189,12 +189,12 @@ class ContextMemoryRepository:
         sort_by: Literal["next_review_at", "error_count", "correct_streak"] = "next_review_at",
         sort_order: Literal["asc", "desc"] = "asc",
     ) -> list[WordProgressModel]:
-        stmt = select(WordProgressModel).where(WordProgressModel.user_id == user_id)
+        query = select(WordProgressModel).where(WordProgressModel.user_id == user_id)
 
         if q:
             search = q.strip().lower()
             if search:
-                stmt = stmt.where(WordProgressModel.word.contains(search))
+                query = query.where(WordProgressModel.word.contains(search))
 
         if sort_by == "error_count":
             primary_col = WordProgressModel.error_count
@@ -204,8 +204,8 @@ class ContextMemoryRepository:
             primary_col = WordProgressModel.next_review_at
 
         primary_order = asc(primary_col) if sort_order == "asc" else desc(primary_col)
-        stmt = stmt.order_by(primary_order, WordProgressModel.next_review_at.asc()).offset(offset).limit(limit)
-        return list(db.scalars(stmt))
+        query = query.order_by(primary_order, WordProgressModel.next_review_at.asc()).offset(offset).limit(limit)
+        return list(db.scalars(query))
 
     def delete_word_progress(
         self,

@@ -22,7 +22,7 @@ class AnswerPersistPayload:
 class LearningSessionRepository:
     def _apply_session_filters(
         self,
-        stmt: Select,
+        query: Select,
         *,
         user_id: int | None,
         min_accuracy: float | None = None,
@@ -31,22 +31,22 @@ class LearningSessionRepository:
         created_to: datetime | None = None,
     ) -> Select:
         if user_id is not None:
-            stmt = stmt.where(LearningSessionModel.user_id == user_id)
+            query = query.where(LearningSessionModel.user_id == user_id)
         if min_accuracy is not None:
-            stmt = stmt.where(LearningSessionModel.accuracy >= min_accuracy)
+            query = query.where(LearningSessionModel.accuracy >= min_accuracy)
         if max_accuracy is not None:
-            stmt = stmt.where(LearningSessionModel.accuracy <= max_accuracy)
+            query = query.where(LearningSessionModel.accuracy <= max_accuracy)
         if created_from is not None:
-            stmt = stmt.where(LearningSessionModel.created_at >= created_from)
+            query = query.where(LearningSessionModel.created_at >= created_from)
         if created_to is not None:
-            stmt = stmt.where(LearningSessionModel.created_at < created_to)
-        return stmt
+            query = query.where(LearningSessionModel.created_at < created_to)
+        return query
 
     def list_sessions(self, db: Session, user_id: int | None) -> list[LearningSessionModel]:
-        stmt = select(LearningSessionModel)
-        stmt = self._apply_session_filters(stmt, user_id=user_id)
-        stmt = stmt.order_by(LearningSessionModel.id.desc())
-        return list(db.scalars(stmt))
+        query = select(LearningSessionModel)
+        query = self._apply_session_filters(query, user_id=user_id)
+        query = query.order_by(LearningSessionModel.id.desc())
+        return list(db.scalars(query))
 
     def list_sessions_paginated(
         self,
@@ -60,17 +60,17 @@ class LearningSessionRepository:
         created_from: datetime | None = None,
         created_to: datetime | None = None,
     ) -> list[LearningSessionModel]:
-        stmt = select(LearningSessionModel)
-        stmt = self._apply_session_filters(
-            stmt,
+        query = select(LearningSessionModel)
+        query = self._apply_session_filters(
+            query,
             user_id=user_id,
             min_accuracy=min_accuracy,
             max_accuracy=max_accuracy,
             created_from=created_from,
             created_to=created_to,
         )
-        stmt = stmt.order_by(LearningSessionModel.id.desc()).limit(limit).offset(offset)
-        return list(db.scalars(stmt))
+        query = query.order_by(LearningSessionModel.id.desc()).limit(limit).offset(offset)
+        return list(db.scalars(query))
 
     def count_sessions(
         self,
@@ -82,16 +82,16 @@ class LearningSessionRepository:
         created_from: datetime | None = None,
         created_to: datetime | None = None,
     ) -> int:
-        stmt = select(func.count(LearningSessionModel.id))
-        stmt = self._apply_session_filters(
-            stmt,
+        query = select(func.count(LearningSessionModel.id))
+        query = self._apply_session_filters(
+            query,
             user_id=user_id,
             min_accuracy=min_accuracy,
             max_accuracy=max_accuracy,
             created_from=created_from,
             created_to=created_to,
         )
-        return int(db.scalar(stmt) or 0)
+        return int(db.scalar(query) or 0)
 
     def list_answers_by_session(
         self,
@@ -99,20 +99,20 @@ class LearningSessionRepository:
         session_id: int,
         user_id: int,
     ) -> list[LearningSessionAnswerModel] | None:
-        session_stmt = select(LearningSessionModel).where(
+        session_query = select(LearningSessionModel).where(
             LearningSessionModel.id == session_id,
             LearningSessionModel.user_id == user_id,
         )
-        session_row = db.scalar(session_stmt)
+        session_row = db.scalar(session_query)
         if session_row is None:
             return None
 
-        answers_stmt = (
+        answers_query = (
             select(LearningSessionAnswerModel)
             .where(LearningSessionAnswerModel.session_id == session_id)
             .order_by(LearningSessionAnswerModel.id.asc())
         )
-        return list(db.scalars(answers_stmt))
+        return list(db.scalars(answers_query))
 
     def create_with_answers(
         self,
@@ -163,7 +163,7 @@ class LearningSessionRepository:
         limit: int = 20,
         unique: bool = True,
     ) -> list[str]:
-        stmt = (
+        query = (
             select(
                 LearningSessionAnswerModel.target_word,
                 LearningSessionAnswerModel.prompt,
@@ -179,7 +179,7 @@ class LearningSessionRepository:
             .order_by(LearningSessionAnswerModel.id.desc())
             .limit(limit)
         )
-        rows = list(db.execute(stmt))
+        rows = list(db.execute(query))
 
         words: list[str] = []
         for target_word, prompt in rows:
