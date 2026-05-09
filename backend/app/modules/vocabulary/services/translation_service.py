@@ -8,7 +8,7 @@ from app.modules.ai_services.contracts import TranslateWithContextRequest
 from app.modules.ai_services.public_api import TranslationProviderUnavailableError, ai_service
 from app.modules.vocabulary.assemblers import to_translation_result_dto
 from app.modules.vocabulary.contracts import TranslationResultDTO
-from app.modules.identity.public_api import users_public_api
+from app.modules.identity.service import get_user_or_404
 from app.modules.vocabulary.items_public_api import vocabulary_public_api
 
 
@@ -39,7 +39,7 @@ class TranslationApplicationService:
     ) -> TranslationResultDTO:
         """Переводит текст с учетом уровня пользователя и локального глоссария."""
 
-        user = users_public_api.get_or_404(db=db, user_id=user_id)
+        user = get_user_or_404(db=db, user_id=user_id)
 
         cefr_level = user.cefr_level
         vocabulary_items = vocabulary_public_api.list_items(db, user_id=user_id)[:50]

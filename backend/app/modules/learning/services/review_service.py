@@ -45,7 +45,7 @@ from app.modules.learning.schemas.review_schemas import (
     ReviewSessionStartRequest,
 )
 from app.modules.learning.session_public_api import learning_session_public_api
-from app.modules.identity.public_api import users_public_api
+from app.modules.identity.service import get_user_by_id
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
@@ -80,7 +80,7 @@ class ContextMemoryApplicationService:
 
         if user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Forbidden")
-        user = users_public_api.get_by_id(db, user_id)
+        user = get_user_by_id(db, user_id)
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
         return user
@@ -346,7 +346,7 @@ class ContextMemoryApplicationService:
         user_id: int,
         fallback_cefr: str,
     ) -> str:
-        user = users_public_api.get_by_id(db, user_id)
+        user = get_user_by_id(db, user_id)
         return user.cefr_level if user is not None else fallback_cefr
 
     def ensure_word_progress_entry(

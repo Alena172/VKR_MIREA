@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.application import AsyncTaskResponse
 from app.core.db import get_db
-from app.modules.identity.dependencies import get_current_user_id
+from app.modules.identity.deps import get_current_user_id
 from app.modules.vocabulary.schemas.items_schemas import (
     VocabularyFromCaptureRequest,
     VocabularyFromCaptureRequestMe,

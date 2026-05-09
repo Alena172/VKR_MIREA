@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.modules.identity.repositories.users_repository import users_repository
+from app.modules.identity.repository import get_user_by_id
 
 
 class AsyncTaskResponse(BaseModel):
@@ -36,7 +36,7 @@ class ApplicationAccess:
     def get_user_or_404(self, *, db: Session, user_id: int):
         """Возвращает пользователя или останавливает HTTP-запрос с 404."""
 
-        user = users_repository.get_by_id(db, user_id)
+        user = get_user_by_id(db, user_id)
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
         return user

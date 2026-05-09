@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.modules.identity.dependencies import get_current_user_id
+from app.modules.identity.deps import get_current_user_id
 from app.modules.learning_graph.services.service import learning_graph_application_service
 from app.modules.learning_graph.contracts import (
     InterestWordsDTO,

@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.core.application import AsyncTaskResponse, application_access
 from app.core.db import get_db
-from app.modules.identity.dependencies import get_current_user_id
-from app.modules.identity.public_api import users_public_api
+from app.modules.identity.deps import get_current_user_id
+from app.modules.identity.service import get_user_or_404
 from app.modules.learning.repositories.session_repository import learning_session_repository
 from app.modules.learning.routers.review_presenters import (
     to_progress_snapshot_response,
@@ -181,7 +181,7 @@ async def submit_session(
         requested_user_id=payload.user_id,
         current_user_id=current_user_id,
     )
-    user = users_public_api.get_or_404(db=db, user_id=target_user_id)
+    user = get_user_or_404(db=db, user_id=target_user_id)
     result = await learning_session_submission_service.submit(
         db=db,
         user_id=target_user_id,

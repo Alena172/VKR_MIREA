@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.modules.ai_services.routers.router import router as ai_services_router
-from app.modules.identity.routers.router import router as identity_router
+from app.modules.identity.router import router as identity_router
 from app.modules.learning.routers.router import router as learning_router
 from app.modules.learning_graph.routers.router import router as learning_graph_router
 from app.platform.tasks.router import router as tasks_router
