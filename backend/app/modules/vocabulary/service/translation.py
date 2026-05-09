@@ -4,24 +4,54 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.application import application_access
-from app.modules.ai.schemas import TranslateWithContextRequest
-from app.modules.ai.facade import AIProviderUnavailableError, ai_facade as ai_service
+from app.core.config import get_settings
+from app.core.libretranslate_client import LibreTranslateClient
 from app.modules.identity.service import get_user_or_404
-from app.modules.vocabulary.service.items import list_user_items
 from app.modules.vocabulary.schemas import TranslationResultDTO
+from app.modules.vocabulary.service.lexicon import lookup_translation
 
 
-def _build_translation_note(provider_note: str) -> str:
-    normalized = provider_note.strip().lower()
-    if normalized.startswith("local_heuristic"):
-        return f"Local heuristic translation used ({provider_note})"
-    if normalized.startswith("ai_disambiguation:"):
-        return f"AI disambiguation used ({provider_note})"
-    if normalized.startswith("ai_translation:"):
-        return f"AI translation used ({provider_note})"
-    if normalized.startswith("glossary"):
-        return f"Glossary translation used ({provider_note})"
-    return f"Translation completed ({provider_note})"
+def _get_libretranslate_client() -> LibreTranslateClient:
+    settings = get_settings()
+    return LibreTranslateClient(
+        base_url=settings.libretranslate_url,
+        api_key=settings.libretranslate_api_key,
+        timeout_seconds=settings.libretranslate_timeout_seconds,
+    )
+
+
+async def translate_word_with_context(
+    *,
+    db: Session,
+    english_lemma: str,
+    source_context: str | None,
+) -> TranslationResultDTO:
+    lexicon_translation = lookup_translation(db=db, english_lemma=english_lemma)
+    if lexicon_translation and not source_context:
+        return TranslationResultDTO(
+            translated_text=lexicon_translation,
+            note="base_lexicon",
+        )
+
+    client = _get_libretranslate_client()
+    if client.is_configured():
+        result = await client.translate(
+            text=english_lemma,
+            context=source_context,
+        )
+        if result:
+            return TranslationResultDTO(
+                translated_text=result,
+                note="libretranslate",
+            )
+
+    if lexicon_translation:
+        return TranslationResultDTO(
+            translated_text=lexicon_translation,
+            note="base_lexicon_fallback",
+        )
+
+    raise HTTPException(status_code=503, detail="Translation service unavailable")
 
 
 async def translate_for_user(
@@ -31,30 +61,12 @@ async def translate_for_user(
     text: str,
     source_context: str | None,
 ) -> TranslationResultDTO:
-    user = get_user_or_404(db=db, user_id=user_id)
-
-    try:
-        ai_response = await ai_service.translate_with_context_async(
-            TranslateWithContextRequest(
-                text=text,
-                cefr_level=user.cefr_level,
-                source_context=source_context,
-                glossary=[
-                    {
-                        "english_term": item.english_lemma,
-                        "russian_translation": item.russian_translation,
-                        "source_sentence": item.source_sentence,
-                    }
-                    for item in list_user_items(db=db, user_id=user_id)[:50]
-                ],
-            )
-        )
-    except AIProviderUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    return TranslationResultDTO(
-        translated_text=ai_response.translated_text,
-        note=_build_translation_note(ai_response.provider_note),
+    get_user_or_404(db=db, user_id=user_id)
+    english_lemma = text.strip().lower().split()[0]
+    return await translate_word_with_context(
+        db=db,
+        english_lemma=english_lemma,
+        source_context=source_context,
     )
 
 

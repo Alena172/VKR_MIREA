@@ -11,12 +11,9 @@ from app.modules.ai.schemas import (
     ExplainErrorResponse,
     GenerateExercisesRequest,
     GenerateExercisesResponse,
-    TranslateWithContextRequest,
-    TranslateWithContextResponse,
 )
 from app.modules.ai.service.definitions import DefinitionService
 from app.modules.ai.service.exercises import ExerciseGenerator, _extract_json_payload
-from app.modules.ai.service.translation import TranslationService
 
 
 class AIProviderUnavailableError(RuntimeError):
@@ -35,13 +32,6 @@ class AIFacade:
             max_retries=max(0, int(settings.ai_max_retries)),
         )
         self._recent_sentences: dict[str, deque[str]] = {}
-        self._translation_service = TranslationService(
-            model=self._chat_client.model,
-            translation_strict_remote=settings.translation_strict_remote,
-            remote_enabled=self._chat_client.remote_enabled,
-            chat_complete_async=self._chat_completion_async,
-            provider_unavailable_error=AIProviderUnavailableError,
-        )
         self._definition_service = DefinitionService(
             chat_complete_async=self._chat_completion_async,
         )
@@ -51,7 +41,6 @@ class AIFacade:
             remote_enabled=self._chat_client.remote_enabled,
             chat_complete_async=self._chat_completion_async,
             provider_unavailable_error=AIProviderUnavailableError,
-            translation_service=self._translation_service,
             recent_sentences=self._recent_sentences,
         )
 
@@ -243,17 +232,6 @@ class AIFacade:
             russian_translation=russian_translation,
             source_sentence=source_sentence,
         )
-
-    def translate_with_context(self, payload: TranslateWithContextRequest) -> TranslateWithContextResponse:
-        return self._run_sync(self.translate_with_context_async(payload))
-
-    async def translate_with_context_async(
-        self, payload: TranslateWithContextRequest
-    ) -> TranslateWithContextResponse:
-        return await self._translation_service.translate_with_context_async(payload)
-
-    def fast_translate_single_word(self, text: str) -> str | None:
-        return self._translation_service.fast_translate_single_word(text)
 
     def generate_exercises(self, payload: GenerateExercisesRequest) -> GenerateExercisesResponse:
         return self._run_sync(self.generate_exercises_async(payload))
