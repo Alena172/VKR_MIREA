@@ -10,7 +10,7 @@ from app.modules.learning.assemblers import (
 from app.modules.learning.contracts import ReviewQueueItemDTO, ReviewSessionItemDTO, WordProgressDTO
 from app.modules.learning.models.review_models import WordProgressModel
 from app.modules.learning.models.review_status import build_review_status
-from app.modules.vocabulary.items_public_api import vocabulary_public_api
+from app.modules.vocabulary.service.items import get_definition_map_for_user, get_translation_map_for_user
 
 
 class ReviewProjectionService:
@@ -23,7 +23,7 @@ class ReviewProjectionService:
         is_valid_word,
     ) -> list[ReviewQueueItemDTO]:
         words = [row.word for row in rows]
-        translation_map = vocabulary_public_api.get_translation_map(db, user_id=user_id, english_lemmas=words)
+        translation_map = get_translation_map_for_user(db, user_id=user_id, english_lemmas=words)
         return [
             to_review_queue_item_dto(
                 word=row.word,
@@ -49,7 +49,7 @@ class ReviewProjectionService:
         progress_rows: list[WordProgressModel],
     ) -> list[WordProgressDTO]:
         words = [row.word for row in progress_rows]
-        translation_map = vocabulary_public_api.get_translation_map(db, user_id=user_id, english_lemmas=words)
+        translation_map = get_translation_map_for_user(db, user_id=user_id, english_lemmas=words)
         return [
             to_word_progress_dto(
                 user_id=row.user_id,
@@ -74,7 +74,7 @@ class ReviewProjectionService:
         user_id: int,
         progress: WordProgressModel,
     ) -> WordProgressDTO:
-        translation_map = vocabulary_public_api.get_translation_map(
+        translation_map = get_translation_map_for_user(
             db,
             user_id=user_id,
             english_lemmas=[progress.word],
@@ -101,8 +101,8 @@ class ReviewProjectionService:
         words: list[str],
         progress_map: dict[str, WordProgressModel],
     ) -> list[ReviewSessionItemDTO]:
-        translation_map = vocabulary_public_api.get_translation_map(db, user_id=user_id, english_lemmas=words)
-        definition_map = vocabulary_public_api.get_definition_map(db, user_id=user_id, english_lemmas=words)
+        translation_map = get_translation_map_for_user(db, user_id=user_id, english_lemmas=words)
+        definition_map = get_definition_map_for_user(db, user_id=user_id, english_lemmas=words)
         return [
             to_review_session_item_dto(
                 word=word,

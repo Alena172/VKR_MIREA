@@ -5,7 +5,7 @@ from app.modules.identity.router import router as identity_router
 from app.modules.learning.routers.router import router as learning_router
 from app.modules.learning_graph.routers.router import router as learning_graph_router
 from app.platform.tasks.router import router as tasks_router
-from app.modules.vocabulary.routers.router import router as vocabulary_router
+from app.modules.vocabulary.router import router as vocabulary_router
 
 api_router = APIRouter(prefix="/api/v1")
 

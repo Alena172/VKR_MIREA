@@ -7,7 +7,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.core.api import api_router
 from app.core.config import get_settings
 from app.core.db import SessionLocal
-from app.modules.vocabulary.base_lexicon_public_api import base_lexicon_public_api
+from app.modules.vocabulary.service.lexicon import ensure_seeded
 
 settings = get_settings()
 
@@ -40,7 +40,7 @@ def ensure_base_lexicon_seeded() -> None:
 
     db = SessionLocal()
     try:
-        base_lexicon_public_api.ensure_seeded(db)
+        ensure_seeded(db=db)
     finally:
         db.close()
 

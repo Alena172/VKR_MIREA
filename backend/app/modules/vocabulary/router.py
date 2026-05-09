@@ -4,53 +4,32 @@ from sqlalchemy.orm import Session
 from app.core.application import AsyncTaskResponse
 from app.core.db import get_db
 from app.modules.identity.deps import get_current_user_id
-from app.modules.vocabulary.schemas.items_schemas import (
+from app.modules.vocabulary.schemas import (
+    TranslateRequest,
+    TranslateRequestMe,
+    TranslateResponse,
     VocabularyFromCaptureRequest,
     VocabularyFromCaptureRequestMe,
     VocabularyFromCaptureResponse,
-    VocabularyItem,
     VocabularyItemCreate,
     VocabularyItemCreateMe,
+    VocabularyItemRead,
     VocabularyItemUpdateMe,
 )
-from app.modules.vocabulary.schemas.translation_schemas import TranslateRequest, TranslateRequestMe, TranslateResponse
-from app.modules.vocabulary.services.items_service import vocabulary_items_application_service
-from app.modules.vocabulary.services.translation_service import translation_application_service
-from app.modules.vocabulary.contracts import VocabularyFromCaptureResultDTO, VocabularyItemDTO
-
+from app.modules.vocabulary.service.items import delete_item, list_items, queue_add_item, queue_add_item_from_capture, update_item
+from app.modules.vocabulary.service.translation import resolve_target_user_id, translate_for_user
 
 router = APIRouter()
 
 
-def _to_vocabulary_response(item: VocabularyItemDTO) -> VocabularyItem:
-    return VocabularyItem(
-        id=item.id,
-        user_id=item.user_id,
-        english_lemma=item.english_lemma,
-        russian_translation=item.russian_translation,
-        context_definition_ru=item.context_definition_ru,
-        context_definition_source=item.context_definition_source,
-        context_definition_confidence=item.context_definition_confidence,
-        definition_reused_from_item_id=item.definition_reused_from_item_id,
-        source_sentence=item.source_sentence,
-        source_url=item.source_url,
-    )
-
-
-def _to_vocabulary_from_capture_response(result: VocabularyFromCaptureResultDTO) -> VocabularyFromCaptureResponse:
-    return VocabularyFromCaptureResponse(
-        vocabulary=_to_vocabulary_response(result.vocabulary),
-    )
-
-
-@router.get("/vocabulary/me", response_model=list[VocabularyItem])
+@router.get("/vocabulary/me", response_model=list[VocabularyItemRead])
 def list_my_items(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
-) -> list[VocabularyItem]:
+) -> list[VocabularyItemRead]:
     return [
-        _to_vocabulary_response(item)
-        for item in vocabulary_items_application_service.list_items(
+        VocabularyItemRead.model_validate(item)
+        for item in list_items(
             db=db,
             requested_user_id=current_user_id,
             current_user_id=current_user_id,
@@ -58,15 +37,15 @@ def list_my_items(
     ]
 
 
-@router.get("/vocabulary", response_model=list[VocabularyItem])
-def list_items(
+@router.get("/vocabulary", response_model=list[VocabularyItemRead])
+def list_vocabulary_items(
     user_id: int | None = Query(default=None, ge=1),
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
-) -> list[VocabularyItem]:
+) -> list[VocabularyItemRead]:
     return [
-        _to_vocabulary_response(item)
-        for item in vocabulary_items_application_service.list_items(
+        VocabularyItemRead.model_validate(item)
+        for item in list_items(
             db=db,
             requested_user_id=user_id,
             current_user_id=current_user_id,
@@ -80,7 +59,7 @@ def add_my_item(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> AsyncTaskResponse:
-    return vocabulary_items_application_service.queue_add_item(
+    return queue_add_item(
         db=db,
         payload=VocabularyItemCreate(
             user_id=current_user_id,
@@ -99,7 +78,7 @@ def add_item(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> AsyncTaskResponse:
-    return vocabulary_items_application_service.queue_add_item(
+    return queue_add_item(
         db=db,
         payload=payload,
         current_user_id=current_user_id,
@@ -112,7 +91,7 @@ def add_my_item_from_capture(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> AsyncTaskResponse:
-    return vocabulary_items_application_service.queue_add_item_from_capture(
+    return queue_add_item_from_capture(
         db=db,
         payload=VocabularyFromCaptureRequest(
             user_id=current_user_id,
@@ -131,27 +110,28 @@ def add_item_from_capture(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> AsyncTaskResponse:
-    return vocabulary_items_application_service.queue_add_item_from_capture(
+    return queue_add_item_from_capture(
         db=db,
         payload=payload,
         current_user_id=current_user_id,
     )
 
 
-@router.put("/vocabulary/me/{item_id}", response_model=VocabularyItem)
+@router.put("/vocabulary/me/{item_id}", response_model=VocabularyItemRead)
 def update_my_item(
     item_id: int,
     payload: VocabularyItemUpdateMe,
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
-) -> VocabularyItem:
-    result = vocabulary_items_application_service.update_item(
-        db=db,
-        item_id=item_id,
-        payload=payload,
-        current_user_id=current_user_id,
+) -> VocabularyItemRead:
+    return VocabularyItemRead.model_validate(
+        update_item(
+            db=db,
+            item_id=item_id,
+            payload=payload,
+            current_user_id=current_user_id,
+        )
     )
-    return _to_vocabulary_response(result)
 
 
 @router.delete("/vocabulary/me/{item_id}")
@@ -160,7 +140,7 @@ def delete_my_item(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> dict[str, bool]:
-    return vocabulary_items_application_service.delete_item(
+    return delete_item(
         db=db,
         item_id=item_id,
         current_user_id=current_user_id,
@@ -173,7 +153,7 @@ async def translate_me(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> TranslateResponse:
-    result = await translation_application_service.translate_for_user(
+    result = await translate_for_user(
         db=db,
         user_id=current_user_id,
         text=payload.text,
@@ -191,11 +171,11 @@ async def translate(
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> TranslateResponse:
-    user_id = translation_application_service.resolve_target_user_id(
+    user_id = resolve_target_user_id(
         requested_user_id=payload.user_id,
         current_user_id=current_user_id,
     )
-    result = await translation_application_service.translate_for_user(
+    result = await translate_for_user(
         db=db,
         user_id=user_id,
         text=payload.text,

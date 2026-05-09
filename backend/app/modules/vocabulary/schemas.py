@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -24,7 +28,7 @@ class VocabularyItemCreateMe(BaseModel):
     source_url: str | None = Field(default=None, max_length=2000)
 
 
-class VocabularyItem(BaseModel):
+class VocabularyItemRead(BaseModel):
     """Словарная запись в HTTP-ответах."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -72,4 +76,77 @@ class VocabularyFromCaptureRequestMe(BaseModel):
 class VocabularyFromCaptureResponse(BaseModel):
     """Ответ capture-сценария с созданной или найденной записью."""
 
-    vocabulary: VocabularyItem
+    vocabulary: VocabularyItemRead
+
+
+class TranslateRequest(BaseModel):
+    """Запрос перевода с возможным указанием пользователя."""
+
+    text: str = Field(min_length=1, max_length=5000)
+    user_id: int | None = Field(default=None, ge=1)
+    source_context: str | None = Field(default=None, max_length=10000)
+
+
+class TranslateRequestMe(BaseModel):
+    """Запрос перевода для текущего пользователя."""
+
+    text: str = Field(min_length=1, max_length=5000)
+    source_context: str | None = Field(default=None, max_length=10000)
+
+
+class TranslateResponse(BaseModel):
+    """Результат перевода и пояснение источника."""
+
+    translated_text: str
+    note: str
+
+
+@dataclass(frozen=True)
+class VocabularyItemDTO:
+    """Словарная запись, которую vocabulary отдает наружу."""
+
+    id: int
+    user_id: int
+    english_lemma: str
+    russian_translation: str
+    context_definition_ru: str | None
+    context_definition_source: str | None
+    context_definition_confidence: str | None
+    definition_reused_from_item_id: int | None
+    source_sentence: str | None
+    source_url: str | None
+
+    @staticmethod
+    def from_model(item: "VocabularyItemModel") -> "VocabularyItemDTO":
+        from app.modules.vocabulary.models import VocabularyItemModel
+
+        if not isinstance(item, VocabularyItemModel):
+            raise TypeError("VocabularyItemDTO.from_model expects VocabularyItemModel")
+
+        return VocabularyItemDTO(
+            id=item.id,
+            user_id=item.user_id,
+            english_lemma=item.english_lemma,
+            russian_translation=item.russian_translation,
+            context_definition_ru=item.context_definition_ru,
+            context_definition_source=item.context_definition_source,
+            context_definition_confidence=item.context_definition_confidence,
+            definition_reused_from_item_id=item.definition_reused_from_item_id,
+            source_sentence=item.source_sentence,
+            source_url=item.source_url,
+        )
+
+
+@dataclass(frozen=True)
+class CaptureDTO:
+    """Результат сохранения слова из выделенного текста или контекста."""
+
+    vocabulary: VocabularyItemDTO
+
+
+@dataclass(frozen=True)
+class TranslationResultDTO:
+    """Результат перевода вместе с технической заметкой об источнике."""
+
+    translated_text: str
+    note: str

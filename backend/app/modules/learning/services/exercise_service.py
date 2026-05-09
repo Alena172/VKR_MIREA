@@ -16,7 +16,7 @@ from app.modules.learning.contracts import ExerciseGenerateResultDTO, ExerciseIt
 from app.modules.learning.services.prefetch_service import prefetch_service
 from app.modules.learning.schemas.exercise_schemas import ExerciseGenerateRequest
 from app.modules.learning_graph.public_api import learning_graph_public_api
-from app.modules.vocabulary.items_public_api import vocabulary_public_api
+from app.modules.vocabulary.service.items import list_user_items
 
 
 class ExerciseEngineApplicationService:
@@ -129,7 +129,7 @@ class ExerciseEngineApplicationService:
     ):
         """Выбирает подходящие словарные элементы для выбранного режима."""
 
-        vocabulary_items = vocabulary_public_api.list_items(db, user_id=user_id)
+        vocabulary_items = list_user_items(db=db, user_id=user_id)
         if vocabulary_ids:
             allowed = set(vocabulary_ids)
             vocabulary_items = [item for item in vocabulary_items if item.id in allowed]

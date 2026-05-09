@@ -1,4 +1,9 @@
-from sqlalchemy import ForeignKey, Integer, String, Text
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -53,3 +58,43 @@ class VocabularyItemModel(Base):
         String(2000),
         nullable=True,
     )
+
+
+class BaseLexiconEntryModel(Base):
+    """Локальная базовая пара `английская лемма -> русский перевод`."""
+
+    __tablename__ = "base_lexicon_entries"
+    __table_args__ = (
+        UniqueConstraint("english_lemma", name="uq_base_lexicon_english_lemma"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+    english_lemma: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        index=True,
+    )
+    russian_translation: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+
+@dataclass(frozen=True)
+class CaptureModel:
+    """Нормализованные входные данные capture-сценария."""
+
+    user_id: int
+    selected_text: str
+    source_url: str | None
+    source_sentence: str | None
+    force_new_vocabulary_item: bool
