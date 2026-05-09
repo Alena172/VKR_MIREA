@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.learning.repositories.review_repository import context_repository
 from app.modules.learning.models.review_status import matches_review_status_filter
-from app.modules.learning.session_public_api import learning_session_public_api
+from app.modules.training.repository import list_recent_incorrect_words
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
@@ -37,7 +37,7 @@ class RecommendationScoringService:
         user_id: int,
         limit: int,
     ) -> RecommendationScoreSnapshot:
-        recent_error_words_stream = learning_session_public_api.list_recent_incorrect_words(
+        recent_error_words_stream = list_recent_incorrect_words(
             db,
             user_id=user_id,
             limit=limit * 5,

@@ -40,7 +40,7 @@ class LearningSessionModel(Base):
     )
 
 
-class LearningSessionAnswerModel(Base):
+class AnswerModel(Base):
     """Один ответ пользователя внутри учебной сессии."""
 
     __tablename__ = "learning_session_answers"

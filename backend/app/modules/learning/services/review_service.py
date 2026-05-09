@@ -44,7 +44,7 @@ from app.modules.learning.schemas.review_schemas import (
     ReviewQueueSubmitRequest,
     ReviewSessionStartRequest,
 )
-from app.modules.learning.session_public_api import learning_session_public_api
+from app.modules.training.repository import get_progress_snapshot
 from app.modules.identity.service import get_user_by_id
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
@@ -393,14 +393,11 @@ class ContextMemoryApplicationService:
             raise HTTPException(status_code=403, detail="Forbidden")
 
         target_user_id = user_id or current_user_id
-        progress = learning_session_public_api.get_progress_dto(
-            db,
-            user_id=target_user_id,
-        )
+        total_sessions, average_accuracy = get_progress_snapshot(db, user_id=target_user_id)
         return to_progress_snapshot_dto(
             user_id=target_user_id,
-            total_sessions=progress.total_sessions,
-            avg_accuracy=progress.average_accuracy,
+            total_sessions=total_sessions,
+            avg_accuracy=average_accuracy,
         )
 
 context_memory_application_service = ContextMemoryApplicationService()

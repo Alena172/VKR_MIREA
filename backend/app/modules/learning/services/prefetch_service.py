@@ -9,15 +9,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-    from app.modules.learning.contracts import ExerciseItemDTO
+    from app.modules.training.schemas import ExerciseDTO
 
 
 class ExercisePrefetchService:
     """Service for prefetching exercises in the background."""
 
     def __init__(self) -> None:
-        self._queue: dict[tuple[int, str], list[ExerciseItemDTO]] = {}
+        self._queue: dict[tuple[int, str], list[ExerciseDTO]] = {}
         self._max_prefetch_per_user = 10
 
     def has_prefetch(self, user_id: int, mode: str) -> bool:
@@ -25,7 +24,7 @@ class ExercisePrefetchService:
         key = (user_id, mode)
         return key in self._queue and len(self._queue[key]) > 0
 
-    def get_prefetched(self, user_id: int, mode: str, count: int) -> list[ExerciseItemDTO]:
+    def get_prefetched(self, user_id: int, mode: str, count: int) -> list[ExerciseDTO]:
         """Get prefetched exercises for user.
         
         Returns up to `count` exercises and removes them from the queue.
@@ -43,7 +42,7 @@ class ExercisePrefetchService:
         
         return exercises
 
-    def store_prefetch(self, user_id: int, mode: str, exercises: list[ExerciseItemDTO]) -> None:
+    def store_prefetch(self, user_id: int, mode: str, exercises: list[ExerciseDTO]) -> None:
         """Store prefetched exercises for user."""
         key = (user_id, mode)
         if key not in self._queue:

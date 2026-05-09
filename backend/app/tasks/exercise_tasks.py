@@ -18,6 +18,7 @@ def _exercise_result_to_dict(result) -> dict:
                 "prompt": item.prompt,
                 "answer": item.answer,
                 "exercise_type": item.exercise_type,
+                "target_word": item.target_word,
                 "options": list(item.options),
             }
             for item in result.exercises
@@ -47,12 +48,12 @@ def generate_exercises_for_user(
     The result matches ExerciseGenerateResponse schema.
     """
     from app.core.db import SessionLocal
-    from app.modules.learning.services.exercise_service import exercise_engine_application_service
+    from app.modules.training.service.exercises import generate_for_user
 
     db = SessionLocal()
     try:
         response = asyncio.run(
-            exercise_engine_application_service.generate_for_user(
+            generate_for_user(
                 db=db,
                 user_id=user_id,
                 vocabulary_ids=vocabulary_ids,
