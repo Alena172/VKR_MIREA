@@ -4,29 +4,21 @@ import httpx
 
 
 class AIChatClient:
-    """HTTP-клиент для OpenAI-совместимых и Ollama-провайдеров."""
+    """HTTP-клиент для AI-провайдера с OpenAI-совместимым API."""
 
     def __init__(
         self,
         *,
-        provider: str,
         base_url: str,
-        api_key: str | None,
         model: str,
         timeout_seconds: float,
         max_retries: int,
     ) -> None:
-        self._provider = provider
         self._base_url = base_url.rstrip("/")
-        self._api_key = api_key
         self._model = model
         self._timeout_seconds = timeout_seconds
         self._max_retries = max(0, int(max_retries))
         self._async_client: httpx.AsyncClient | None = None
-
-    @property
-    def provider(self) -> str:
-        return self._provider
 
     @property
     def model(self) -> str:
@@ -45,17 +37,7 @@ class AIChatClient:
         return self._max_retries
 
     def remote_enabled(self) -> bool:
-        if self._provider == "openai_compatible":
-            return bool(self._api_key)
-        if self._provider == "ollama":
-            return bool(self._base_url) and bool(self._model)
-        return False
-
-    def _build_chat_headers(self) -> dict[str, str]:
-        headers = {"Content-Type": "application/json"}
-        if self._provider == "openai_compatible" and self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
-        return headers
+        return bool(self._base_url) and bool(self._model)
 
     def _get_async_client(self) -> httpx.AsyncClient:
         if self._async_client is None:
@@ -88,11 +70,10 @@ class AIChatClient:
 
         client = self._get_async_client()
         url = f"{self._base_url}/chat/completions"
-        headers = self._build_chat_headers()
 
         for _ in range(self._max_retries + 1):
             try:
-                response = await client.post(url, headers=headers, json=payload)
+                response = await client.post(url, json=payload)
                 response.raise_for_status()
                 data = response.json()
                 return (

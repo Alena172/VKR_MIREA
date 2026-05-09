@@ -66,14 +66,12 @@ class TranslationService:
     def __init__(
         self,
         *,
-        provider: str,
         model: str,
         translation_strict_remote: bool,
         remote_enabled: Callable[[], bool],
         chat_complete_async: Callable[..., Awaitable[str | None]],
         provider_unavailable_error: type[Exception],
     ) -> None:
-        self._provider = provider
         self._model = model
         self._translation_strict_remote = translation_strict_remote
         self._remote_enabled = remote_enabled
@@ -219,9 +217,8 @@ class TranslationService:
     def _build_remote_provider_note(self, payload: TranslateWithContextRequest) -> str:
         uses_glossary = bool(payload.glossary)
         uses_context = bool((payload.source_context or "").strip())
-        if uses_glossary or uses_context or self._looks_ambiguous(payload.text):
-            return f"ai_disambiguation:{self._provider}/{self._model}"
-        return f"ai_translation:{self._provider}/{self._model}"
+        prefix = "ai_disambiguation" if (uses_glossary or uses_context or self._looks_ambiguous(payload.text)) else "ai_translation"
+        return f"{prefix}:{self._model}"
 
     def fast_translate_single_word(
         self,
@@ -280,7 +277,7 @@ class TranslationService:
         if self._translation_strict_remote and not self._remote_enabled():
             raise self._provider_unavailable_error(
                 "Translation provider is unavailable. "
-                "Use AI_PROVIDER=ollama or set AI_PROVIDER=openai_compatible with AI_API_KEY."
+                "AI-провайдер недоступен. Проверь AI_BASE_URL и AI_MODEL в .env."
             )
 
         glossary_json = json.dumps(

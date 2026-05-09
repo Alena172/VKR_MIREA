@@ -79,9 +79,8 @@ class GenerateExercisesResponse(BaseModel):
 
 
 class AIStatusResponse(BaseModel):
-    """Текущая конфигурация AI-провайдера для диагностики."""
+    """Текущая конфигурация Ollama для диагностики."""
 
-    provider: str
     model: str
     remote_enabled: bool
     base_url: str

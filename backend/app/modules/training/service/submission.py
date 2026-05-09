@@ -264,7 +264,6 @@ def _update_progress(
     *,
     db: Session,
     user_id: int,
-    user_cefr_level: str | None,
     evaluated_answers: list[EvaluatedAnswer],
 ) -> None:
     progress_updates: list[WordProgressUpdate] = []
@@ -290,7 +289,6 @@ def _update_progress(
     context_memory_public_api.update_learning_progress(
         db=db,
         user_id=user_id,
-        user_cefr_level=user_cefr_level,
         updates=progress_updates,
     )
 
@@ -330,7 +328,6 @@ async def submit(
     *,
     db: Session,
     user_id: int,
-    user_cefr_level: str | None,
     answers: list[SessionAnswer],
 ) -> SessionSubmitResultDTO:
     normalized_answers = _dedupe_answers(answers)
@@ -340,7 +337,6 @@ async def submit(
         _update_progress(
             db=db,
             user_id=user_id,
-            user_cefr_level=user_cefr_level,
             evaluated_answers=evaluated_answers,
         )
         session_row = _persist_session(

@@ -8,10 +8,8 @@ class Settings(BaseSettings):
 
     app_name: str = "VKR English Learning API"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/vkr_db"
-    ai_provider: str = "stub"
-    ai_base_url: str = "https://api.openai.com/v1"
-    ai_api_key: str | None = None
-    ai_model: str = "gpt-4o-mini"
+    ai_base_url: str = "http://localhost:11434/v1"
+    ai_model: str = "llama3"
     ai_timeout_seconds: float = 20.0
     ai_max_retries: int = 1
     translation_strict_remote: bool = True

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import re
 from collections import deque
 
 from app.core.config import get_settings
@@ -17,67 +15,48 @@ from app.modules.ai.schemas import (
     TranslateWithContextResponse,
 )
 from app.modules.ai.service.definitions import DefinitionService
-from app.modules.ai.service.exercises import ExerciseGenerator
+from app.modules.ai.service.exercises import ExerciseGenerator, _extract_json_payload
 from app.modules.ai.service.translation import TranslationService
 
 
-class TranslationProviderUnavailableError(RuntimeError):
-    """Ошибка, когда выбранный удаленный AI-провайдер недоступен."""
-
-    pass
+class AIProviderUnavailableError(RuntimeError):
+    """AI-провайдер недоступен или не сконфигурирован."""
 
 
 class AIFacade:
-    """Единая точка входа к AI для всех доменных модулей.
-
-    Доменные модули (vocabulary, training, review) импортируют только
-    ai.facade — никакого прямого обращения к chat_client или провайдеру.
-    """
+    """Единая точка входа к AI для всех доменных модулей."""
 
     def __init__(self) -> None:
         settings = get_settings()
-        self._provider = settings.ai_provider.strip().lower()
-        self._model = settings.ai_model
-        self._timeout_seconds = settings.ai_timeout_seconds
-        self._max_retries = max(0, int(settings.ai_max_retries))
-        self._translation_strict_remote = bool(settings.translation_strict_remote)
         self._chat_client = AIChatClient(
-            provider=self._provider,
             base_url=settings.ai_base_url,
-            api_key=settings.ai_api_key,
             model=settings.ai_model,
             timeout_seconds=settings.ai_timeout_seconds,
-            max_retries=self._max_retries,
+            max_retries=max(0, int(settings.ai_max_retries)),
         )
         self._recent_sentences: dict[str, deque[str]] = {}
         self._translation_service = TranslationService(
-            provider=self._provider,
-            model=self._model,
-            translation_strict_remote=self._translation_strict_remote,
-            remote_enabled=self._remote_enabled,
+            model=self._chat_client.model,
+            translation_strict_remote=settings.translation_strict_remote,
+            remote_enabled=self._chat_client.remote_enabled,
             chat_complete_async=self._chat_completion_async,
-            provider_unavailable_error=TranslationProviderUnavailableError,
+            provider_unavailable_error=AIProviderUnavailableError,
         )
         self._definition_service = DefinitionService(
             chat_complete_async=self._chat_completion_async,
         )
         self._exercise_generator = ExerciseGenerator(
-            provider=self._provider,
-            model=self._model,
-            max_retries=self._max_retries,
-            remote_enabled=self._remote_enabled,
+            model=self._chat_client.model,
+            max_retries=self._chat_client.max_retries,
+            remote_enabled=self._chat_client.remote_enabled,
             chat_complete_async=self._chat_completion_async,
-            chat_complete_sync=self._chat_completion,
-            provider_unavailable_error=TranslationProviderUnavailableError,
+            provider_unavailable_error=AIProviderUnavailableError,
             translation_service=self._translation_service,
             recent_sentences=self._recent_sentences,
         )
 
-    def _remote_enabled(self) -> bool:
-        return self._chat_client.remote_enabled()
-
     def is_remote_enabled(self) -> bool:
-        return self._remote_enabled()
+        return self._chat_client.remote_enabled()
 
     def _run_sync(self, coro):
         try:
@@ -85,22 +64,6 @@ class AIFacade:
         except RuntimeError:
             return asyncio.run(coro)
         raise RuntimeError("Synchronous AIFacade methods cannot be called from an active event loop")
-
-    def _chat_completion(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        temperature: float = 0.2,
-        max_tokens: int = 300,
-    ) -> str | None:
-        return self._run_sync(
-            self._chat_completion_async(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-        )
 
     async def _chat_completion_async(
         self,
@@ -117,15 +80,12 @@ class AIFacade:
         )
 
     def get_status(self) -> AIStatusResponse:
-        """Возвращает диагностический статус AI-провайдера."""
-
         return AIStatusResponse(
-            provider=self._provider,
-            model=self._model,
-            remote_enabled=self._remote_enabled(),
+            model=self._chat_client.model,
+            remote_enabled=self._chat_client.remote_enabled(),
             base_url=self._chat_client.base_url,
-            timeout_seconds=self._timeout_seconds,
-            max_retries=self._max_retries,
+            timeout_seconds=self._chat_client.timeout_seconds,
+            max_retries=self._chat_client.max_retries,
         )
 
     def _fallback_explain_error(self) -> ExplainErrorResponse:
@@ -148,8 +108,6 @@ class AIFacade:
         return self._run_sync(self.explain_error_async(payload))
 
     async def explain_error_async(self, payload: ExplainErrorRequest) -> ExplainErrorResponse:
-        """Объясняет ошибку пользователя или возвращает локальный fallback."""
-
         content = await self._chat_completion_async(
             system_prompt=(
                 "Ты преподаватель английского для русскоязычных пользователей. "
@@ -172,8 +130,6 @@ class AIFacade:
         return self._run_sync(self.suggest_improvement_async(payload))
 
     async def suggest_improvement_async(self, payload: ExplainErrorRequest) -> ExplainErrorResponse:
-        """Дает мягкую стилистическую рекомендацию для засчитанного ответа."""
-
         content = await self._chat_completion_async(
             system_prompt=(
                 "Ты преподаватель английского для русскоязычных пользователей. "
@@ -192,22 +148,6 @@ class AIFacade:
         if content:
             return ExplainErrorResponse(explanation_ru=content)
         return self._fallback_improvement_hint()
-
-    def _extract_json_payload(self, raw: str) -> dict | list | None:
-        text = raw.strip()
-        if not text:
-            return None
-        try:
-            return json.loads(text)
-        except Exception:
-            pass
-        fenced = re.search(r"```json\s*(\{.*\}|\[.*\])\s*```", text, re.DOTALL)
-        if fenced:
-            try:
-                return json.loads(fenced.group(1))
-            except Exception:
-                return None
-        return None
 
     def is_translation_semantically_correct(
         self,
@@ -231,8 +171,6 @@ class AIFacade:
         expected_answer: str,
         user_answer: str,
     ) -> bool:
-        """Проверяет, передает ли пользовательский перевод тот же смысл."""
-
         content = await self._chat_completion_async(
             system_prompt=(
                 "Ты проверяешь переводы с английского на русский. "
@@ -251,7 +189,7 @@ class AIFacade:
             max_tokens=60,
         )
         if content:
-            payload = self._extract_json_payload(content)
+            payload = _extract_json_payload(content)
             if isinstance(payload, dict) and isinstance(payload.get("equivalent"), bool):
                 return payload["equivalent"]
             lowered = content.lower()
@@ -312,8 +250,6 @@ class AIFacade:
     async def translate_with_context_async(
         self, payload: TranslateWithContextRequest
     ) -> TranslateWithContextResponse:
-        """Переводит текст через translation provider с учетом контекста."""
-
         return await self._translation_service.translate_with_context_async(payload)
 
     def fast_translate_single_word(self, text: str) -> str | None:
@@ -323,8 +259,6 @@ class AIFacade:
         return self._run_sync(self.generate_exercises_async(payload))
 
     async def generate_exercises_async(self, payload: GenerateExercisesRequest) -> GenerateExercisesResponse:
-        """Генерирует упражнения по seed-словам."""
-
         return await self._exercise_generator.generate_exercises_async(payload)
 
     async def generate_exercises_batch(

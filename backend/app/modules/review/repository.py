@@ -10,20 +10,20 @@ from sqlalchemy.orm import Session
 from app.modules.review.models import WordProgressModel
 
 
+_WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
+
+
+def _normalize_valid_word(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized and _WORD_RE.fullmatch(normalized) else None
+
+
 class ReviewRepository:
     """Низкоуровневые запросы и SRS-обновления для `word_progress`."""
 
     _SRS_STEPS_DAYS = [1, 3, 7, 14, 30, 60]
-    _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
-
-    @classmethod
-    def _normalize_valid_word(cls, value: str | None) -> str | None:
-        if not value:
-            return None
-        normalized = value.strip().lower()
-        if not normalized or not cls._WORD_RE.fullmatch(normalized):
-            return None
-        return normalized
 
     def update_word_progress(
         self,
@@ -34,7 +34,7 @@ class ReviewRepository:
     ) -> WordProgressModel | None:
         """Обновляет счетчики и дату следующего повторения по SRS."""
 
-        normalized = self._normalize_valid_word(word)
+        normalized = _normalize_valid_word(word)
         if not normalized:
             return None
 
@@ -77,7 +77,7 @@ class ReviewRepository:
     ) -> WordProgressModel | None:
         """Создает запись прогресса для слова, если ее еще нет."""
 
-        normalized = self._normalize_valid_word(word)
+        normalized = _normalize_valid_word(word)
         if not normalized:
             return None
 
@@ -109,7 +109,7 @@ class ReviewRepository:
         user_id: int,
         word: str,
     ) -> WordProgressModel | None:
-        normalized = self._normalize_valid_word(word)
+        normalized = _normalize_valid_word(word)
         if not normalized:
             return None
         return db.scalar(
@@ -125,7 +125,7 @@ class ReviewRepository:
         user_id: int,
         words: list[str],
     ) -> dict[str, WordProgressModel]:
-        normalized = [w for w in (self._normalize_valid_word(item) for item in words) if w]
+        normalized = [w for w in (_normalize_valid_word(item) for item in words) if w]
         if not normalized:
             return {}
         rows = list(db.scalars(
@@ -213,7 +213,7 @@ class ReviewRepository:
         return list(db.scalars(query))
 
     def delete_word_progress(self, db: Session, user_id: int, word: str) -> bool:
-        normalized = self._normalize_valid_word(word)
+        normalized = _normalize_valid_word(word)
         if not normalized:
             return False
 

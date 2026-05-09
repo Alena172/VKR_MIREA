@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.application import AsyncTaskResponse, application_access
 from app.core.db import get_db
 from app.modules.identity.deps import get_current_user_id
-from app.modules.identity.service import get_user_or_404
 from app.modules.training import repository
 from app.modules.training.schemas import (
     ExerciseGenerateRequest,
@@ -153,11 +152,9 @@ async def submit_session(
         requested_user_id=payload.user_id,
         current_user_id=current_user_id,
     )
-    user = get_user_or_404(db=db, user_id=target_user_id)
     result = await submit(
         db=db,
         user_id=target_user_id,
-        user_cefr_level=user.cefr_level,
         answers=payload.answers,
     )
     return SessionSubmitResponse(

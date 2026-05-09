@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.application import application_access
 from app.modules.ai.schemas import TranslateWithContextRequest
-from app.modules.ai.facade import TranslationProviderUnavailableError, ai_facade as ai_service
+from app.modules.ai.facade import AIProviderUnavailableError, ai_facade as ai_service
 from app.modules.identity.service import get_user_or_404
 from app.modules.vocabulary.service.items import list_user_items
 from app.modules.vocabulary.schemas import TranslationResultDTO
@@ -49,7 +49,7 @@ async def translate_for_user(
                 ],
             )
         )
-    except TranslationProviderUnavailableError as exc:
+    except AIProviderUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return TranslationResultDTO(

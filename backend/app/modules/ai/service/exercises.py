@@ -18,6 +18,23 @@ from app.modules.ai.schemas import (
 from app.modules.ai.service.translation import TranslationService
 
 
+def _extract_json_payload(raw: str) -> dict | list | None:
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    fenced = re.search(r"```json\s*(\{.*\}|\[.*\])\s*```", text, re.DOTALL)
+    if fenced:
+        try:
+            return json.loads(fenced.group(1))
+        except Exception:
+            return None
+    return None
+
+
 class ExerciseGenerator:
     _FAST_START_EN_TEMPLATES = (
         "The key word is {word}.",
@@ -33,22 +50,18 @@ class ExerciseGenerator:
     def __init__(
         self,
         *,
-        provider: str,
         model: str,
         max_retries: int,
         remote_enabled: Callable[[], bool],
         chat_complete_async: Callable[..., Awaitable[str | None]],
-        chat_complete_sync: Callable[..., str | None],
         provider_unavailable_error: type[Exception],
         translation_service: TranslationService,
         recent_sentences: dict[str, deque[str]],
     ) -> None:
-        self._provider = provider
         self._model = model
         self._max_retries = max_retries
         self._remote_enabled = remote_enabled
         self._chat_complete_async = self._wrap_async_chat_complete(chat_complete_async)
-        self._chat_complete_sync = chat_complete_sync
         self._provider_unavailable_error = provider_unavailable_error
         self._translation_service = translation_service
         self._recent_sentences = recent_sentences
@@ -64,22 +77,6 @@ class ExerciseGenerator:
             return await asyncio.to_thread(callback, **kwargs)
 
         return _wrapped
-
-    def _extract_json_payload(self, raw: str) -> dict | list | None:
-        text = raw.strip()
-        if not text:
-            return None
-        try:
-            return json.loads(text)
-        except Exception:
-            pass
-        fenced = re.search(r"```json\s*(\{.*\}|\[.*\])\s*```", text, re.DOTALL)
-        if fenced:
-            try:
-                return json.loads(fenced.group(1))
-            except Exception:
-                return None
-        return None
 
     def _is_word_scramble_suitable(self, word: str) -> bool:
         clean_word = re.sub(r"[^a-z]", "", word.strip().lower())
@@ -172,7 +169,7 @@ class ExerciseGenerator:
         )
 
     def _parse_sentence_translation_payload(self, raw: str) -> tuple[str, str] | None:
-        payload = self._extract_json_payload(raw)
+        payload = _extract_json_payload(raw)
         if not isinstance(payload, dict):
             return None
 
@@ -305,7 +302,7 @@ class ExerciseGenerator:
         if not self._remote_enabled():
             raise self._provider_unavailable_error(
                 "Sentence generation requires remote AI provider. "
-                "Use AI_PROVIDER=ollama or set AI_PROVIDER=openai_compatible with AI_API_KEY."
+                "AI-провайдер недоступен. Проверь AI_BASE_URL и AI_MODEL в .env."
             )
 
         word = seed.english_lemma.strip().lower()
@@ -493,14 +490,14 @@ class ExerciseGenerator:
 
         level_note = f" CEFR={payload.cefr_level}." if payload.cefr_level else ""
         provider_note = (
-            f"remote_sentence_pipeline:{self._provider}/{self._model}{level_note}"
+            f"remote_sentence_pipeline:{self._model}{level_note}"
             if payload.mode == "sentence_translation_full"
             else f"local_heuristic exercise_generation.{level_note}"
         )
         return GenerateExercisesResponse(exercises=list(result), provider_note=provider_note)
 
     def _parse_generated_exercises(self, raw_content: str, size: int) -> list[GeneratedExerciseItem]:
-        payload = self._extract_json_payload(raw_content)
+        payload = _extract_json_payload(raw_content)
         if payload is None:
             return []
 
@@ -594,7 +591,7 @@ class ExerciseGenerator:
                         seed_idx += 1
                 return GenerateExercisesResponse(
                     exercises=parsed,
-                    provider_note=f"remote:{self._provider}/{self._model}",
+                    provider_note=f"remote:{self._model}",
                 )
         return await self._fallback_generate_exercises(payload)
 
