@@ -17,6 +17,8 @@ from app.modules.vocabulary.schemas.items_schemas import (
 
 
 class VocabularyItemsApplicationService:
+    """Application-сервис для ручного управления словарными записями."""
+
     def list_items(
         self,
         *,
@@ -24,6 +26,8 @@ class VocabularyItemsApplicationService:
         requested_user_id: int | None,
         current_user_id: int,
     ) -> list[VocabularyItemDTO]:
+        """Возвращает словарь пользователя или общий список для служебного endpoint."""
+
         target_user_id = application_access.resolve_target_user_id(
             requested_user_id=requested_user_id,
             current_user_id=current_user_id,
@@ -37,6 +41,8 @@ class VocabularyItemsApplicationService:
         payload: VocabularyItemCreate,
         current_user_id: int,
     ) -> AsyncTaskResponse:
+        """Ставит создание словарной записи с AI-обогащением в очередь."""
+
         target_user_id = application_access.resolve_target_user_id(
             requested_user_id=payload.user_id,
             current_user_id=current_user_id,
@@ -65,6 +71,8 @@ class VocabularyItemsApplicationService:
         payload: VocabularyFromCaptureRequest,
         current_user_id: int,
     ) -> AsyncTaskResponse:
+        """Ставит capture-сценарий сохранения слова в фоновую очередь."""
+
         target_user_id = application_access.resolve_target_user_id(
             requested_user_id=payload.user_id,
             current_user_id=current_user_id,
@@ -94,6 +102,8 @@ class VocabularyItemsApplicationService:
         payload: VocabularyItemUpdateMe,
         current_user_id: int,
     ) -> VocabularyItemDTO:
+        """Обновляет словарную запись текущего пользователя."""
+
         item = vocabulary_repository.get_by_id_for_user(db, item_id=item_id, user_id=current_user_id)
         if item is None:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")
@@ -115,6 +125,8 @@ class VocabularyItemsApplicationService:
         item_id: int,
         current_user_id: int,
     ) -> dict[str, bool]:
+        """Удаляет словарную запись и связанные семантические связи."""
+
         item = vocabulary_repository.get_by_id_for_user(db, item_id=item_id, user_id=current_user_id)
         if item is None:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")

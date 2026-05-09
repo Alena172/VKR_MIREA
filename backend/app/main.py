@@ -1,3 +1,5 @@
+"""Точка сборки FastAPI-приложения и общих middleware."""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -34,6 +36,8 @@ app.include_router(api_router)
 
 @app.on_event("startup")
 def ensure_base_lexicon_seeded() -> None:
+    """Заполняет базовый локальный словарь при старте приложения."""
+
     db = SessionLocal()
     try:
         base_lexicon_public_api.ensure_seeded(db)
@@ -43,4 +47,6 @@ def ensure_base_lexicon_seeded() -> None:
 
 @app.get("/health", tags=["system"])
 def healthcheck() -> dict[str, str]:
+    """Простой healthcheck для Docker, gateway и ручной проверки API."""
+
     return {"status": "ok"}

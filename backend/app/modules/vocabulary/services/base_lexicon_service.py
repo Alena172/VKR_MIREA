@@ -5,12 +5,16 @@ from app.modules.vocabulary.models.base_lexicon_seed_data import load_default_ba
 
 
 class BaseLexiconApplicationService:
+    """Сервис инициализации и чтения локального базового лексикона."""
+
     def lookup_translation(
         self,
         *,
         db: Session,
         english_lemma: str,
     ) -> str | None:
+        """Ищет быстрый локальный перевод по английской лемме."""
+
         entry = base_lexicon_repository.get_by_lemma(
             db,
             english_lemma=english_lemma,
@@ -22,6 +26,8 @@ class BaseLexiconApplicationService:
         *,
         db: Session,
     ) -> int:
+        """Гарантирует наличие seed-данных базового лексикона."""
+
         return base_lexicon_repository.seed_defaults(
             db,
             entries=load_default_base_lexicon_entries(),
@@ -33,6 +39,8 @@ class BaseLexiconApplicationService:
         db: Session,
         entries: list[tuple[str, str]],
     ) -> int:
+        """Импортирует или обновляет записи базового лексикона."""
+
         return base_lexicon_repository.upsert_entries(
             db,
             entries=entries,

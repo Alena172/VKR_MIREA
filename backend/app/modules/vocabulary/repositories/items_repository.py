@@ -6,7 +6,11 @@ from app.modules.vocabulary.schemas.items_schemas import VocabularyItemCreate
 
 
 class VocabularyRepository:
+    """Запросы к личному словарю пользователя."""
+
     def list_items(self, db: Session, user_id: int | None) -> list[VocabularyItemModel]:
+        """Возвращает словарные записи, опционально ограниченные пользователем."""
+
         query = select(VocabularyItemModel)
         if user_id is not None:
             query = query.where(VocabularyItemModel.user_id == user_id)
@@ -37,6 +41,8 @@ class VocabularyRepository:
         english_lemma: str,
         limit: int = 20,
     ) -> list[VocabularyItemModel]:
+        """Ищет существующие определения для переиспользования по той же лемме."""
+
         normalized = english_lemma.strip().lower()
         if not normalized:
             return []
@@ -95,6 +101,8 @@ class VocabularyRepository:
         user_id: int,
         english_lemmas: list[str],
     ) -> dict[str, str]:
+        """Возвращает последние переводы для набора лемм пользователя."""
+
         normalized = [lemma.strip().lower() for lemma in english_lemmas if lemma and lemma.strip()]
         if not normalized:
             return {}
@@ -122,6 +130,8 @@ class VocabularyRepository:
         user_id: int,
         english_lemmas: list[str],
     ) -> dict[str, str]:
+        """Возвращает последние контекстные определения для набора лемм."""
+
         normalized = [lemma.strip().lower() for lemma in english_lemmas if lemma and lemma.strip()]
         if not normalized:
             return {}

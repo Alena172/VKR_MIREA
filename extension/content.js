@@ -1,3 +1,4 @@
+/** Находит короткое предложение вокруг выделенного текста на странице. */
 function extractSentenceFromText(fullText, selectedText) {
   if (!fullText || !selectedText) {
     return "";
@@ -20,6 +21,7 @@ function extractSentenceFromText(fullText, selectedText) {
   return normalizedFull.slice(start, end).trim();
 }
 
+/** Собирает данные выделения, которые popup отправит в backend. */
 function getSelectionPayload() {
   const selectedText = window.getSelection()?.toString()?.trim() || "";
   let sourceSentence = "";
@@ -41,6 +43,7 @@ function getSelectionPayload() {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  // Content script отвечает только за чтение выделения, без доступа к API проекта.
   if (message?.type === "VKR_GET_SELECTION") {
     sendResponse({ ok: true, payload: getSelectionPayload() });
     return true;

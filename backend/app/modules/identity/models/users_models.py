@@ -7,6 +7,8 @@ from app.core.db import Base
 
 
 class UserModel(Base):
+    """Пользователь системы и его базовый учебный профиль."""
+
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(

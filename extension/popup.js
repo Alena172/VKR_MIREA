@@ -20,6 +20,7 @@ const addBtn = document.getElementById("addBtn");
 
 let currentToken = null;
 
+/** Печатает результат операции в popup в читаемом виде. */
 function setOutput(data) {
   output.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
 }
@@ -41,6 +42,7 @@ function storageRemove(keys) {
   return new Promise((resolve) => chrome.storage.local.remove(keys, resolve));
 }
 
+/** Обертка над fetch для API проекта с bearer-токеном расширения. */
 async function requestJson(path, { method = "POST", payload = null } = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     method,
@@ -59,6 +61,7 @@ async function requestJson(path, { method = "POST", payload = null } = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+/** Проверяет токен и сохраняет user_id для последующих действий. */
 async function refreshIdentity() {
   if (!currentToken) {
     throw new Error("Сначала получи токен");
@@ -118,6 +121,7 @@ async function clearToken() {
   setOutput("Токен удален");
 }
 
+/** Запрашивает выделенный текст у content script активной вкладки. */
 function requestSelectionFromTab() {
   return new Promise((resolve, reject) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -180,6 +184,7 @@ async function translateSelection() {
   }
 }
 
+/** Сохраняет выделенный текст в словарь через capture-сценарий backend. */
 async function addToVocabulary() {
   const selectedText = selectedTextInput.value.trim();
   const sourceSentence = sourceSentenceInput.value.trim();

@@ -21,6 +21,8 @@ from app.modules.vocabulary.schemas.items_schemas import VocabularyItemCreate
 
 
 class VocabularyStudyFlowService:
+    """Сценарии добавления словаря с AI-переводом и контекстным определением."""
+
     _ENGLISH_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
     _RUSSIAN_TOKEN_RE = re.compile(r"[А-Яа-яЁё-]+")
     _GENERIC_TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'-]*")
@@ -28,6 +30,8 @@ class VocabularyStudyFlowService:
 
     @dataclass(frozen=True)
     class DefinitionResolution:
+        """Итог выбора источника контекстного определения."""
+
         context_definition: str
         source: str
         confidence: str
@@ -43,6 +47,8 @@ class VocabularyStudyFlowService:
         source_sentence: str | None,
         source_url: str | None,
     ) -> VocabularyItemDTO:
+        """Создает словарную запись, получая определение через reuse или AI."""
+
         application_access.get_user_or_404(db=db, user_id=user_id)
 
         normalized_lemma = english_lemma.strip().lower()
@@ -87,6 +93,8 @@ class VocabularyStudyFlowService:
         source_sentence: str | None,
         force_new_vocabulary_item: bool,
     ) -> VocabularyFromCaptureResultDTO:
+        """Сохраняет выделенный текст в словарь с учетом исходного контекста."""
+
         user = application_access.get_user_or_404(db=db, user_id=user_id)
         normalized_sentence = source_sentence.strip() if source_sentence else None
         normalized_url = source_url.strip() if source_url else None
@@ -253,6 +261,8 @@ class VocabularyStudyFlowService:
         russian_translation: str,
         source_sentence: str | None,
     ) -> DefinitionResolution | None:
+        """Находит лучшее сохраненное определение для той же леммы."""
+
         candidates = vocabulary_repository.list_definition_candidates(
             db,
             user_id=user_id,
@@ -291,6 +301,8 @@ class VocabularyStudyFlowService:
         source_sentence: str | None,
         cefr_level: str | None = None,
     ) -> DefinitionResolution:
+        """Переиспользует подходящее определение или генерирует новое через AI."""
+
         reusable = self._find_reusable_definition(
             db=db,
             user_id=user_id,
@@ -323,6 +335,8 @@ class VocabularyStudyFlowService:
         source_sentence: str | None,
         db: Session,
     ) -> tuple[str, str, str | None]:
+        """Получает перевод и контекст для capture-сценария."""
+
         if self._is_single_word_capture(selected_text):
             fast_translation = base_lexicon_public_api.lookup_translation(
                 db=db,

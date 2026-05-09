@@ -43,6 +43,8 @@ def _detect_simple_exercise_type(
     prompt: str | None,
     expected_answer: str | None,
 ) -> str | None:
+    """Определяет простые типы упражнений по явному типу или старому prompt."""
+
     normalized_type = _normalize_text_fragment(exercise_type)
     if normalized_type in {"word_scramble", "word_definition_match"}:
         return normalized_type
@@ -105,6 +107,8 @@ def _evaluate_simple_exercise(
     user_answer: str | None,
     exercise_type: str,
 ) -> tuple[bool, str | None]:
+    """Проверяет упражнения, которые не требуют семантической AI-оценки."""
+
     if exercise_type == "word_scramble":
         is_correct = _normalize_scramble_answer(expected_answer) == _normalize_scramble_answer(user_answer)
         explanation_ru = None if is_correct else "Слово собрано неверно."
@@ -157,6 +161,8 @@ def _extract_progress_word(
 
 @dataclass
 class EvaluatedAnswer:
+    """Ответ пользователя после проверки и подготовки к сохранению."""
+
     exercise_id: int
     exercise_type: str | None
     target_word: str | None
@@ -171,10 +177,14 @@ class EvaluatedAnswer:
 
 
 class LearningSessionSubmissionService:
+    """Сервис оценки ответов, обновления прогресса и сохранения сессии."""
+
     _STYLE_ADVICE_MIN_TOKENS = 6
     _STYLE_ADVICE_MAX_TOKENS = 24
 
     def _should_run_semantic_check(self, expected_answer: str | None, user_answer: str | None) -> bool:
+        """Решает, стоит ли подключать AI для проверки близкого ответа."""
+
         metrics = answer_similarity_metrics(expected_answer, user_answer)
         return (
             metrics["text_similarity"] >= 0.45
@@ -183,6 +193,8 @@ class LearningSessionSubmissionService:
         )
 
     def _should_add_style_advice(self, expected_answer: str | None, user_answer: str | None) -> bool:
+        """Решает, нужна ли стилистическая подсказка при правильном ответе."""
+
         metrics = answer_similarity_metrics(expected_answer, user_answer)
         normalized_expected = normalize_answer(expected_answer)
         normalized_user = normalize_answer(user_answer)
@@ -226,6 +238,8 @@ class LearningSessionSubmissionService:
         return list(deduped.values())
 
     async def evaluate_answers(self, answers: list[SessionAnswer]) -> list[EvaluatedAnswer]:
+        """Оценивает ответы параллельно с ограничением числа AI-запросов."""
+
         if not answers:
             return []
 
@@ -397,6 +411,8 @@ class LearningSessionSubmissionService:
         user_cefr_level: str | None,
         evaluated_answers: list[EvaluatedAnswer],
     ) -> None:
+        """Обновляет SRS-прогресс и регистрирует ошибки в learning graph."""
+
         progress_updates: list[WordProgressUpdate] = []
         for item in evaluated_answers:
             if item.progress_word:
@@ -431,6 +447,8 @@ class LearningSessionSubmissionService:
         user_id: int,
         evaluated_answers: list[EvaluatedAnswer],
     ):
+        """Сохраняет сессию и все ответы внутри текущей транзакции."""
+
         total = len(evaluated_answers)
         correct = sum(1 for item in evaluated_answers if item.is_correct)
         return learning_session_repository.create_with_answers(
@@ -463,6 +481,8 @@ class LearningSessionSubmissionService:
         user_cefr_level: str | None,
         answers: list[SessionAnswer],
     ) -> SessionSubmitResultDTO:
+        """Полный сценарий отправки учебной сессии."""
+
         normalized_answers = self._dedupe_answers(answers)
         evaluated_answers = await self.evaluate_answers(normalized_answers)
         incorrect_feedback, advice_feedback = self.collect_feedback(evaluated_answers)

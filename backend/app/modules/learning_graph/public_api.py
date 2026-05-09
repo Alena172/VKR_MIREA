@@ -17,6 +17,8 @@ __all__ = [
 
 
 class LearningGraphPublicApi:
+    """Публичный фасад learning_graph для vocabulary и learning."""
+
     register_mistake = staticmethod(learning_graph_application_service.register_mistake)
 
     @staticmethod
@@ -31,6 +33,8 @@ class LearningGraphPublicApi:
         source_url: str | None,
         vocabulary_item_id: int | None,
     ) -> RegisteredVocabularySenseDTO:
+        """Регистрирует смысл словарной записи без раскрытия внутреннего сервиса."""
+
         return learning_graph_application_service.register_vocabulary_semantics(
             db=db,
             user_id=user_id,
@@ -50,6 +54,8 @@ class LearningGraphPublicApi:
         english_lemma: str,
         limit: int,
     ) -> list[WordAnchorDTO]:
+        """Возвращает связанные слова как DTO для генерации упражнений."""
+
         items = learning_graph_application_service.list_word_anchors(
             db=db,
             user_id=user_id,
@@ -65,6 +71,8 @@ class LearningGraphPublicApi:
         user_id: int,
         vocabulary_item_id: int,
     ) -> int:
+        """Удаляет связи словарной записи при удалении vocabulary item."""
+
         return learning_graph_application_service.delete_vocabulary_links(
             db=db,
             user_id=user_id,

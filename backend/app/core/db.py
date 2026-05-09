@@ -7,6 +7,8 @@ from app.core.config import get_settings
 
 
 class Base(DeclarativeBase):
+    """Базовый класс для всех SQLAlchemy-моделей приложения."""
+
     pass
 
 
@@ -16,6 +18,8 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 
 def get_db() -> Generator[Session, None, None]:
+    """Создает DB-сессию для FastAPI-зависимостей и закрывает ее после запроса."""
+
     db = SessionLocal()
     try:
         yield db

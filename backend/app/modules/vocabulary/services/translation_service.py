@@ -13,7 +13,11 @@ from app.modules.vocabulary.items_public_api import vocabulary_public_api
 
 
 class TranslationApplicationService:
+    """Application-сервис перевода для ручного ввода и capture-сценариев."""
+
     def _build_translation_note(self, provider_note: str) -> str:
+        """Преобразует техническую заметку провайдера в читаемое описание."""
+
         normalized = provider_note.strip().lower()
         if normalized.startswith("local_heuristic"):
             return f"Local heuristic translation used ({provider_note})"
@@ -33,6 +37,8 @@ class TranslationApplicationService:
         text: str,
         source_context: str | None,
     ) -> TranslationResultDTO:
+        """Переводит текст с учетом уровня пользователя и локального глоссария."""
+
         user = users_public_api.get_or_404(db=db, user_id=user_id)
 
         cefr_level = user.cefr_level
@@ -68,6 +74,8 @@ class TranslationApplicationService:
         requested_user_id: int | None,
         current_user_id: int,
     ) -> int:
+        """Переиспользует общее правило доступа к user_id."""
+
         return application_access.resolve_target_user_id(
             requested_user_id=requested_user_id,
             current_user_id=current_user_id,

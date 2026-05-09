@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Настройки приложения, читаемые из `.env` и переменных окружения."""
+
     app_name: str = "VKR English Learning API"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/vkr_db"
     ai_provider: str = "stub"
@@ -28,15 +30,21 @@ class Settings(BaseSettings):
 
     @property
     def cors_allow_origins_list(self) -> list[str]:
+        """Преобразует CSV-строку CORS origin-ов в список для middleware."""
+
         values = [item.strip() for item in self.cors_allow_origins.split(",")]
         return [item for item in values if item]
 
     @property
     def trusted_hosts_list(self) -> list[str]:
+        """Преобразует CSV-строку доверенных хостов в список для middleware."""
+
         values = [item.strip() for item in self.trusted_hosts.split(",")]
         return [item for item in values if item]
 
 
 @lru_cache
 def get_settings() -> Settings:
+    """Возвращает кэшированный объект настроек приложения."""
+
     return Settings()

@@ -7,6 +7,8 @@ from app.core.db import Base
 
 
 class BaseLexiconEntryModel(Base):
+    """Локальная базовая пара `английская лемма -> русский перевод`."""
+
     __tablename__ = "base_lexicon_entries"
     __table_args__ = (
         UniqueConstraint("english_lemma", name="uq_base_lexicon_english_lemma"),

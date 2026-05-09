@@ -9,6 +9,8 @@ from app.modules.learning.models.review_models import WordProgressModel
 
 
 class ContextMemoryRepository:
+    """Низкоуровневые запросы и SRS-обновления для `word_progress`."""
+
     _SRS_STEPS_DAYS = [1, 3, 7, 14, 30, 60]
     _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
@@ -28,6 +30,8 @@ class ContextMemoryRepository:
         word: str,
         is_correct: bool,
     ) -> WordProgressModel | None:
+        """Обновляет счетчики и дату следующего повторения по SRS."""
+
         normalized = self._normalize_valid_word(word)
         if not normalized:
             return None
@@ -69,6 +73,8 @@ class ContextMemoryRepository:
         user_id: int,
         word: str,
     ) -> WordProgressModel | None:
+        """Создает запись прогресса для слова, если ее еще нет."""
+
         normalized = self._normalize_valid_word(word)
         if not normalized:
             return None
@@ -134,6 +140,8 @@ class ContextMemoryRepository:
         user_id: int,
         limit: int,
     ) -> list[WordProgressModel]:
+        """Возвращает слова, которые нужно повторить сейчас."""
+
         now = datetime.utcnow()
         query = (
             select(WordProgressModel)

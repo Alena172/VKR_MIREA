@@ -6,6 +6,8 @@ from app.core.config import get_settings
 
 
 class AuthService:
+    """Создает и проверяет JWT access-токены приложения."""
+
     def __init__(self) -> None:
         settings = get_settings()
         self._secret = settings.jwt_secret
@@ -14,6 +16,8 @@ class AuthService:
         self._algorithm = "HS256"
 
     def create_access_token(self, user_id: int) -> str:
+        """Выпускает JWT с user_id в поле `sub`."""
+
         now = datetime.now(timezone.utc)
         payload = {
             "sub": str(user_id),
@@ -24,6 +28,8 @@ class AuthService:
         return jwt.encode(payload, self._secret, algorithm=self._algorithm)
 
     def verify_token(self, token: str) -> int | None:
+        """Проверяет JWT и возвращает user_id или None при любой ошибке."""
+
         try:
             payload = jwt.decode(
                 token,

@@ -7,6 +7,8 @@ from app.core.db import Base
 
 
 class LearningSessionModel(Base):
+    """Сводка одной учебной сессии пользователя."""
+
     __tablename__ = "learning_sessions"
 
     id: Mapped[int] = mapped_column(
@@ -39,6 +41,8 @@ class LearningSessionModel(Base):
 
 
 class LearningSessionAnswerModel(Base):
+    """Один ответ пользователя внутри учебной сессии."""
+
     __tablename__ = "learning_session_answers"
     __table_args__ = (
         UniqueConstraint("session_id", "exercise_id", name="uq_learning_session_answers_session_exercise"),

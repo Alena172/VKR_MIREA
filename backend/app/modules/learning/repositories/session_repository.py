@@ -9,6 +9,8 @@ from app.modules.learning.models.session_models import LearningSessionAnswerMode
 
 @dataclass
 class AnswerPersistPayload:
+    """Данные ответа, подготовленные к сохранению в БД."""
+
     exercise_id: int
     exercise_type: str | None
     target_word: str | None
@@ -20,6 +22,8 @@ class AnswerPersistPayload:
 
 
 class LearningSessionRepository:
+    """Запросы к учебным сессиям и ответам пользователя."""
+
     def _apply_session_filters(
         self,
         query: Select,
@@ -30,6 +34,8 @@ class LearningSessionRepository:
         created_from: datetime | None = None,
         created_to: datetime | None = None,
     ) -> Select:
+        """Применяет общие фильтры истории сессий к SQLAlchemy-запросу."""
+
         if user_id is not None:
             query = query.where(LearningSessionModel.user_id == user_id)
         if min_accuracy is not None:
@@ -125,6 +131,8 @@ class LearningSessionRepository:
         *,
         auto_commit: bool = True,
     ) -> LearningSessionModel:
+        """Создает сессию и сохраняет все ответы одним блоком."""
+
         session_row = LearningSessionModel(
             user_id=user_id,
             total=total,
@@ -163,6 +171,8 @@ class LearningSessionRepository:
         limit: int = 20,
         unique: bool = True,
     ) -> list[str]:
+        """Возвращает последние слова, по которым пользователь ошибался."""
+
         query = (
             select(
                 LearningSessionAnswerModel.target_word,

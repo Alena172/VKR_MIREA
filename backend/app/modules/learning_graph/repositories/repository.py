@@ -20,6 +20,8 @@ from app.modules.learning_graph.schemas.schemas import InterestItem, InterestWor
 
 @dataclass
 class SemanticUpsertResult:
+    """Результат создания или переиспользования смысла слова."""
+
     sense: WordSenseModel
     created_new: bool
     duplicate_of_id: int | None
@@ -28,20 +30,22 @@ class SemanticUpsertResult:
 
 @dataclass(frozen=True)
 class TopicInference:
+    """Результат простого определения темы по контексту и лемме."""
+
     key: str
     display_name: str
     confidence: float
 
 
 class LearningGraphRepository:
-    """Small personal learning graph around interests and word senses.
+    """Персональный learning graph вокруг интересов и смыслов слов.
 
-    The graph deliberately stays modest:
-    - infer a user's interests from saved vocabulary contexts;
-    - keep separate senses for polysemous words;
-    - expose related senses as lightweight anchors.
+    Граф намеренно остается компактным:
+    - выводит интересы пользователя из сохраненного словаря;
+    - хранит разные смыслы многозначных слов;
+    - отдает связанные смыслы как легкие semantic anchors.
 
-    SRS and error scheduling remain owned by the learning/review module.
+    SRS и расписание повторений остаются ответственностью learning/review.
     """
 
     _WORD_RE = re.compile(r"[^a-z]+")
@@ -332,6 +336,8 @@ class LearningGraphRepository:
         topic_hint: str | None = None,
         vocabulary_item_id: int | None = None,
     ) -> SemanticUpsertResult:
+        """Создает смысл слова или переиспользует существующий semantic key."""
+
         lemma = self._normalize_lemma(english_lemma)
         translation = (russian_translation or "").strip()
         if not lemma or not translation:
@@ -476,6 +482,8 @@ class LearningGraphRepository:
         limit: int,
         known_lemmas: set[str] | None = None,
     ) -> list[InterestWordItem]:
+        """Возвращает лучшие слова, связанные с текущим профилем интересов."""
+
         interests = {
             row.interest_key: row.weight
             for row in db.scalars(select(UserInterestModel).where(UserInterestModel.user_id == user_id))
@@ -518,6 +526,8 @@ class LearningGraphRepository:
         return items[:limit]
 
     def list_anchors(self, db: Session, *, user_id: int, english_lemma: str, limit: int) -> list[SenseAnchorItem]:
+        """Возвращает semantic anchors для леммы пользователя."""
+
         lemma = self._normalize_lemma(english_lemma)
         if not lemma:
             return []

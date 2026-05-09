@@ -10,6 +10,7 @@ function wait(ms) {
   });
 }
 
+/** Управляет review-экраном: планом, карточками и отправкой SRS-ответов. */
 export function useReviewSession({ onError }) {
   const [plan, setPlan] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -27,6 +28,7 @@ export function useReviewSession({ onError }) {
   const [sessionMessage, setSessionMessage] = useState("");
   const { abortAllRequests, registerController, releaseController } = useAbortControllers();
 
+  /** Загружает сводку, план и semantic anchors для обзорных блоков. */
   async function loadReviewMeta() {
     const controller = registerController();
     try {
@@ -106,6 +108,7 @@ export function useReviewSession({ onError }) {
     }
   }
 
+  /** Отправляет результат карточки и синхронизирует анимацию переворота. */
   async function submitAnswer(isCorrect) {
     if (!currentItem || submitting) {
       return;

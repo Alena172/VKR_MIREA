@@ -6,6 +6,8 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class UserDTO:
+    """Публичное представление пользователя для межмодульного обмена."""
+
     id: int
     email: str
     full_name: str | None
@@ -15,5 +17,7 @@ class UserDTO:
 
 @dataclass(frozen=True)
 class FindOrCreateUserDTO:
+    """Результат сценария входа или регистрации пользователя."""
+
     user: UserDTO
     is_new_user: bool

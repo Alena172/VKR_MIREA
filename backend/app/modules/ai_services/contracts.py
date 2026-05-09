@@ -2,22 +2,30 @@ from pydantic import BaseModel, Field
 
 
 class ExplainErrorRequest(BaseModel):
+    """Запрос объяснения ошибки пользователя в упражнении."""
+
     english_prompt: str = Field(min_length=1, max_length=2000)
     user_answer: str = Field(min_length=1, max_length=1000)
     expected_answer: str = Field(min_length=1, max_length=1000)
 
 
 class ExplainErrorResponse(BaseModel):
+    """Пояснение ошибки на русском языке."""
+
     explanation_ru: str
 
 
 class TranslateGlossaryItem(BaseModel):
+    """Подсказка перевода для термина, уже известного системе."""
+
     english_term: str = Field(min_length=1, max_length=200)
     russian_translation: str = Field(min_length=1, max_length=200)
     source_sentence: str | None = Field(default=None, max_length=2000)
 
 
 class TranslateWithContextRequest(BaseModel):
+    """Запрос перевода текста с учетом уровня и контекста."""
+
     text: str = Field(min_length=1, max_length=5000)
     cefr_level: str | None = Field(default=None, pattern="^(A1|A2|B1|B2|C1|C2)$")
     source_context: str | None = Field(default=None, max_length=10000)
@@ -25,11 +33,15 @@ class TranslateWithContextRequest(BaseModel):
 
 
 class TranslateWithContextResponse(BaseModel):
+    """Ответ перевода и заметка о провайдере или fallback-сценарии."""
+
     translated_text: str
     provider_note: str
 
 
 class ExerciseSeed(BaseModel):
+    """Исходные данные словарной записи для генерации упражнения."""
+
     english_lemma: str = Field(min_length=1, max_length=200)
     russian_translation: str = Field(min_length=1, max_length=200)
     context_definition_ru: str | None = Field(default=None, max_length=4000)
@@ -37,6 +49,8 @@ class ExerciseSeed(BaseModel):
 
 
 class GenerateExercisesRequest(BaseModel):
+    """Запрос генерации упражнений по набору seed-слов."""
+
     size: int = Field(ge=1, le=30)
     cefr_level: str | None = Field(default=None, pattern="^(A1|A2|B1|B2|C1|C2)$")
     fast_start: bool = False
@@ -48,6 +62,8 @@ class GenerateExercisesRequest(BaseModel):
 
 
 class GeneratedExerciseItem(BaseModel):
+    """Одно упражнение, сгенерированное AI-сервисом."""
+
     prompt: str
     answer: str
     exercise_type: str
@@ -56,11 +72,15 @@ class GeneratedExerciseItem(BaseModel):
 
 
 class GenerateExercisesResponse(BaseModel):
+    """Ответ генератора упражнений."""
+
     exercises: list[GeneratedExerciseItem]
     provider_note: str
 
 
 class AIStatusResponse(BaseModel):
+    """Текущая конфигурация AI-провайдера для диагностики."""
+
     provider: str
     model: str
     remote_enabled: bool

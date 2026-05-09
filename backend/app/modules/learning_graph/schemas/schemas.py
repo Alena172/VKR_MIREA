@@ -2,11 +2,15 @@ from pydantic import BaseModel, Field
 
 
 class InterestItem(BaseModel):
+    """Один интерес пользователя в HTTP API."""
+
     interest: str = Field(min_length=1, max_length=120)
     weight: float = Field(default=1.0, ge=0.1, le=10.0)
 
 
 class InterestUpsertRequest(BaseModel):
+    """Запрос ручного обновления интересов пользователя."""
+
     interests: list[InterestItem] = Field(default_factory=list, max_length=30)
 
 
@@ -16,6 +20,8 @@ class UserInterestsResponse(BaseModel):
 
 
 class SemanticUpsertRequest(BaseModel):
+    """Запрос регистрации смысла слова в learning graph."""
+
     english_lemma: str = Field(min_length=1, max_length=200)
     russian_translation: str = Field(min_length=1, max_length=200)
     context_definition_ru: str | None = Field(default=None, max_length=3000)
@@ -26,6 +32,8 @@ class SemanticUpsertRequest(BaseModel):
 
 
 class WordSenseRead(BaseModel):
+    """Смысл слова в HTTP-ответах."""
+
     id: int
     english_lemma: str
     semantic_key: str
@@ -39,6 +47,8 @@ class SemanticUpsertResponse(BaseModel):
 
 
 class InterestWordItem(BaseModel):
+    """Слово, связанное с интересами пользователя."""
+
     english_lemma: str
     russian_translation: str
     score: float
@@ -53,6 +63,8 @@ class InterestWordsResponse(BaseModel):
 
 
 class SenseAnchorItem(BaseModel):
+    """Связанное слово и тип семантической связи."""
+
     english_lemma: str
     russian_translation: str
     relation_type: str

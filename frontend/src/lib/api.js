@@ -1,14 +1,17 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const AUTH_TOKEN_KEY = "vkr_auth_token";
 
+/** Сохраняет JWT, который будет автоматически добавляться к API-запросам. */
 export function setAuthToken(token) {
   localStorage.setItem(AUTH_TOKEN_KEY, token);
 }
 
+/** Удаляет JWT из локального хранилища. */
 export function clearAuthToken() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
+/** Отличает отмененный fetch от настоящей ошибки запроса. */
 export function isAbortError(error) {
   return error?.name === "AbortError";
 }
@@ -72,6 +75,7 @@ function createApiError({ status, detail = "", raw = null }) {
   return error;
 }
 
+/** Возвращает текст ошибки, который можно безопасно показать пользователю. */
 export function getErrorMessage(error) {
   if (!error) {
     return "Произошла неизвестная ошибка.";
@@ -99,6 +103,7 @@ function sleep(ms, signal) {
   });
 }
 
+/** Единая обертка над fetch: авторизация, JSON-ошибки и user-friendly message. */
 async function request(path, options = {}) {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   let response;
@@ -178,6 +183,7 @@ export async function pollTask(
     signal,
   } = {},
 ) {
+  // Фоновые задачи могут занять время, поэтому интервал опроса постепенно растет.
   let currentIntervalMs = intervalMs;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -215,6 +221,7 @@ export async function pollTask(
 }
 
 export const api = {
+  // Тонкий клиент backend API. Компоненты работают с методами, а не с URL строками.
   getUsers: (options = {}) => request("/users", options),
   createUser: (payload, options = {}) => request("/users", { method: "POST", body: JSON.stringify(payload), ...options }),
   authToken: (payload, options = {}) => request("/auth/token", { method: "POST", body: JSON.stringify(payload), ...options }),

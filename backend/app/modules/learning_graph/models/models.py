@@ -7,6 +7,8 @@ from app.core.db import Base
 
 
 class UserInterestModel(Base):
+    """Интерес пользователя, выведенный из словаря и контекстов."""
+
     __tablename__ = "user_interests"
     __table_args__ = (UniqueConstraint("user_id", "interest_key", name="uq_user_interest_key"),)
 
@@ -42,6 +44,8 @@ class UserInterestModel(Base):
 
 
 class TopicClusterModel(Base):
+    """Тематический кластер, к которому могут относиться смыслы слов."""
+
     __tablename__ = "topic_clusters"
     __table_args__ = (UniqueConstraint("user_id", "cluster_key", name="uq_topic_cluster_user_key"),)
 
@@ -72,6 +76,8 @@ class TopicClusterModel(Base):
 
 
 class WordSenseModel(Base):
+    """Конкретный смысл леммы в контексте пользователя."""
+
     __tablename__ = "word_senses"
     __table_args__ = (UniqueConstraint("user_id", "english_lemma", "semantic_key", name="uq_word_sense_user_lemma_key"),)
 
@@ -124,6 +130,8 @@ class WordSenseModel(Base):
 
 
 class VocabularySenseLinkModel(Base):
+    """Связь словарной записи с выбранным смыслом слова."""
+
     __tablename__ = "vocabulary_sense_links"
     __table_args__ = (UniqueConstraint("user_id", "vocabulary_item_id", name="uq_vocab_sense_link_user_vocab"),)
 
@@ -155,6 +163,8 @@ class VocabularySenseLinkModel(Base):
 
 
 class SenseRelationModel(Base):
+    """Смысловая связь между двумя `WordSense` пользователя."""
+
     __tablename__ = "sense_relations"
     __table_args__ = (
         UniqueConstraint("user_id", "left_sense_id", "right_sense_id", name="uq_sense_relation_pair"),
@@ -198,6 +208,8 @@ class SenseRelationModel(Base):
 
 
 class SenseErrorEventModel(Base):
+    """Событие ошибки, привязанное к слову или конкретному смыслу."""
+
     __tablename__ = "sense_error_events"
 
     id: Mapped[int] = mapped_column(

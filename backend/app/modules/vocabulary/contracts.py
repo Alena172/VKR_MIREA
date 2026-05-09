@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class VocabularyItemDTO:
+    """Словарная запись, которую vocabulary отдает наружу."""
+
     id: int
     user_id: int
     english_lemma: str
@@ -19,10 +21,14 @@ class VocabularyItemDTO:
 
 @dataclass(frozen=True)
 class VocabularyFromCaptureResultDTO:
+    """Результат сохранения слова из выделенного текста или контекста."""
+
     vocabulary: VocabularyItemDTO
 
 
 @dataclass(frozen=True)
 class TranslationResultDTO:
+    """Результат перевода вместе с технической заметкой об источнике."""
+
     translated_text: str
     note: str

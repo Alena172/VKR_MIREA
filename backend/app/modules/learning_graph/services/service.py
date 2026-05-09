@@ -27,12 +27,16 @@ from app.modules.learning_graph.schemas.schemas import (
 
 
 class LearningGraphApplicationService:
+    """Application-сервис семантического профиля, интересов и смыслов слов."""
+
     def list_interests(
         self,
         *,
         db: Session,
         current_user_id: int,
     ) -> UserInterestsDTO:
+        """Возвращает интересы текущего пользователя."""
+
         application_access.get_user_or_404(db=db, user_id=current_user_id)
         return to_user_interests_dto(
             user_id=current_user_id,
@@ -61,6 +65,8 @@ class LearningGraphApplicationService:
         payload: SemanticUpsertRequest,
         current_user_id: int,
     ) -> SemanticUpsertResultDTO:
+        """Создает или переиспользует смысл слова в семантическом графе."""
+
         application_access.get_user_or_404(db=db, user_id=current_user_id)
 
         try:
@@ -89,6 +95,8 @@ class LearningGraphApplicationService:
         limit: int,
         current_user_id: int,
     ) -> InterestWordsDTO:
+        """Возвращает слова, связанные с интересами пользователя."""
+
         application_access.get_user_or_404(db=db, user_id=current_user_id)
         known_lemmas = {
             item.word
@@ -121,6 +129,8 @@ class LearningGraphApplicationService:
         source_url: str | None,
         vocabulary_item_id: int | None,
     ) -> RegisteredVocabularySenseDTO:
+        """Привязывает словарную запись к смыслу после сохранения vocabulary item."""
+
         result = learning_graph_repository.semantic_upsert(
             db,
             user_id=user_id,
@@ -143,6 +153,8 @@ class LearningGraphApplicationService:
         expected_answer: str | None,
         user_answer: str | None,
     ) -> None:
+        """Сохраняет событие ошибки для последующего анализа смыслов."""
+
         learning_graph_repository.add_sense_error_event(
             db,
             user_id=user_id,
@@ -160,6 +172,8 @@ class LearningGraphApplicationService:
         english_lemma: str,
         limit: int,
     ):
+        """Возвращает связанные слова для подсказок при генерации упражнений."""
+
         return learning_graph_repository.list_anchors(
             db,
             user_id=user_id,

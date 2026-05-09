@@ -51,12 +51,16 @@ _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
 
 def _is_valid_review_word(value: str | None) -> bool:
+    """Проверяет, что слово подходит для SRS-учета."""
+
     if not value:
         return False
     return bool(_WORD_RE.fullmatch(value.strip().lower()))
 
 
 def _dedupe_keep_order(values: list[str]) -> list[str]:
+    """Удаляет дубли, сохраняя исходный порядок."""
+
     seen: set[str] = set()
     result: list[str] = []
     for value in values:
@@ -69,7 +73,11 @@ def _dedupe_keep_order(values: list[str]) -> list[str]:
 
 
 class ContextMemoryApplicationService:
+    """Application-сервис SRS, очереди повторения и прогресса слов."""
+
     def ensure_user_access(self, *, db: Session, user_id: int, current_user_id: int):
+        """Проверяет, что пользователь работает только со своими данными."""
+
         if user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Forbidden")
         user = users_public_api.get_by_id(db, user_id)
@@ -85,6 +93,8 @@ class ContextMemoryApplicationService:
         current_user_id: int,
         limit: int,
     ) -> ReviewQueueResponseDTO:
+        """Возвращает слова, срок повторения которых уже наступил."""
+
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
         due_progress = context_repository.list_due_word_progress(db, user_id=user_id, limit=limit * 5)
         total_due_raw = context_repository.count_due_word_progress(db, user_id=user_id)
@@ -105,6 +115,8 @@ class ContextMemoryApplicationService:
         current_user_id: int,
         payload: ReviewQueueSubmitRequest,
     ) -> WordProgressDTO:
+        """Обновляет прогресс одного слова после ответа в очереди повторения."""
+
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
 
         normalized_word = payload.word.strip().lower()
@@ -130,6 +142,8 @@ class ContextMemoryApplicationService:
         current_user_id: int,
         payload: ReviewQueueBulkSubmitRequest,
     ) -> ReviewQueueBulkSubmitDTO:
+        """Обновляет прогресс сразу по нескольким словам."""
+
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
 
         if not payload.items:
@@ -164,6 +178,8 @@ class ContextMemoryApplicationService:
         current_user_id: int,
         payload: ReviewSessionStartRequest,
     ) -> ReviewSessionStartDTO:
+        """Создает набор карточек для review-сессии."""
+
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
 
         if payload.mode == "srs":
@@ -258,6 +274,8 @@ class ContextMemoryApplicationService:
         limit: int,
         horizon_hours: int,
     ) -> ReviewPlanDTO:
+        """Строит план повторения на сейчас и ближайший горизонт."""
+
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
 
         due_progress = context_repository.list_due_word_progress(db, user_id=user_id, limit=limit)
@@ -303,6 +321,8 @@ class ContextMemoryApplicationService:
         min_streak: int,
         min_errors: int,
     ) -> ReviewSummaryDTO:
+        """Возвращает агрегированную сводку прогресса повторения."""
+
         self.ensure_user_access(db=db, user_id=user_id, current_user_id=current_user_id)
         counters = review_query_service.build_review_summary_counters(
             db=db,

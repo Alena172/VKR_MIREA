@@ -20,6 +20,8 @@ from app.modules.vocabulary.items_public_api import vocabulary_public_api
 
 
 class ExerciseEngineApplicationService:
+    """Application-сервис генерации упражнений по словарю пользователя."""
+
     _PREFETCH_EXTRA = 5
     _BATCH_SIZE = 5
 
@@ -30,6 +32,8 @@ class ExerciseEngineApplicationService:
         payload: ExerciseGenerateRequest,
         current_user_id: int,
     ) -> AsyncTaskResponse:
+        """Ставит генерацию упражнений в фоновую очередь."""
+
         target_user_id = application_access.resolve_target_user_id(
             requested_user_id=payload.user_id,
             current_user_id=current_user_id,
@@ -63,6 +67,8 @@ class ExerciseEngineApplicationService:
         fast_start: bool = False,
         incremental: bool = False,
     ) -> ExerciseGenerateResultDTO:
+        """Генерирует упражнения сразу, используя prefetch и semantic anchors."""
+
         user = application_access.get_user_or_404(db=db, user_id=user_id)
         use_prefetch = not vocabulary_ids
 
@@ -121,6 +127,8 @@ class ExerciseEngineApplicationService:
         vocabulary_ids: list[int],
         mode: str,
     ):
+        """Выбирает подходящие словарные элементы для выбранного режима."""
+
         vocabulary_items = vocabulary_public_api.list_items(db, user_id=user_id)
         if vocabulary_ids:
             allowed = set(vocabulary_ids)
@@ -156,6 +164,8 @@ class ExerciseEngineApplicationService:
         user_id: int,
         vocabulary_items,
     ) -> tuple[list[ExerciseSeed], int]:
+        """Строит seed-данные для AI и добавляет смысловые подсказки."""
+
         anchors_used_count = 0
         seeds: list[ExerciseSeed] = []
         for item in vocabulary_items:
@@ -197,6 +207,8 @@ class ExerciseEngineApplicationService:
         cefr_level: str,
         fast_start: bool = False,
     ) -> tuple[list[ExerciseItemDTO], str]:
+        """Генерирует упражнения одним запросом или батчами."""
+
         if size > self._BATCH_SIZE and len(seeds) >= self._BATCH_SIZE:
             batches = []
             remaining = size

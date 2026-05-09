@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 class ReviewQueueItem(BaseModel):
+    """Одно слово в очереди повторения."""
+
     word: str
     russian_translation: str | None = None
     next_review_at: datetime
@@ -13,12 +15,16 @@ class ReviewQueueItem(BaseModel):
 
 
 class ReviewQueueResponse(BaseModel):
+    """Очередь слов, которые пора повторять."""
+
     user_id: int
     total_due: int
     items: list[ReviewQueueItem]
 
 
 class ReviewQueueSubmitRequest(BaseModel):
+    """Результат повторения одного слова."""
+
     word: str = Field(min_length=1, max_length=200)
     is_correct: bool
 
@@ -29,10 +35,14 @@ class ReviewQueueBulkSubmitItem(BaseModel):
 
 
 class ReviewQueueBulkSubmitRequest(BaseModel):
+    """Пакет результатов повторения нескольких слов."""
+
     items: list[ReviewQueueBulkSubmitItem] = Field(default_factory=list, max_length=200)
 
 
 class WordProgressRead(BaseModel):
+    """Состояние SRS-прогресса одного слова."""
+
     user_id: int
     word: str
     russian_translation: str | None = None
@@ -56,6 +66,8 @@ class ReviewQueueBulkSubmitResponse(BaseModel):
 
 
 class ReviewPlanResponse(BaseModel):
+    """План повторения на сейчас и ближайшее время."""
+
     user_id: int
     due_count: int
     upcoming_count: int
@@ -65,11 +77,15 @@ class ReviewPlanResponse(BaseModel):
 
 
 class ReviewSessionStartRequest(BaseModel):
+    """Запрос старта короткой review-сессии."""
+
     mode: Literal["srs", "random"] = "srs"
     size: int = Field(default=20, ge=1, le=200)
 
 
 class ReviewSessionItem(BaseModel):
+    """Карточка слова внутри review-сессии."""
+
     word: str
     russian_translation: str | None = None
     context_definition: str | None = None
@@ -93,12 +109,16 @@ class WordProgressDeleteResponse(BaseModel):
 
 
 class ProgressSnapshot(BaseModel):
+    """Краткая статистика учебного прогресса."""
+
     user_id: int | None = None
     total_sessions: int
     avg_accuracy: float
 
 
 class ReviewSummary(BaseModel):
+    """Агрегированная сводка SRS-состояния."""
+
     user_id: int
     total_tracked: int
     due_now: int

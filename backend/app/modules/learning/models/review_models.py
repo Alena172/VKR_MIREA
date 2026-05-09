@@ -7,6 +7,8 @@ from app.core.db import Base
 
 
 class WordProgressModel(Base):
+    """SRS-состояние одного слова пользователя."""
+
     __tablename__ = "word_progress"
     __table_args__ = (UniqueConstraint("user_id", "word", name="uq_word_progress_user_word"),)
 

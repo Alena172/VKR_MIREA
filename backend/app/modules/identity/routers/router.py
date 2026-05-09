@@ -24,6 +24,8 @@ router = APIRouter()
 
 @router.post("/auth/token", response_model=TokenResponse)
 def token(payload: TokenRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    """Выдает JWT для существующего пользователя по email."""
+
     user = users_public_api.get_by_email(db, payload.email)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -36,6 +38,8 @@ def login_or_register(
     payload: LoginOrRegisterRequest,
     db: Session = Depends(get_db),
 ) -> LoginOrRegisterResponse:
+    """Находит пользователя по email или создает нового и возвращает JWT."""
+
     result = users_public_api.find_or_create(
         db=db,
         email=payload.email,
@@ -53,27 +57,37 @@ def login_or_register(
 
 @router.post("/auth/verify", response_model=TokenVerifyResponse)
 def verify(payload: TokenVerifyRequest) -> TokenVerifyResponse:
+    """Проверяет JWT без обращения к защищенному endpoint."""
+
     user_id = auth_service.verify_token(payload.token)
     return TokenVerifyResponse(valid=user_id is not None, user_id=user_id)
 
 
 @router.get("/auth/me", response_model=TokenIdentityResponse)
 def me(user_id: int = Depends(get_current_user_id)) -> TokenIdentityResponse:
+    """Возвращает id текущего пользователя из bearer-токена."""
+
     return TokenIdentityResponse(user_id=user_id)
 
 
 @router.get("/auth/ping")
 def ping() -> dict[str, str]:
+    """Проверяет доступность identity-модуля."""
+
     return {"module": "auth", "status": "ok"}
 
 
 @router.get("/users", response_model=list[UserRead])
 def list_users(db: Session = Depends(get_db)) -> list[UserRead]:
+    """Возвращает список пользователей для служебных сценариев."""
+
     return users_repository.list_users(db)
 
 
 @router.get("/users/{user_id}", response_model=UserRead)
 def get_user(user_id: int, db: Session = Depends(get_db)) -> UserRead:
+    """Возвращает пользователя по id или 404."""
+
     user = users_repository.get_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -82,6 +96,8 @@ def get_user(user_id: int, db: Session = Depends(get_db)) -> UserRead:
 
 @router.post("/users", response_model=UserRead)
 def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> UserRead:
+    """Создает пользователя и возвращает 409 при повторе email."""
+
     try:
         return users_repository.create(db, payload)
     except IntegrityError:

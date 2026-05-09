@@ -33,15 +33,21 @@ except ModuleNotFoundError:
 
 @dataclass
 class LocalTaskResult:
+    """Минимальный результат задачи для локального fallback-режима."""
+
     id: str
 
 
 class LocalTaskContext:
+    """Контекст задачи, имитирующий нужную часть Celery API."""
+
     def retry(self, *, exc: Exception, **_: Any) -> None:
         raise exc
 
 
 class LocalTaskWrapper:
+    """Обертка, которая позволяет запускать задачи без настоящего Celery worker."""
+
     def __init__(self, fn, *, bind: bool) -> None:
         self._fn = fn
         self._bind = bind
@@ -73,6 +79,8 @@ class LocalTaskWrapper:
 
 
 class LocalCeleryApp:
+    """Маленькая замена Celery для тестов и локального режима без брокера."""
+
     def task(self, *decorator_args: Any, **decorator_kwargs: Any):
         bind = bool(decorator_kwargs.get("bind", False))
 
@@ -136,11 +144,15 @@ def _get_local_task_owner(task_id: str) -> int | None:
 
 
 class TaskOwnershipRegistry:
+    """Хранит связь task_id с пользователем, который поставил задачу."""
+
     def __init__(self) -> None:
         self._redis_client: Redis | None = None
         self._redis_checked = False
 
     def _get_redis_client(self) -> Redis | None:
+        """Лениво создает Redis-клиент и отключает Redis при ошибке подключения."""
+
         if self._redis_checked:
             return self._redis_client
         self._redis_checked = True
@@ -154,6 +166,8 @@ class TaskOwnershipRegistry:
         return self._redis_client
 
     def register(self, *, task_id: str, owner_user_id: int) -> None:
+        """Регистрирует владельца задачи в Redis или локальной памяти."""
+
         redis_client = self._get_redis_client()
         if redis_client is not None:
             try:
@@ -168,6 +182,8 @@ class TaskOwnershipRegistry:
         _register_local_task_owner(task_id, owner_user_id)
 
     def get_owner_user_id(self, task_id: str) -> int | None:
+        """Возвращает владельца задачи, если запись еще не истекла."""
+
         redis_client = self._get_redis_client()
         if redis_client is not None:
             try:
@@ -183,12 +199,16 @@ task_ownership_registry = TaskOwnershipRegistry()
 
 
 def enqueue_task(task: Any, *, owner_user_id: int, kwargs: dict[str, Any]) -> Any:
+    """Ставит задачу в очередь и запоминает, кто имеет право читать результат."""
+
     async_result = task.apply_async(kwargs=kwargs)
     task_ownership_registry.register(task_id=async_result.id, owner_user_id=owner_user_id)
     return async_result
 
 
 def create_celery():
+    """Создает Celery-приложение или локальный fallback при отсутствии Celery."""
+
     if not CELERY_AVAILABLE:
         return LocalCeleryApp()
 

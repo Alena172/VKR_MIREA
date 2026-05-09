@@ -5,12 +5,16 @@ from app.modules.vocabulary.models.base_lexicon_models import BaseLexiconEntryMo
 
 
 class BaseLexiconRepository:
+    """Запросы к локальному базовому лексикону."""
+
     def get_by_lemma(
         self,
         db: Session,
         *,
         english_lemma: str,
     ) -> BaseLexiconEntryModel | None:
+        """Возвращает перевод для нормализованной английской леммы."""
+
         normalized = english_lemma.strip().lower()
         if not normalized:
             return None
@@ -21,6 +25,8 @@ class BaseLexiconRepository:
         )
 
     def count_entries(self, db: Session) -> int:
+        """Считает количество записей в базовом лексиконе."""
+
         return int(db.scalar(select(func.count(BaseLexiconEntryModel.id))) or 0)
 
     def seed_defaults(
@@ -29,6 +35,8 @@ class BaseLexiconRepository:
         *,
         entries: list[tuple[str, str]],
     ) -> int:
+        """Добавляет seed-записи, которых еще нет в базе."""
+
         created = 0
         for english_lemma, russian_translation in entries:
             normalized = (english_lemma or "").strip().lower()
@@ -54,6 +62,8 @@ class BaseLexiconRepository:
         *,
         entries: list[tuple[str, str]],
     ) -> int:
+        """Создает или обновляет пары лемма-перевод при импорте."""
+
         updated = 0
         for english_lemma, russian_translation in entries:
             normalized = (english_lemma or "").strip().lower()

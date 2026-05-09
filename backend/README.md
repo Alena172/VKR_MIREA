@@ -19,9 +19,7 @@
 
 ```bash
 cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e .
+uv sync
 ```
 
 ### 2. Файл окружения
@@ -29,7 +27,7 @@ pip install -e .
 Создай `.env` в папке `backend/`:
 
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/vkr_db
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/vkr_db?connect_timeout=5
 AI_PROVIDER=stub
 AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=
@@ -55,17 +53,21 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/1
 docker compose up -d postgres redis
 ```
 
+Перед миграциями убедись, что запущен Docker Desktop и Postgres слушает
+`localhost:15432`. Если Docker daemon не запущен, `uv run alembic upgrade head`
+не сможет подключиться к базе.
+
 ### 4. Применить миграции
 
 ```bash
 cd backend
-alembic upgrade head
+uv run alembic upgrade head
 ```
 
 ### 5. Запустить API
 
 ```bash
-uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
 
 Серверная часть будет доступна по адресу `http://localhost:8000`.
@@ -211,7 +213,7 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 ### Проверка границ модулей
 
 ```bash
-python tools/check_module_boundaries.py
+uv run python tools/check_module_boundaries.py
 ```
 
 Эта проверка подтверждает, что:
@@ -222,7 +224,7 @@ python tools/check_module_boundaries.py
 ### Тесты
 
 ```bash
-pytest -q
+uv run pytest -q
 ```
 
 Текущий тестовый контур в основном интеграционный и использует SQLite in-memory.
@@ -234,7 +236,7 @@ pytest -q
 Импорт:
 
 ```bash
-python tools/import_base_lexicon.py data/base_lexicon.seed.json
+uv run python tools/import_base_lexicon.py data/base_lexicon.seed.json
 ```
 
 ## Дополнительные материалы

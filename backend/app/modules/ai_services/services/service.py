@@ -20,14 +20,16 @@ from app.modules.ai_services.providers.translation_service import TranslationSer
 
 
 class TranslationProviderUnavailableError(RuntimeError):
+    """Ошибка, когда выбранный удаленный AI-провайдер недоступен."""
+
     pass
 
 
 class AIService:
-    """AI facade.
+    """Фасад AI-сценариев проекта.
 
-    Current implementation is deterministic and local.
-    Keep public methods stable for future LLM provider integration.
+    Публичные методы стабилизируют контракт для доменных модулей, а детали
+    провайдера, fallback-логика и синхронные/асинхронные вызовы остаются внутри.
     """
 
     def __init__(self) -> None:
@@ -110,6 +112,8 @@ class AIService:
         )
 
     def get_status(self) -> AIStatusResponse:
+        """Возвращает диагностический статус AI-провайдера."""
+
         return AIStatusResponse(
             provider=self._provider,
             model=self._model,
@@ -139,6 +143,8 @@ class AIService:
         return self._run_sync(self.explain_error_async(payload))
 
     async def explain_error_async(self, payload: ExplainErrorRequest) -> ExplainErrorResponse:
+        """Объясняет ошибку пользователя или возвращает локальный fallback."""
+
         content = await self._chat_completion_async(
             system_prompt=(
                 "Ты преподаватель английского для русскоязычных пользователей. "
@@ -161,6 +167,8 @@ class AIService:
         return self._run_sync(self.suggest_improvement_async(payload))
 
     async def suggest_improvement_async(self, payload: ExplainErrorRequest) -> ExplainErrorResponse:
+        """Дает мягкую стилистическую рекомендацию для засчитанного ответа."""
+
         content = await self._chat_completion_async(
             system_prompt=(
                 "Ты преподаватель английского для русскоязычных пользователей. "
@@ -202,6 +210,8 @@ class AIService:
         expected_answer: str,
         user_answer: str,
     ) -> bool:
+        """Проверяет, передает ли пользовательский перевод тот же смысл."""
+
         content = await self._chat_completion_async(
             system_prompt=(
                 "Ты проверяешь переводы с английского на русский. "
@@ -355,6 +365,8 @@ class AIService:
         source_sentence: str | None,
         cefr_level: str | None = None,
     ) -> str:
+        """Генерирует английское определение конкретного смысла слова."""
+
         content = await self._chat_completion_async(
             system_prompt=(
                 "You are an English lexicography assistant. "
@@ -396,6 +408,8 @@ class AIService:
         self,
         payload: TranslateWithContextRequest,
     ) -> TranslateWithContextResponse:
+        """Переводит текст через translation provider с учетом контекста."""
+
         return await self._translation_service.translate_with_context_async(payload)
 
     def fast_translate_single_word(
@@ -446,6 +460,8 @@ class AIService:
         self,
         payload: GenerateExercisesRequest,
     ) -> GenerateExercisesResponse:
+        """Генерирует упражнения по seed-словам."""
+
         return await self._exercise_generator.generate_exercises_async(payload)
 
     async def generate_exercises_batch(

@@ -5,6 +5,8 @@ from app.core.db import Base
 
 
 class VocabularyItemModel(Base):
+    """Сохраненное слово или фраза в личном словаре пользователя."""
+
     __tablename__ = "vocabulary_items"
 
     id: Mapped[int] = mapped_column(

@@ -4,6 +4,7 @@ import { useAbortControllers } from "./useAbortControllers";
 
 const NEXT_EXERCISE_BUFFER = 1;
 
+/** Управляет тренировкой: генерацией, prefetch-буфером и отправкой ответов. */
 export function useTrainingSession({ onError }) {
   const [size, setSize] = useState(6);
   const [mode, setMode] = useState("sentence_translation_full");
@@ -25,6 +26,7 @@ export function useTrainingSession({ onError }) {
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
+  /** Генерирует упражнения через фоновую задачу backend и дожидается результата. */
   async function generateBatch(targetMode, batchSize, vocabularyIds, signal, { fastStart = false, incremental = false } = {}) {
     const { task_id } = await api.generateExercisesMe(
       {
@@ -70,6 +72,7 @@ export function useTrainingSession({ onError }) {
     setSessionResult(result);
   }
 
+  /** Быстро получает первое упражнение, а остальные догружает постепенно. */
   async function startTraining(options = {}) {
     const nextMode = options.overrideMode || mode;
     const nextSize = options.overrideSize || size;
@@ -202,6 +205,7 @@ export function useTrainingSession({ onError }) {
   }
 
   useEffect(() => {
+    // Поддерживаем небольшой буфер, чтобы следующее упражнение уже было готово.
     if (!isTrainingActive || loadingCurrent || loadingPrefetch) {
       return undefined;
     }

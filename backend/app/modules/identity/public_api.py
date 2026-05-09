@@ -13,23 +13,33 @@ __all__ = [
 
 
 class UsersPublicApi:
+    """Публичный фасад identity для других модулей приложения."""
+
     @staticmethod
     def get_by_id(db, user_id: int) -> UserDTO | None:
+        """Возвращает пользователя по id без раскрытия SQLAlchemy-модели."""
+
         user = users_repository.get_by_id(db, user_id)
         return to_user_dto(user) if user is not None else None
 
     @staticmethod
     def get_by_email(db, email: str) -> UserDTO | None:
+        """Ищет пользователя по email и возвращает DTO."""
+
         user = users_repository.get_by_email(db, email)
         return to_user_dto(user) if user is not None else None
 
     @staticmethod
     def create(db, payload: UserCreate) -> UserDTO:
+        """Создает пользователя и возвращает его публичное DTO."""
+
         user = users_repository.create(db, payload)
         return to_user_dto(user)
 
     @staticmethod
     def get_or_404(*, db, user_id: int):
+        """Возвращает пользователя или выбрасывает HTTP 404 для API-сценариев."""
+
         user = users_repository.get_by_id(db, user_id)
         if user is None:
             from fastapi import HTTPException
@@ -39,6 +49,8 @@ class UsersPublicApi:
 
     @staticmethod
     def find_or_create(*, db, email: str, full_name: str, cefr_level: str) -> FindOrCreateUserDTO:
+        """Находит пользователя по email или создает нового при первом входе."""
+
         user = users_repository.get_by_email(db, email)
         if user is not None:
             return to_find_or_create_user_dto(user=user, is_new_user=False)
