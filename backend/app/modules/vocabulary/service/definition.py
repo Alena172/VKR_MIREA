@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.modules.ai_services.public_api import ai_service
+from app.modules.ai.facade import ai_facade as ai_service
 from app.modules.vocabulary import repository
 
 _GENERIC_TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'-]*")

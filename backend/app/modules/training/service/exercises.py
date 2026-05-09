@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.celery_app import enqueue_task
 from app.core.application import AsyncTaskResponse, application_access
-from app.modules.ai_services.contracts import ExerciseSeed, GenerateExercisesRequest
-from app.modules.ai_services.public_api import TranslationProviderUnavailableError, ai_service
-from app.modules.learning.services.prefetch_service import prefetch_service
-from app.modules.learning_graph.public_api import learning_graph_public_api
+from app.modules.ai.schemas import ExerciseSeed, GenerateExercisesRequest
+from app.modules.ai.facade import TranslationProviderUnavailableError, ai_facade as ai_service
+from app.modules.training.service.prefetch import prefetch_service
+from app.modules.graph.service.graph import graph_service as learning_graph_public_api
 from app.modules.training.schemas import ExerciseDTO, ExerciseGenerateRequest, ExerciseGenerateResultDTO
 from app.modules.vocabulary.service.items import list_user_items
 

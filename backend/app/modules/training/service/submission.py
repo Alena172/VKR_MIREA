@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.core.application import application_transaction
-from app.modules.ai_services.contracts import ExplainErrorRequest
-from app.modules.ai_services.public_api import ai_service
-from app.modules.learning.review_public_api import WordProgressUpdate, context_memory_public_api
-from app.modules.learning_graph.public_api import learning_graph_public_api
+from app.modules.ai.schemas import ExplainErrorRequest
+from app.modules.ai.facade import ai_facade as ai_service
+from app.modules.review.service.srs import WordProgressUpdate, srs_service as context_memory_public_api
+from app.modules.graph.service.graph import graph_service as learning_graph_public_api
 from app.modules.training import repository
 from app.modules.training.repository import AnswerPersistPayload
 from app.modules.training.schemas import SessionAnswer, SessionAnswerFeedbackDTO, SessionSubmitResultDTO

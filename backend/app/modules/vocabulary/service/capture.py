@@ -5,10 +5,10 @@ import re
 from sqlalchemy.orm import Session
 
 from app.core.application import application_access, application_transaction
-from app.modules.ai_services.contracts import TranslateWithContextRequest
-from app.modules.ai_services.public_api import ai_service
-from app.modules.learning.review_public_api import context_memory_public_api
-from app.modules.learning_graph.public_api import learning_graph_public_api
+from app.modules.ai.schemas import TranslateWithContextRequest
+from app.modules.ai.facade import ai_facade as ai_service
+from app.modules.review.service.srs import srs_service as context_memory_public_api
+from app.modules.graph.service.graph import graph_service as learning_graph_public_api
 from app.modules.vocabulary import repository
 from app.modules.vocabulary.models import CaptureModel
 from app.modules.vocabulary.schemas import CaptureDTO, VocabularyItemCreate, VocabularyItemDTO

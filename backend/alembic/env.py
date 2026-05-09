@@ -8,12 +8,9 @@ from sqlalchemy import engine_from_config, pool, text
 from app.core.config import get_settings
 from app.core.db import Base
 from app.modules.identity.models.users_models import UserModel
-from app.modules.learning.models.review_models import WordProgressModel
-from app.modules.learning.models.session_models import (
-    LearningSessionAnswerModel,
-    LearningSessionModel,
-)
-from app.modules.learning_graph.models.models import (
+from app.modules.review.models import WordProgressModel
+from app.modules.training.models import AnswerModel, LearningSessionModel
+from app.modules.graph.models import (
     SenseRelationModel,
     SenseErrorEventModel,
     TopicClusterModel,
@@ -31,7 +28,7 @@ _ = (
     BaseLexiconEntryModel,
     WordProgressModel,
     LearningSessionModel,
-    LearningSessionAnswerModel,
+    AnswerModel,
     UserInterestModel,
     TopicClusterModel,
     WordSenseModel,

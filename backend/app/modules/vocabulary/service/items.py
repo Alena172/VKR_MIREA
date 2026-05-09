@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.celery_app import enqueue_task
 from app.core.application import AsyncTaskResponse, application_access, application_transaction
-from app.modules.learning_graph.public_api import learning_graph_public_api
+from app.modules.graph.service.graph import graph_service as learning_graph_public_api
 from app.modules.vocabulary import repository
 from app.modules.vocabulary.schemas import VocabularyFromCaptureRequest, VocabularyItemCreate, VocabularyItemDTO, VocabularyItemUpdateMe
 from app.modules.vocabulary.service.definition import resolve_context_definition

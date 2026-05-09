@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"d:\\\\VKR\\\\VKR_V3_Curs\\\\backend\" -Recurse -Force)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Remove-Item -Recurse -Force \"d:\\\\VKR\\\\VKR_V3_Curs\\\\backend\\\\app\\\\modules\\\\learning\")",
+      "Bash(Remove-Item -Recurse -Force \"d:\\\\VKR\\\\VKR_V3_Curs\\\\backend\\\\app\\\\modules\\\\learning_graph\")",
+      "Bash(Remove-Item -Recurse -Force \"d:\\\\VKR\\\\VKR_V3_Curs\\\\backend\\\\app\\\\modules\\\\ai_services\")",
+      "Bash(Write-Output \"Done\")"
+    ]
+  }
+}

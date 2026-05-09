@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.db import Base, get_db
 from app.main import app
 from app.modules.vocabulary.models.base_lexicon_models import BaseLexiconEntryModel
-from app.modules.learning.models.session_models import LearningSessionModel
+from app.modules.training.models import LearningSessionModel
 from app.modules.identity.models.users_models import UserModel
 from app.modules.vocabulary.models.items_models import VocabularyItemModel
 

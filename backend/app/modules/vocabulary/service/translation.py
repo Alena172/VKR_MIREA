@@ -4,8 +4,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.application import application_access
-from app.modules.ai_services.contracts import TranslateWithContextRequest
-from app.modules.ai_services.public_api import TranslationProviderUnavailableError, ai_service
+from app.modules.ai.schemas import TranslateWithContextRequest
+from app.modules.ai.facade import TranslationProviderUnavailableError, ai_facade as ai_service
 from app.modules.identity.service import get_user_or_404
 from app.modules.vocabulary.service.items import list_user_items
 from app.modules.vocabulary.schemas import TranslationResultDTO
