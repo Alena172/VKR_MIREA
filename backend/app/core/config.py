@@ -14,11 +14,13 @@ class Settings(BaseSettings):
     ai_timeout_seconds: float = 20.0
     ai_max_retries: int = 1
     translation_strict_remote: bool = True
-    jwt_secret: str = "change_me"
+    jwt_secret: str = "change_me_dev_secret_please_replace_32b"
     jwt_issuer: str = "vkr"
     jwt_access_ttl_minutes: int = 60 * 24
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
-    cors_allow_origin_regex: str | None = r"^https://.*\.ngrok-free\.dev$"
+    cors_allow_origin_regex: str | None = (
+        r"^(https://.*\.ngrok-free\.dev|chrome-extension://[a-p]{32}|moz-extension://.+)$"
+    )
     trusted_hosts: str = "localhost,127.0.0.1,backend,gateway,*.ngrok-free.dev"
     # Celery / Redis
     redis_url: str = "redis://localhost:6379/0"

@@ -1,80 +1,190 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  background:
+    radial-gradient(circle at top left, #fff6d8 0%, #fff8ea 25%, #f6f7fb 70%),
+    linear-gradient(180deg, #fffdf8 0%, #f6f7fb 100%);
+  color: #18212f;
 }
 
 .app {
-  width: 360px;
-  padding: 12px;
+  width: 380px;
+  padding: 14px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
 }
 
 h1 {
-  margin: 0;
-  font-size: 18px;
+  font-size: 19px;
+  line-height: 1.2;
 }
 
 h2 {
-  margin: 0;
   font-size: 14px;
+}
+
+.subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #526071;
+}
+
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dfe5ee;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 30px rgba(25, 35, 52, 0.06);
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.badge-off,
+.badge-idle {
+  background: #edf1f6;
+  color: #536273;
+}
+
+.badge-on,
+.badge-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #526071;
 }
 
 label {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   font-size: 12px;
+  color: #334155;
 }
 
 input,
-textarea,
 button {
   font: inherit;
 }
 
-input,
-textarea {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px;
+input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cfd8e3;
+  border-radius: 10px;
+  padding: 10px 11px;
   background: #fff;
+  color: #18212f;
+}
+
+input:focus {
+  outline: 2px solid rgba(28, 100, 242, 0.18);
+  border-color: #1d4ed8;
 }
 
 .actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
 }
 
-.auth-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+.actions-auth {
+  grid-template-columns: 1fr 1fr 1fr;
 }
 
 button {
-  border: 1px solid #0f172a;
-  background: #0f172a;
-  color: #fff;
-  border-radius: 8px;
-  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
   cursor: pointer;
-  font-size: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #1d4ed8 0%, #0f766e 100%);
+  font-weight: 600;
 }
 
 button:hover {
-  opacity: 0.9;
+  filter: brightness(0.98);
 }
 
-.result {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 8px;
+.button-secondary {
+  background: #e7edf5;
+  color: #243445;
+}
+
+.button-ghost {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #d6deea;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.status-grid > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+
+.status-label {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.status-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #18212f;
+  word-break: break-word;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 18px;
   display: grid;
   gap: 6px;
+  font-size: 12px;
+  color: #475569;
 }
 
 pre {
@@ -82,5 +192,46 @@ pre {
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 12px;
+  line-height: 1.45;
   color: #334155;
+}
+
+.toggle {
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.toggle input {
+  display: none;
+}
+
+.toggle-track {
+  width: 54px;
+  height: 30px;
+  border-radius: 999px;
+  background: #d7dee8;
+  position: relative;
+  transition: background 0.18s ease;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18);
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+
+.toggle input:checked + .toggle-track {
+  background: linear-gradient(135deg, #16a34a 0%, #0f766e 100%);
+}
+
+.toggle input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(24px);
 }

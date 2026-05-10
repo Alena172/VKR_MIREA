@@ -3,52 +3,86 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VKR Helper</title>
+    <title>VKR Studying</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="app">
-      <h1>VKR Helper</h1>
+      <header class="header">
+        <div>
+          <h1>VKR Studying</h1>
+          <p class="subtitle">Режим захвата слов на странице</p>
+        </div>
+        <label class="toggle">
+          <input id="studyingEnabled" type="checkbox" />
+          <span class="toggle-track">
+            <span class="toggle-thumb"></span>
+          </span>
+        </label>
+      </header>
 
-      <label>
-        Email
-        <input id="email" type="email" placeholder="user@example.com" />
-      </label>
+      <section class="card">
+        <div class="card-title-row">
+          <h2>Состояние</h2>
+          <span id="studyingBadge" class="badge badge-off">Выключено</span>
+        </div>
+        <p class="hint">
+          Когда режим включен, выделите английское слово или фразу на странице. Расширение покажет перевод рядом с выделением.
+        </p>
+      </section>
 
-      <label>
-        JWT токен
-        <input id="token" type="text" placeholder="Сначала получи токен" readonly />
-      </label>
+      <section class="card">
+        <div class="card-title-row">
+          <h2>Авторизация</h2>
+          <span id="authBadge" class="badge badge-idle">Не выполнена</span>
+        </div>
 
-      <div class="auth-actions">
-        <button id="authTokenBtn" type="button">Получить токен</button>
-        <button id="clearTokenBtn" type="button">Сбросить</button>
-      </div>
+        <label>
+          Email
+          <input id="email" type="email" placeholder="user@example.com" autocomplete="username" />
+        </label>
 
-      <label>
-        User ID
-        <input id="userId" type="number" min="1" placeholder="Например: 1" readonly />
-      </label>
+        <label>
+          Имя
+          <input id="fullName" type="text" placeholder="Как к вам обращаться" autocomplete="name" />
+        </label>
 
-      <label>
-        Выделенный текст
-        <textarea id="selectedText" rows="2" placeholder="Выдели текст на странице"></textarea>
-      </label>
+        <label>
+          Пароль
+          <input id="password" type="password" placeholder="Минимум 8 символов" autocomplete="current-password" />
+        </label>
 
-      <label>
-        Контекст
-        <textarea id="sourceSentence" rows="3" placeholder="Контекст предложения"></textarea>
-      </label>
+        <div class="actions actions-auth">
+          <button id="registerBtn" type="button" class="button-secondary">Регистрация</button>
+          <button id="loginBtn" type="button">Войти</button>
+          <button id="logoutBtn" type="button" class="button-ghost">Выйти</button>
+        </div>
 
-      <div class="actions">
-        <button id="refreshSelection" type="button">Обновить выделение</button>
-        <button id="translateBtn" type="button">Перевести</button>
-        <button id="addBtn" type="button">Добавить в словарь</button>
-      </div>
+        <div class="status-grid">
+          <div>
+            <span class="status-label">Пользователь</span>
+            <span id="userEmailValue" class="status-value">-</span>
+          </div>
+          <div>
+            <span class="status-label">User ID</span>
+            <span id="userIdValue" class="status-value">-</span>
+          </div>
+        </div>
+      </section>
 
-      <section class="result">
-        <h2>Результат</h2>
-        <pre id="output">-</pre>
+      <section class="card">
+        <h2>Как использовать</h2>
+        <ol class="steps">
+          <li>Войдите в расширение через email и пароль.</li>
+          <li>Включите режим `Studying`.</li>
+          <li>Выделите английское слово или короткую фразу на странице.</li>
+          <li>Во всплывающем окне нажмите `Добавить в словарь` или закройте его.</li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2>Статус</h2>
+        <pre id="output">Готово к работе.</pre>
       </section>
     </main>
 
