@@ -164,15 +164,62 @@ class VocabularyRepository:
         self._db.refresh(item)
         return item, True
 
-    def list_user_vocabulary(self, *, user_id: int) -> list[tuple[UserVocabularyModel, DictionaryEntryModel]]:
+    def add_phrase_to_user_vocabulary(
+        self,
+        *,
+        user_id: int,
+        phrase_en: str,
+        phrase_ru: str,
+        source_sentence: str | None,
+        source_url: str | None,
+    ) -> tuple[UserVocabularyModel, bool]:
+        normalized = phrase_en.strip().lower()
+        existing = self._db.scalar(
+            select(UserVocabularyModel).where(
+                UserVocabularyModel.user_id == user_id,
+                UserVocabularyModel.phrase_en == normalized,
+            )
+        )
+        if existing is not None:
+            return existing, False
+
+        item = UserVocabularyModel(
+            user_id=user_id,
+            entry_id=None,
+            phrase_en=normalized,
+            phrase_ru=phrase_ru.strip(),
+            source_sentence=source_sentence,
+            source_url=source_url,
+        )
+        self._db.add(item)
+        self._db.flush()
+        self._db.refresh(item)
+        return item, True
+
+    def list_user_vocabulary(self, *, user_id: int) -> list[tuple[UserVocabularyModel, DictionaryEntryModel | None]]:
         try:
-            rows = self._db.execute(
+            # Words: joined with dictionary_entries
+            word_rows = self._db.execute(
                 select(UserVocabularyModel, DictionaryEntryModel)
                 .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
                 .where(UserVocabularyModel.user_id == user_id)
                 .order_by(UserVocabularyModel.added_at.desc())
             ).all()
-            return [(uv, entry) for uv, entry in rows]
+            # Phrases: entry_id IS NULL
+            phrase_rows = list(self._db.scalars(
+                select(UserVocabularyModel)
+                .where(
+                    UserVocabularyModel.user_id == user_id,
+                    UserVocabularyModel.entry_id.is_(None),
+                )
+                .order_by(UserVocabularyModel.added_at.desc())
+            ))
+            result: list[tuple[UserVocabularyModel, DictionaryEntryModel | None]] = [
+                (uv, entry) for uv, entry in word_rows
+            ]
+            result.extend((uv, None) for uv in phrase_rows)
+            result.sort(key=lambda row: row[0].added_at, reverse=True)
+            return result
         except ProgrammingError:
             self._db.rollback()
             rows = self._db.execute(

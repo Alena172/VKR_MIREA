@@ -42,6 +42,7 @@ class VocabularyItemRead(BaseModel):
     source_sentence: str | None = None
     source_url: str | None = None
     added_at: datetime
+    is_phrase: bool = False
 
 
 class VocabularyItemUpdateMe(BaseModel):
@@ -74,6 +75,7 @@ class VocabularyFromCaptureResponse(BaseModel):
     """Ответ capture-сценария с созданной или найденной записью."""
 
     vocabulary: VocabularyItemRead
+    created_new_vocabulary_item: bool = False
 
 
 class TranslateRequest(BaseModel):
@@ -104,9 +106,23 @@ class VocabularyItemDTO:
     source_sentence: str | None
     source_url: str | None
     added_at: datetime
+    is_phrase: bool = False
 
     @staticmethod
-    def from_model(uv: UserVocabularyModel, entry: DictionaryEntryModel) -> VocabularyItemDTO:
+    def from_model(uv: UserVocabularyModel, entry: DictionaryEntryModel | None) -> VocabularyItemDTO:
+        if entry is None:
+            # Фраза: данные хранятся прямо в user_vocabulary
+            return VocabularyItemDTO(
+                id=uv.id,
+                user_id=uv.user_id,
+                english_lemma=uv.phrase_en or "",
+                russian_translation=uv.phrase_ru or "",
+                context_definition_ru=None,
+                source_sentence=uv.source_sentence,
+                source_url=uv.source_url,
+                added_at=uv.added_at,
+                is_phrase=True,
+            )
         return VocabularyItemDTO(
             id=uv.id,
             user_id=uv.user_id,
@@ -116,6 +132,7 @@ class VocabularyItemDTO:
             source_sentence=uv.source_sentence,
             source_url=uv.source_url,
             added_at=uv.added_at,
+            is_phrase=False,
         )
 
 

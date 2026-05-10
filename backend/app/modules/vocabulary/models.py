@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -29,23 +29,34 @@ class DictionaryEntryModel(Base):
 
 
 class UserVocabularyModel(Base):
-    """Личный словарь пользователя — привязка к записи в общем словаре.
+    """Личный словарь пользователя.
 
-    Хранит только то, что уникально для пользователя:
-    контекстное предложение и URL страницы, где встретилось слово.
+    Слова: entry_id → dictionary_entries, phrase_en/phrase_ru = NULL.
+    Фразы: entry_id = NULL, phrase_en и phrase_ru заполнены.
     """
 
     __tablename__ = "user_vocabulary"
     __table_args__ = (
         UniqueConstraint("user_id", "entry_id", name="uq_user_vocabulary_user_entry"),
+        UniqueConstraint("user_id", "phrase_en", name="uq_user_vocabulary_user_phrase"),
+        CheckConstraint(
+            "(entry_id IS NOT NULL) OR (phrase_en IS NOT NULL)",
+            name="ck_user_vocabulary_word_or_phrase",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    entry_id: Mapped[int] = mapped_column(ForeignKey("dictionary_entries.id"), nullable=False, index=True)
+    entry_id: Mapped[int | None] = mapped_column(ForeignKey("dictionary_entries.id"), nullable=True, index=True)
+    phrase_en: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)
+    phrase_ru: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_sentence: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    @property
+    def is_phrase(self) -> bool:
+        return self.entry_id is None
 
 
 class BaseLexiconEntryModel(Base):
