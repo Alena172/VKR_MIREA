@@ -4,102 +4,111 @@
 
 Серверная часть устроена как модульный монолит: проект запускается как одно FastAPI-приложение, но бизнес-логика разделена на самостоятельные верхнеуровневые модули.
 
-Чтобы модули читались одинаково, внутри каждого модуля используется единая слоистая структура. В проекте больше не используются вложенные продуктовые подмодули вроде `learning/session` или `vocabulary/items`: различия сценариев выражаются именами файлов внутри слоев.
+Чтобы модули читались одинаково, внутри каждого модуля используется единая слоистая структура. В проекте больше не используются вложенные продуктовые подмодули вроде `training/session` или `vocabulary/items`: различия сценариев выражаются именами файлов внутри слоев.
 
 ## Модули верхнего уровня
 
 - `identity`: пользователь, авторизация, JWT, профиль и настройки.
 - `vocabulary`: личный словарь, перевод, захват слова из контекста, базовый локальный лексикон.
-- `learning`: генерация упражнений, прохождение сессий, проверка ответов, SRS-повторение.
-- `learning_graph`: семантический профиль пользователя, интересы, смыслы слов и смысловые связи.
-- `ai_services`: адаптер к внешнему AI и локальным fallback-сценариям.
-- `platform`: технические механизмы приложения, не являющиеся продуктовым доменом.
+- `training`: генерация упражнений, прохождение сессий, проверка ответов, история.
+- `review`: SRS-повторение, очередь повторения, план, сводка прогресса.
+- `graph`: семантический профиль пользователя, интересы, смыслы слов и смысловые связи.
+- `ai`: фасад к AI-провайдерам, гибридный перевод, генерация определений и упражнений, объяснение ошибок.
 
 ## Единый шаблон модуля
 
 ```text
 module/
-  api/
-    router.py
-    *_schemas.py
-  application/
-    *_service.py
-    *_flow.py
-  domain/
-    *_models.py
-    *_contracts.py
-    *_assembler.py
-  adapters/
-    *_repository.py
-    *_adapter.py
-  public_api.py
+  models.py
+  repository.py
+  router.py
+  schemas.py
+  service/
+    *.py
 ```
 
-Не каждый модуль обязан иметь все файлы. Слой создается только тогда, когда в нем есть реальная ответственность.
+Не каждый модуль обязан иметь все файлы. Файл создается только тогда, когда в нем есть реальная ответственность.
 
 ## Назначение слоев
 
-- `api`: FastAPI-маршруты, зависимости текущего пользователя, HTTP-схемы запросов и ответов.
-- `application`: пользовательские сценарии, транзакционные границы, координация домена, БД и внешних адаптеров.
-- `domain`: SQLAlchemy-модели, DTO/контракты, преобразования между моделями, DTO и API-ответами.
-- `adapters`: репозитории, запросы к базе, клиенты внешних сервисов и технические адаптеры.
-- `public_api.py` или `*_public_api.py`: маленький фасад для межмодульного доступа.
+- `router.py`: FastAPI-маршруты, зависимости текущего пользователя, HTTP-схемы запросов и ответов.
+- `service/`: пользовательские сценарии, транзакционные границы, координация между репозиторием, внешними адаптерами и другими модулями.
+- `repository.py`: запросы к базе данных, работа с SQLAlchemy-сессией.
+- `models.py`: SQLAlchemy ORM-модели, описание таблиц.
+- `schemas.py`: Pydantic-схемы для запросов, ответов и внутренних DTO.
 
 ## Текущая структура
 
 ```text
 modules/
   identity/
-    api/
-    application/
-    domain/
-    adapters/
-    public_api.py
+    models.py
+    repository.py
+    router.py
+    schemas.py
+    service.py
+    deps.py
 
   vocabulary/
-    api/
-    application/
-    domain/
-    adapters/
-    items_public_api.py
-    base_lexicon_public_api.py
+    models.py
+    repository.py
+    router.py
+    schemas.py
+    service/
+      capture.py
+      definition.py
+      items.py
+      lexicon.py
+      translation.py
 
-  learning/
-    api/
-    application/
-    domain/
-    adapters/
-    review_public_api.py
-    session_public_api.py
+  training/
+    models.py
+    repository.py
+    router.py
+    schemas.py
+    service/
+      evaluation.py
+      exercises.py
+      prefetch.py
+      submission.py
 
-  learning_graph/
-    api/
-    application/
-    domain/
-    adapters/
-    public_api.py
+  review/
+    models.py
+    repository.py
+    router.py
+    schemas.py
+    service/
+      scoring.py
+      srs.py
 
-  ai_services/
-    api/
-    application/
-    domain/
-    adapters/
-    public_api.py
+  graph/
+    models.py
+    repository.py
+    router.py
+    schemas.py
+    service/
+      graph.py
+      strategies.py
+
+  ai/
+    chat_client.py
+    facade.py
+    router.py
+    schemas.py
+    service/
+      definitions.py
+      exercises.py
+      translation.py
 ```
 
 ## Правило межмодульных зависимостей
 
-Модуль может обращаться к другому модулю через:
-
-- публичный фасад в корне модуля;
-- DTO из `domain/*_contracts.py`;
-- согласованный адаптер или фасад.
+Модуль может обращаться к другому модулю через его сервисы, импортируя только публичные функции из `service/*.py`.
 
 Модуль не обращается напрямую к чужим:
 
-- `application`;
-- `adapters`;
-- `domain/*_models.py`.
+- `repository.py`;
+- `models.py`.
 
 Так сохраняется понятная граница: один модуль может менять внутреннюю реализацию, не ломая остальные.
 
@@ -108,11 +117,10 @@ modules/
 Проект придерживается умеренной слоистости:
 
 ```text
-HTTP API -> application -> adapters
-             |
-             +-> domain DTO/models
-             +-> public API других модулей
-             +-> adapters
+HTTP (router.py) -> service/*.py -> repository.py -> models.py
+                         |
+                         +-> другие модули (через их service/*.py)
+                         +-> ai facade (app.modules.ai.facade)
 ```
 
 Главный ориентир: структура всех модулей выглядит одинаково, а сложность живет в именах файлов, а не в глубокой вложенности папок.

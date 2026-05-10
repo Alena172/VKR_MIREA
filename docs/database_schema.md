@@ -8,7 +8,8 @@
 
 - `users`
 - `base_lexicon_entries`
-- `vocabulary_items`
+- `dictionary_entries` (общий словарь)
+- `user_vocabulary` (личный словарь)
 - `word_progress`
 - `learning_sessions`
 - `learning_session_answers`
@@ -26,7 +27,7 @@
 
 ### 1. Захват слова стал частью словарного сценария
 
-Выделенный текст сразу обрабатывается внутри сценария словаря. Основной бизнес-сущностью остается `vocabulary_items`.
+Выделенный текст сразу обрабатывается внутри сценария словаря. Основными бизнес-сущностями являются `dictionary_entries` (общий словарь) и `user_vocabulary` (личный словарь пользователя).
 
 ### 2. `learning_session_answers` хранит структурированные метаданные упражнения
 
@@ -88,6 +89,7 @@
 - интервальные повторения на основе результатов пользователя
 - генерацию упражнений с помощью AI и обратную связь
 - семантический профиль через `learning_graph`
+- общий словарь (`dictionary_entries`) позволяет переиспользовать переводы между пользователями
 
 При этом схема остается ближе к демонстрируемому пользовательскому циклу и проще объясняется на защите.
 
@@ -110,17 +112,21 @@ erDiagram
         TIMESTAMP created_at
     }
 
-    vocabulary_items {
+    dictionary_entries {
         BIGINT id PK
-        BIGINT user_id FK
         VARCHAR_200 english_lemma
         VARCHAR_200 russian_translation
         TEXT context_definition_ru
-        VARCHAR_64 context_definition_source
-        VARCHAR_16 context_definition_confidence
-        BIGINT definition_reused_from_item_id
+        TIMESTAMP created_at
+    }
+
+    user_vocabulary {
+        BIGINT id PK
+        BIGINT user_id FK
+        BIGINT entry_id FK
         TEXT source_sentence
         VARCHAR_2000 source_url
+        TIMESTAMP added_at
     }
 
     word_progress {
@@ -189,7 +195,7 @@ erDiagram
     vocabulary_sense_links {
         BIGINT id PK
         BIGINT user_id FK
-        BIGINT vocabulary_item_id FK
+        BIGINT user_vocabulary_id FK
         BIGINT word_sense_id FK
         TIMESTAMP created_at
     }
@@ -217,7 +223,7 @@ erDiagram
         TIMESTAMP created_at
     }
 
-    users ||--o{ vocabulary_items : owns
+    users ||--o{ user_vocabulary : owns
     users ||--o{ word_progress : tracks
     users ||--o{ learning_sessions : owns
     users ||--o{ user_interests : has
@@ -227,9 +233,10 @@ erDiagram
     users ||--o{ sense_relations : has
     users ||--o{ sense_error_events : has
 
+    dictionary_entries ||--o{ user_vocabulary : referenced_by
     learning_sessions ||--o{ learning_session_answers : contains
     topic_clusters ||--o{ word_senses : groups
-    vocabulary_items ||--o{ vocabulary_sense_links : maps
+    user_vocabulary ||--o{ vocabulary_sense_links : maps
     word_senses ||--o{ vocabulary_sense_links : maps
     word_senses ||--o{ sense_relations : left_side
     word_senses ||--o{ sense_relations : right_side

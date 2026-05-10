@@ -1,6 +1,6 @@
 # Серверная часть
 
-Серверная часть представляет собой FastAPI-модульный монолит, организованный вокруг доменных модулей `identity`, `vocabulary`, `learning`, `learning_graph`, слоя адаптера `ai_services` и инфраструктурного слоя `tasks`.
+Серверная часть представляет собой FastAPI-модульный монолит, организованный вокруг доменных модулей `identity`, `vocabulary`, `training`, `review`, слоя адаптера `ai` и модуля `graph`.
 
 ## Технологический стек
 
@@ -106,7 +106,7 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 
 ## Настройка AI
 
-Весь доступ к AI централизован в `app.modules.ai_services`. В архитектуре серверной части это слой адаптера: он скрывает детали внешнего провайдера и резервной логики от доменных модулей.
+Весь доступ к AI централизован в `app.modules.ai`. В архитектуре серверной части это слой адаптера: он скрывает детали внешнего провайдера и резервной логики от доменных модулей.
 
 Поддерживаемые провайдеры:
 
@@ -128,16 +128,10 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 
 При создании элемента словаря:
 
-1. серверная часть ищет уже существующие определения для той же леммы в словаре пользователя
-2. кандидаты оцениваются по переводу и пересечению контекста
-3. если найден надежный кандидат, определение переиспользуется
-4. иначе вызывается AI и строится новое определение
-
-Вместе с определением сохраняются метаданные:
-
-- `context_definition_source`
-- `context_definition_confidence`
-- `definition_reused_from_item_id`
+1. Система ищет существующие определения для той же леммы в общем словаре (`dictionary_entries`).
+2. Кандидаты оцениваются по совпадению перевода и пересечению контекста.
+3. Если найден надёжный кандидат (score ≥ 0.72), определение переиспользуется.
+4. Иначе вызывается AI и строится новое определение.
 
 ## Фоновые задачи
 
@@ -155,71 +149,68 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 
 ## Основные API-группы
 
-### Identity / auth
+### Identity / Auth
+- POST /api/v1/auth/token
+- POST /api/v1/auth/login-or-register
+- POST /api/v1/auth/verify
+- GET  /api/v1/auth/me
 
-- `POST /api/v1/auth/token`
-- `POST /api/v1/auth/login-or-register`
-- `POST /api/v1/auth/verify`
-- `GET /api/v1/auth/me`
+### Пользователи
+- GET  /api/v1/users
+- GET  /api/v1/users/{user_id}
+- POST /api/v1/users
 
 ### Vocabulary
+- GET    /api/v1/vocabulary/me
+- POST   /api/v1/vocabulary/me           (202 Accepted, Celery task)
+- PUT    /api/v1/vocabulary/me/{item_id}
+- DELETE /api/v1/vocabulary/me/{item_id}
+- POST   /api/v1/vocabulary/me/from-capture (202 Accepted, Celery task)
 
-- `GET /api/v1/vocabulary/me`
-- `POST /api/v1/vocabulary/me`
-- `PUT /api/v1/vocabulary/me/{item_id}`
-- `DELETE /api/v1/vocabulary/me/{item_id}`
-- `POST /api/v1/vocabulary/me/from-capture`
+### Перевод
+- POST /api/v1/translate/me
+- POST /api/v1/translate
 
-### Vocabulary / translation
+### Упражнения и сессии (модуль training)
+- POST /api/v1/exercises/me/generate     (202 Accepted, Celery task)
+- POST /api/v1/sessions/submit
+- GET  /api/v1/sessions/me
+- GET  /api/v1/sessions/me/{session_id}/answers
 
-- `POST /api/v1/translate/me`
+### Повторение и SRS (модуль review)
+- GET  /api/v1/context/me/review-queue
+- POST /api/v1/context/me/review-queue/submit
+- POST /api/v1/context/me/review-queue/submit-bulk
+- POST /api/v1/context/me/review-session/start
+- GET  /api/v1/context/me/review-plan
+- GET  /api/v1/context/me/progress
+- GET  /api/v1/context/me/review-summary
+- GET  /api/v1/context/me/word-progress
+- GET  /api/v1/context/me/word-progress/{word}
+- DELETE /api/v1/context/me/word-progress/{word}
 
-### Learning / упражнения и сессии
+### Learning Graph (модуль graph)
+- GET  /api/v1/learning-graph/me/interests
+- PUT  /api/v1/learning-graph/me/interests
+- POST /api/v1/learning-graph/me/semantic-upsert
+- GET  /api/v1/learning-graph/me/interest-words
+- GET  /api/v1/learning-graph/me/anchors
 
-- `POST /api/v1/exercises/me/generate`
-- `POST /api/v1/sessions/submit`
-- `GET /api/v1/sessions/me`
-- `GET /api/v1/sessions/me/{session_id}/answers`
+### AI
+- GET  /api/v1/ai/status
+- POST /api/v1/ai/explain-error
 
-### Learning / повторение и SRS
+### Фоновые задачи
+- GET /api/v1/tasks/{task_id}
 
-- `GET /api/v1/context/me/review-queue`
-- `POST /api/v1/context/me/review-queue/submit`
-- `POST /api/v1/context/me/review-queue/submit-bulk`
-- `GET /api/v1/context/me/word-progress`
-- `GET /api/v1/context/me/word-progress/{word}`
-- `DELETE /api/v1/context/me/word-progress/{word}`
-- `POST /api/v1/context/me/review-session/start`
-- `GET /api/v1/context/me/review-plan`
-- `GET /api/v1/context/me/progress`
-- `GET /api/v1/context/me/review-summary`
-
-### Learning graph
-
-- `GET /api/v1/learning-graph/me/interests`
-- `POST /api/v1/learning-graph/me/semantic-upsert`
-- `GET /api/v1/learning-graph/me/interest-words`
-- `GET /api/v1/learning-graph/me/anchors`
-
-В текущей версии `learning_graph` используется как компактный семантический профиль:
+В текущей версии `graph` используется как компактный семантический профиль:
 
 - интересы пользователя выводятся из сохраненной лексики и контекстов
 - `WordSense` отделяет разные значения одной леммы
 - смысловые связи показывают полисемию и слова из той же темы
-- SRS-расписание и учет ошибок остаются в модуле `learning`
+- SRS-расписание и учет ошибок остаются в модуле `review`
 
 ## Проверки и тесты
-
-### Проверка границ модулей
-
-```bash
-uv run python tools/check_module_boundaries.py
-```
-
-Эта проверка подтверждает, что:
-
-- межмодульные импорты проходят через `public_api` или явные фасады
-- application-слой возвращает DTO/контракты, а схема HTTP-ответа остается в слое router
 
 ### Тесты
 
@@ -228,16 +219,6 @@ uv run pytest -q
 ```
 
 Текущий тестовый контур в основном интеграционный и использует SQLite in-memory.
-
-## Импорт данных
-
-В проекте есть исходный набор данных для базового лексикона, который используется для быстрого локального перевода частотных слов.
-
-Импорт:
-
-```bash
-uv run python tools/import_base_lexicon.py data/base_lexicon.seed.json
-```
 
 ## Дополнительные материалы
 
