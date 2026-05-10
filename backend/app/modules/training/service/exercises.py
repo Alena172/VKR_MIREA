@@ -138,10 +138,12 @@ class TrainingService:
         if vocabulary_ids:
             allowed = set(vocabulary_ids)
             vocabulary_items = [item for item in vocabulary_items if item.id in allowed]
-        vocabulary_items = _dedupe_vocabulary_by_lemma(vocabulary_items)
-
         if not vocabulary_items:
             raise ValueError("Vocabulary is empty. Add words before generating exercises.")
+
+        if mode in {"word_definition_match", "word_scramble"}:
+            # Для этих режимов один смысл на лемму — иначе в подборке окажутся два "book"
+            vocabulary_items = _dedupe_vocabulary_by_lemma(vocabulary_items)
 
         if mode == "word_definition_match":
             vocabulary_items = [

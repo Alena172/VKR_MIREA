@@ -478,9 +478,11 @@ class ExerciseGenerator:
                 provider_note=f"local_fast_start_template{level_note}",
             )
 
-        scheduled_seeds: list[tuple[ExerciseSeed, int]] = []
-        for idx in range(payload.size):
-            scheduled_seeds.append((seeds[idx % len(seeds)], idx))
+        # Не повторять слова: ограничить количество упражнений числом доступных seeds.
+        effective_size = min(payload.size, len(seeds))
+        scheduled_seeds: list[tuple[ExerciseSeed, int]] = [
+            (seeds[idx], idx) for idx in range(effective_size)
+        ]
 
         semaphore = asyncio.Semaphore(4)
 
