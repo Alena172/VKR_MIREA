@@ -1,6 +1,14 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -59,7 +67,7 @@ class VocabularySenseLinkModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    vocabulary_item_id: Mapped[int] = mapped_column(ForeignKey("vocabulary_items.id"), nullable=False, index=True)
+    vocabulary_item_id: Mapped[int] = mapped_column(ForeignKey("user_vocabulary.id"), nullable=False, index=True)
     word_sense_id: Mapped[int] = mapped_column(ForeignKey("word_senses.id"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 

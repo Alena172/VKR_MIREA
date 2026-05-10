@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
+from collections.abc import Awaitable, Callable
 
-from app.modules.ai.schemas import TranslateGlossaryItem
+from app.modules.ai.schemas import (
+    TranslateGlossaryItem,
+    TranslateWithContextRequest,
+    TranslateWithContextResponse,
+)
 
 
 class TranslationService:
-    """Локальная эвристика для перевода слов — без сетевых запросов.
-
-    Используется внутри ExerciseGenerator как fallback при генерации упражнений.
-    """
-
     _DIRECT_MAP = {
         "apple": "яблоко",
         "pear": "груша",
@@ -61,6 +62,21 @@ class TranslationService:
         "go on": "продолжать",
         "pick up": "подбирать",
     }
+
+    def __init__(
+        self,
+        *,
+        model: str,
+        translation_strict_remote: bool,
+        remote_enabled: Callable[[], bool],
+        chat_complete_async: Callable[..., Awaitable[str | None]],
+        provider_unavailable_error: type[Exception],
+    ) -> None:
+        self._model = model
+        self._translation_strict_remote = translation_strict_remote
+        self._remote_enabled = remote_enabled
+        self._chat_complete_async = chat_complete_async
+        self._provider_unavailable_error = provider_unavailable_error
 
     def _tokenize(self, text: str) -> list[str]:
         return [part for part in re.split(r"[^a-zA-Z']+", text.lower()) if part]
@@ -189,6 +205,31 @@ class TranslationService:
                     return translated
         return None
 
+    def _looks_ambiguous(self, text: str) -> bool:
+        lowered = self._normalize_english_text(text)
+        if lowered in self._PHRASE_MAP:
+            return False
+        tokens = self._tokenize(lowered)
+        if len(tokens) != 1:
+            return False
+        return self._normalize_token(tokens[0]) in self._AMBIGUOUS_MAP
+
+    def _build_remote_provider_note(self, payload: TranslateWithContextRequest) -> str:
+        uses_glossary = bool(payload.glossary)
+        uses_context = bool((payload.source_context or "").strip())
+        prefix = "ai_disambiguation" if (uses_glossary or uses_context or self._looks_ambiguous(payload.text)) else "ai_translation"
+        return f"{prefix}:{self._model}"
+
+    def fast_translate_single_word(
+        self,
+        text: str,
+        glossary: list[TranslateGlossaryItem] | None = None,
+    ) -> str | None:
+        normalized = self._normalize_english_text(text)
+        if not normalized or " " in normalized:
+            return None
+        return self.pick_contextual_translation(normalized, None, glossary)
+
     def heuristic_translate(
         self,
         text: str,
@@ -212,3 +253,70 @@ class TranslationService:
             return only
         mapped = [self.pick_contextual_translation(token, context, glossary) or token for token in normalized]
         return " ".join(mapped)
+
+    def fallback_translate_with_context(
+        self,
+        payload: TranslateWithContextRequest,
+    ) -> TranslateWithContextResponse:
+        translated = self.heuristic_translate(
+            payload.text,
+            payload.source_context,
+            payload.glossary,
+        )
+        level_note = f" CEFR={payload.cefr_level}." if payload.cefr_level else ""
+        context_note = " Context applied." if payload.source_context else ""
+        return TranslateWithContextResponse(
+            translated_text=translated,
+            provider_note=f"local_heuristic EN->RU.{context_note}{level_note}",
+        )
+
+    async def translate_with_context_async(
+        self,
+        payload: TranslateWithContextRequest,
+    ) -> TranslateWithContextResponse:
+        if self._translation_strict_remote and not self._remote_enabled():
+            raise self._provider_unavailable_error(
+                "Translation provider is unavailable. "
+                "AI-провайдер недоступен. Проверь AI_BASE_URL и AI_MODEL в .env."
+            )
+
+        glossary_json = json.dumps(
+            [
+                {
+                    "english_term": item.english_term,
+                    "russian_translation": item.russian_translation,
+                    "source_sentence": item.source_sentence,
+                }
+                for item in payload.glossary[:200]
+            ],
+            ensure_ascii=False,
+        )
+        content = await self._chat_complete_async(
+            system_prompt=(
+                "Ты переводчик EN->RU для русскоязычного студента английского. "
+                "Всегда учитывай контекст и пользовательский глоссарий. "
+                "Если термин есть в глоссарии и подходит по контексту, используй перевод из глоссария. "
+                "Верни только итоговый перевод на русском без комментариев. "
+                "Если входной текст это одно слово или короткая фраза, верни только перевод этого слова/фразы, "
+                "а не полное предложение."
+            ),
+            user_prompt=(
+                f"Текст: {payload.text}\n"
+                f"Уровень CEFR: {payload.cefr_level or 'unknown'}\n"
+                f"Контекст: {payload.source_context or 'none'}\n"
+                f"Глоссарий пользователя (JSON): {glossary_json}\n"
+                "Формат ответа: только перевод, без пояснений и без исходного текста."
+            ),
+            temperature=0.0,
+            max_tokens=220,
+        )
+        if content:
+            return TranslateWithContextResponse(
+                translated_text=content.strip().strip('"'),
+                provider_note=self._build_remote_provider_note(payload),
+            )
+        if self._translation_strict_remote:
+            raise self._provider_unavailable_error(
+                "Translation provider request failed. Check AI_BASE_URL, AI_MODEL, AI_API_KEY and provider availability."
+            )
+        return self.fallback_translate_with_context(payload)

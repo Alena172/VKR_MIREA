@@ -6,7 +6,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.api import api_router
 from app.core.config import get_settings
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, engine
+from app.core.schema import ensure_database_schema_ready
 from app.modules.vocabulary.service.lexicon import ensure_seeded
 
 settings = get_settings()
@@ -37,6 +38,11 @@ app.include_router(api_router)
 @app.on_event("startup")
 def ensure_base_lexicon_seeded() -> None:
     """Заполняет базовый локальный словарь при старте приложения."""
+
+    if not settings.bootstrap_schema_on_startup:
+        return
+
+    ensure_database_schema_ready(engine=engine, database_url=settings.database_url)
 
     db = SessionLocal()
     try:

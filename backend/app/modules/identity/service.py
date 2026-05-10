@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import HTTPException
@@ -26,7 +26,7 @@ _JWT_TTL_MINUTES = _SETTINGS.jwt_access_ttl_minutes
 def create_access_token(user_id: int) -> str:
     """Выпускает JWT с user_id в поле `sub`."""
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "iat": int(now.timestamp()),

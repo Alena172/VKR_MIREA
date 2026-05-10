@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.modules.review.models import WordProgressModel
 
-
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
 

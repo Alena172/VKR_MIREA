@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from alembic import op
 
-
 revision = "0012_rename_mistake_events_to_sense_error_events"
 down_revision = "0011_align_schema_constraints"
 branch_labels = None

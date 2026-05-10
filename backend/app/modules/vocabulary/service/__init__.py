@@ -12,8 +12,15 @@ from app.modules.vocabulary.service.items import (
     queue_add_item_from_capture,
     update_item,
 )
-from app.modules.vocabulary.service.lexicon import ensure_seeded, import_entries, lookup_translation
-from app.modules.vocabulary.service.translation import resolve_target_user_id, translate_for_user
+from app.modules.vocabulary.service.lexicon import (
+    ensure_seeded,
+    import_entries,
+    lookup_translation,
+)
+from app.modules.vocabulary.service.translation import (
+    resolve_target_user_id,
+    translate_for_user,
+)
 
 __all__ = [
     "capture_to_vocabulary",

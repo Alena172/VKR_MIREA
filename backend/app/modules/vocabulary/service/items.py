@@ -4,15 +4,24 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.celery_app import enqueue_task
-from app.core.application import AsyncTaskResponse, application_access, application_transaction
+from app.core.application import (
+    AsyncTaskResponse,
+    application_access,
+    application_transaction,
+)
 from app.modules.graph.service.graph import graph_service as learning_graph_public_api
 from app.modules.vocabulary import repository
-from app.modules.vocabulary.schemas import VocabularyFromCaptureRequest, VocabularyItemCreate, VocabularyItemDTO, VocabularyItemUpdateMe
+from app.modules.vocabulary.schemas import (
+    VocabularyFromCaptureRequest,
+    VocabularyItemCreate,
+    VocabularyItemDTO,
+    VocabularyItemUpdateMe,
+)
 from app.modules.vocabulary.service.definition import resolve_context_definition
 
 
-def _to_vocabulary_item_dto(item) -> VocabularyItemDTO:
-    return VocabularyItemDTO.from_model(item)
+def _to_dto(uv, entry) -> VocabularyItemDTO:
+    return VocabularyItemDTO.from_model(uv, entry)
 
 
 def list_items(
@@ -25,11 +34,11 @@ def list_items(
         requested_user_id=requested_user_id,
         current_user_id=current_user_id,
     )
-    return [_to_vocabulary_item_dto(item) for item in repository.list_vocabulary_items(db, user_id=target_user_id)]
+    return [_to_dto(uv, entry) for uv, entry in repository.list_user_vocabulary(db, user_id=target_user_id)]
 
 
-def list_user_items(*, db: Session, user_id: int | None) -> list[VocabularyItemDTO]:
-    return [_to_vocabulary_item_dto(item) for item in repository.list_vocabulary_items(db, user_id=user_id)]
+def list_user_items(*, db: Session, user_id: int) -> list[VocabularyItemDTO]:
+    return [_to_dto(uv, entry) for uv, entry in repository.list_user_vocabulary(db, user_id=user_id)]
 
 
 def get_translation_map_for_user(
@@ -60,12 +69,8 @@ def get_latest_item_by_lemma(
     user_id: int,
     english_lemma: str,
 ) -> VocabularyItemDTO | None:
-    item = repository.get_latest_vocabulary_item_by_lemma(
-        db,
-        user_id=user_id,
-        english_lemma=english_lemma,
-    )
-    return _to_vocabulary_item_dto(item) if item is not None else None
+    row = repository.get_latest_vocabulary_item_by_lemma(db, user_id=user_id, english_lemma=english_lemma)
+    return _to_dto(row[0], row[1]) if row is not None else None
 
 
 def queue_add_item(
@@ -142,30 +147,29 @@ async def create_item_with_ai(
 
     definition_resolution = await resolve_context_definition(
         db=db,
-        user_id=user_id,
         english_lemma=normalized_lemma,
         russian_translation=normalized_translation,
         source_sentence=normalized_sentence,
     )
 
     with application_transaction.boundary(db=db):
-        item = repository.create_vocabulary_item(
+        entry, _ = repository.get_or_create_dictionary_entry(
             db,
-            VocabularyItemCreate(
-                user_id=user_id,
-                english_lemma=normalized_lemma,
-                russian_translation=normalized_translation,
-                context_definition_ru=definition_resolution.context_definition,
-                context_definition_source=definition_resolution.source,
-                context_definition_confidence=definition_resolution.confidence,
-                definition_reused_from_item_id=definition_resolution.reused_from_item_id,
-                source_sentence=normalized_sentence,
-                source_url=normalized_url,
-            ),
-            auto_commit=False,
+            english_lemma=normalized_lemma,
+            russian_translation=normalized_translation,
+            context_definition_ru=definition_resolution.context_definition,
         )
-    db.refresh(item)
-    return _to_vocabulary_item_dto(item)
+        uv, _ = repository.add_to_user_vocabulary(
+            db,
+            user_id=user_id,
+            entry_id=entry.id,
+            source_sentence=normalized_sentence,
+            source_url=normalized_url,
+        )
+
+    db.refresh(uv)
+    db.refresh(entry)
+    return _to_dto(uv, entry)
 
 
 def update_item(
@@ -175,19 +179,16 @@ def update_item(
     payload: VocabularyItemUpdateMe,
     current_user_id: int,
 ) -> VocabularyItemDTO:
-    item = repository.get_vocabulary_item_for_user(db, item_id=item_id, user_id=current_user_id)
-    if item is None:
+    row = repository.get_user_vocabulary_item(db, user_id=current_user_id, item_id=item_id)
+    if row is None:
         raise HTTPException(status_code=404, detail="Vocabulary item not found")
-
-    updated = repository.update_vocabulary_item(
-        db,
-        item,
-        english_lemma=payload.english_lemma,
-        russian_translation=payload.russian_translation,
+    uv, entry = row
+    repository.update_user_vocabulary_item(
+        db, uv,
         source_sentence=payload.source_sentence,
         source_url=payload.source_url,
     )
-    return _to_vocabulary_item_dto(updated)
+    return _to_dto(uv, entry)
 
 
 def delete_item(
@@ -196,14 +197,15 @@ def delete_item(
     item_id: int,
     current_user_id: int,
 ) -> dict[str, bool]:
-    item = repository.get_vocabulary_item_for_user(db, item_id=item_id, user_id=current_user_id)
-    if item is None:
+    row = repository.get_user_vocabulary_item(db, user_id=current_user_id, item_id=item_id)
+    if row is None:
         raise HTTPException(status_code=404, detail="Vocabulary item not found")
+    uv, _ = row
     with application_transaction.boundary(db=db):
         learning_graph_public_api.delete_vocabulary_links(
             db=db,
             user_id=current_user_id,
-            vocabulary_item_id=item.id,
+            vocabulary_item_id=uv.id,
         )
-        repository.delete_vocabulary_item(db, item, auto_commit=False)
+        repository.delete_user_vocabulary_item(db, uv)
     return {"deleted": True}

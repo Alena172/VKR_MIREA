@@ -30,8 +30,8 @@ def get_task_status(
     Returns the task result once it reaches SUCCESS state.
     """
     from app.celery_app import (
-        CELERY_AVAILABLE,
         _LOCAL_TASK_RESULTS,
+        CELERY_AVAILABLE,
         _prune_local_task_results,
         celery_app,
         task_ownership_registry,

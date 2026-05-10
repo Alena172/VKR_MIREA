@@ -14,20 +14,13 @@ _REUSE_CONFIDENCE_THRESHOLD = 0.72
 
 @dataclass(frozen=True)
 class DefinitionResolution:
-    """Итог выбора источника контекстного определения."""
-
     context_definition: str
     source: str
     confidence: str
-    reused_from_item_id: int | None = None
 
 
 def _generic_tokens(text: str | None) -> set[str]:
-    return {
-        token.lower()
-        for token in _GENERIC_TOKEN_RE.findall(text or "")
-        if len(token) >= 3
-    }
+    return {token.lower() for token in _GENERIC_TOKEN_RE.findall(text or "") if len(token) >= 3}
 
 
 def _classify_confidence(score: float) -> str:
@@ -38,57 +31,33 @@ def _classify_confidence(score: float) -> str:
     return "low"
 
 
-def _score_definition_candidate(
-    *,
-    candidate,
-    russian_translation: str,
-    source_sentence: str | None,
-) -> float:
+def _score_definition_candidate(*, candidate, russian_translation: str, source_sentence: str | None) -> float:
     score = 0.0
-
     if candidate.context_definition_ru:
         score += 0.2
-
     candidate_translation = (candidate.russian_translation or "").strip().lower()
     normalized_translation = russian_translation.strip().lower()
     if candidate_translation and candidate_translation == normalized_translation:
         score += 0.45
-
     current_tokens = _generic_tokens(source_sentence)
-    candidate_tokens = _generic_tokens(candidate.source_sentence)
+    candidate_tokens = _generic_tokens(getattr(candidate, "source_sentence", None))
     if current_tokens and candidate_tokens:
         overlap = len(current_tokens & candidate_tokens) / max(1, len(current_tokens))
         score += 0.35 * overlap
     elif not current_tokens and candidate_translation == normalized_translation:
         score += 0.15
-
-    candidate_source = (candidate.context_definition_source or "").strip().lower()
-    if candidate_source.startswith("reuse"):
-        score += 0.03
-    elif candidate_source.startswith("llm"):
-        score += 0.08
-    elif candidate_source.startswith("local"):
-        score += 0.05
-
     return min(score, 1.0)
 
 
 def find_reusable_definition(
     *,
     db: Session,
-    user_id: int,
     english_lemma: str,
     russian_translation: str,
     source_sentence: str | None,
 ) -> DefinitionResolution | None:
-    """Находит лучшее сохраненное определение для той же леммы."""
-
-    candidates = repository.list_definition_candidates(
-        db,
-        user_id=user_id,
-        english_lemma=english_lemma,
-        limit=20,
-    )
+    """Ищет подходящее определение в общем словаре (без привязки к пользователю)."""
+    candidates = repository.list_definition_candidates(db, english_lemma=english_lemma)
     best_candidate = None
     best_score = 0.0
     for candidate in candidates:
@@ -106,26 +75,22 @@ def find_reusable_definition(
 
     return DefinitionResolution(
         context_definition=best_candidate.context_definition_ru or "",
-        source="reuse_existing_context_definition",
+        source="reuse_dictionary_definition",
         confidence=_classify_confidence(best_score),
-        reused_from_item_id=best_candidate.id,
     )
 
 
 async def resolve_context_definition(
     *,
     db: Session,
-    user_id: int,
     english_lemma: str,
     russian_translation: str,
     source_sentence: str | None,
     cefr_level: str | None = None,
 ) -> DefinitionResolution:
-    """Переиспользует подходящее определение или генерирует новое через AI."""
-
+    """Переиспользует определение из общего словаря или генерирует новое через AI."""
     reusable = find_reusable_definition(
         db=db,
-        user_id=user_id,
         english_lemma=english_lemma,
         russian_translation=russian_translation,
         source_sentence=source_sentence,
@@ -141,7 +106,6 @@ async def resolve_context_definition(
     )
     return DefinitionResolution(
         context_definition=definition,
-        source="llm_generated_context_definition",
+        source="llm_generated",
         confidence="medium",
-        reused_from_item_id=None,
     )

@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import ast
-import sys
 from dataclasses import dataclass
 from pathlib import Path
-
 
 MODULES_ROOT = Path(__file__).resolve().parents[1] / "app" / "modules"
 FORBIDDEN_CROSS_MODULE_LAYERS = {"services", "repositories"}

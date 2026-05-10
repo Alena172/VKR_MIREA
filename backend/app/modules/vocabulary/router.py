@@ -10,14 +10,22 @@ from app.modules.vocabulary.schemas import (
     TranslateResponse,
     VocabularyFromCaptureRequest,
     VocabularyFromCaptureRequestMe,
-    VocabularyFromCaptureResponse,
     VocabularyItemCreate,
     VocabularyItemCreateMe,
     VocabularyItemRead,
     VocabularyItemUpdateMe,
 )
-from app.modules.vocabulary.service.items import delete_item, list_items, queue_add_item, queue_add_item_from_capture, update_item
-from app.modules.vocabulary.service.translation import resolve_target_user_id, translate_for_user
+from app.modules.vocabulary.service.items import (
+    delete_item,
+    list_items,
+    queue_add_item,
+    queue_add_item_from_capture,
+    update_item,
+)
+from app.modules.vocabulary.service.translation import (
+    resolve_target_user_id,
+    translate_for_user,
+)
 
 router = APIRouter()
 
@@ -28,7 +36,7 @@ def list_my_items(
     db: Session = Depends(get_db),
 ) -> list[VocabularyItemRead]:
     return [
-        VocabularyItemRead.model_validate(item)
+        VocabularyItemRead.model_validate(item, from_attributes=True)
         for item in list_items(
             db=db,
             requested_user_id=current_user_id,
@@ -44,7 +52,7 @@ def list_vocabulary_items(
     db: Session = Depends(get_db),
 ) -> list[VocabularyItemRead]:
     return [
-        VocabularyItemRead.model_validate(item)
+        VocabularyItemRead.model_validate(item, from_attributes=True)
         for item in list_items(
             db=db,
             requested_user_id=user_id,
@@ -130,7 +138,8 @@ def update_my_item(
             item_id=item_id,
             payload=payload,
             current_user_id=current_user_id,
-        )
+        ),
+        from_attributes=True,
     )
 
 

@@ -4,9 +4,8 @@ services:
       - ./backend:/app/backend
     environment:
       WATCHFILES_FORCE_POLLING: "true"
-    command: >
-      sh -c "python -m alembic upgrade head &&
-      python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      UVICORN_RELOAD: "true"
+    command: /app/backend/entrypoint.sh
 
   celery_worker:
     volumes:

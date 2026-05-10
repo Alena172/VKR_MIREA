@@ -6,13 +6,18 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.core.application import application_transaction
-from app.modules.ai.schemas import ExplainErrorRequest
 from app.modules.ai.facade import ai_facade as ai_service
-from app.modules.review.service.srs import WordProgressUpdate, srs_service as context_memory_public_api
+from app.modules.ai.schemas import ExplainErrorRequest
 from app.modules.graph.service.graph import graph_service as learning_graph_public_api
+from app.modules.review.service.srs import WordProgressUpdate
+from app.modules.review.service.srs import srs_service as context_memory_public_api
 from app.modules.training import repository
 from app.modules.training.repository import AnswerPersistPayload
-from app.modules.training.schemas import SessionAnswer, SessionAnswerFeedbackDTO, SessionSubmitResultDTO
+from app.modules.training.schemas import (
+    SessionAnswer,
+    SessionAnswerFeedbackDTO,
+    SessionSubmitResultDTO,
+)
 from app.modules.training.service.evaluation import (
     answer_similarity_metrics,
     detect_simple_exercise_type,

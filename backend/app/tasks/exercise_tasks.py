@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+
 from app.celery_app import celery_app
 
 logger = logging.getLogger(__name__)

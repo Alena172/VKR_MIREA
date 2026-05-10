@@ -2,29 +2,33 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
+from alembic import context
 from app.core.config import get_settings
 from app.core.db import Base
-from app.modules.identity.models.users_models import UserModel
-from app.modules.review.models import WordProgressModel
-from app.modules.training.models import AnswerModel, LearningSessionModel
 from app.modules.graph.models import (
-    SenseRelationModel,
     SenseErrorEventModel,
+    SenseRelationModel,
     TopicClusterModel,
     UserInterestModel,
     VocabularySenseLinkModel,
     WordSenseModel,
 )
-from app.modules.vocabulary.models.base_lexicon_models import BaseLexiconEntryModel
-from app.modules.vocabulary.models.items_models import VocabularyItemModel
+from app.modules.identity.models import UserModel
+from app.modules.review.models import WordProgressModel
+from app.modules.training.models import AnswerModel, LearningSessionModel
+from app.modules.vocabulary.models import (
+    BaseLexiconEntryModel,
+    DictionaryEntryModel,
+    UserVocabularyModel,
+)
 
 # Register models for metadata discovery.
 _ = (
     UserModel,
-    VocabularyItemModel,
+    DictionaryEntryModel,
+    UserVocabularyModel,
     BaseLexiconEntryModel,
     WordProgressModel,
     LearningSessionModel,
@@ -40,6 +44,8 @@ _ = (
 config = context.config
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
+if config.config_ini_section:
+    config.set_section_option(config.config_ini_section, "sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

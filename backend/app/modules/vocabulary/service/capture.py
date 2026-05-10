@@ -5,21 +5,21 @@ import re
 from sqlalchemy.orm import Session
 
 from app.core.application import application_access, application_transaction
-from app.core.config import get_settings
-from app.core.libretranslate_client import LibreTranslateClient
-from app.modules.review.service.srs import srs_service as context_memory_public_api
+from app.modules.ai.schemas import TranslateWithContextRequest
+from app.modules.ai.facade import ai_facade as ai_service
 from app.modules.graph.service.graph import graph_service as learning_graph_public_api
 from app.modules.vocabulary import repository
 from app.modules.vocabulary.models import CaptureModel
-from app.modules.vocabulary.schemas import CaptureDTO, VocabularyItemCreate, VocabularyItemDTO
+from app.modules.vocabulary.schemas import CaptureDTO, VocabularyItemDTO
 from app.modules.vocabulary.service.definition import resolve_context_definition
 from app.modules.vocabulary.service.lexicon import lookup_translation
 
+_ENGLISH_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _RUSSIAN_TOKEN_RE = re.compile(r"[А-Яа-яЁё-]+")
 
 
-def _to_capture_dto(item) -> CaptureDTO:
-    return CaptureDTO(vocabulary=VocabularyItemDTO.from_model(item))
+def _to_capture_dto(uv, entry) -> CaptureDTO:
+    return CaptureDTO(vocabulary=VocabularyItemDTO.from_model(uv, entry))
 
 
 def _normalize_english_lemma(text: str) -> str:
@@ -33,8 +33,16 @@ def _normalize_translation(text: str) -> str:
     return value or "перевод не найден"
 
 
+def _english_tokens(text: str | None) -> list[str]:
+    return [token.lower() for token in _ENGLISH_TOKEN_RE.findall(text or "")]
+
+
 def _russian_tokens(text: str | None) -> list[str]:
     return [token.lower() for token in _RUSSIAN_TOKEN_RE.findall(text or "")]
+
+
+def _is_single_word_capture(text: str) -> bool:
+    return len(_english_tokens(text)) == 1
 
 
 def _looks_like_context_phrase_expansion(
@@ -53,60 +61,68 @@ def _looks_like_context_phrase_expansion(
     return False
 
 
-def _make_libretranslate_client() -> LibreTranslateClient:
-    settings = get_settings()
-    return LibreTranslateClient(
-        base_url=settings.libretranslate_url,
-        api_key=settings.libretranslate_api_key,
-        timeout_seconds=settings.libretranslate_timeout_seconds,
-    )
-
-
-async def _resolve_translation(
+async def _generate_capture_ai_data(
     *,
-    db: Session,
+    capture: CaptureModel,
     english_lemma: str,
-    source_sentence: str | None,
-) -> tuple[str, str | None]:
-    """Возвращает (russian_translation, semantic_sentence).
+    cefr_level: str,
+    db: Session,
+) -> tuple[str, str, str | None]:
+    if _is_single_word_capture(capture.selected_text):
+        fast_translation = lookup_translation(
+            db=db,
+            english_lemma=english_lemma,
+        ) or ai_service.fast_translate_single_word(english_lemma)
+        if fast_translation:
+            normalized_fast_translation = _normalize_translation(fast_translation)
+            return (
+                normalized_fast_translation,
+                "fast_local_word_translation; local_definition",
+                None,
+            )
 
-    Приоритет: base_lexicon (без контекста) → LibreTranslate с контекстом →
-    LibreTranslate без контекста → fallback "перевод не найден".
+    contextual_response = await ai_service.translate_with_context_async(
+        TranslateWithContextRequest(
+            text=english_lemma,
+            cefr_level=cefr_level,
+            source_context=capture.source_sentence,
+        )
+    )
+    contextual_translation = _normalize_translation(contextual_response.translated_text)
 
-    Для single-word capture с контекстом: если LibreTranslate вернул
-    многословный результат вместо перевода одного слова, берём перевод
-    без контекста и не сохраняем предложение как семантический ключ.
-    """
-    lexicon = lookup_translation(db=db, english_lemma=english_lemma)
-    if lexicon and not source_sentence:
-        return _normalize_translation(lexicon), None
+    translation_note = contextual_response.provider_note
+    semantic_sentence = capture.source_sentence
+    russian_translation = contextual_translation
 
-    client = _make_libretranslate_client()
+    if _is_single_word_capture(capture.selected_text):
+        base_response = await ai_service.translate_with_context_async(
+            TranslateWithContextRequest(
+                text=english_lemma,
+                cefr_level=cefr_level,
+                source_context=None,
+            )
+        )
+        base_translation = _normalize_translation(base_response.translated_text)
 
-    if source_sentence and client.is_configured():
-        contextual = await client.translate(text=english_lemma, context=source_sentence)
-        if contextual:
-            contextual = _normalize_translation(contextual)
-            base = None
-            if client.is_configured():
-                base_raw = await client.translate(text=english_lemma)
-                base = _normalize_translation(base_raw) if base_raw else None
-            if base and _looks_like_context_phrase_expansion(
-                base_translation=base,
-                contextual_translation=contextual,
-            ):
-                return base, None
-            return contextual, source_sentence
+        if _looks_like_context_phrase_expansion(
+            base_translation=base_translation,
+            contextual_translation=contextual_translation,
+        ):
+            russian_translation = base_translation
+            semantic_sentence = None
+            translation_note = (
+                f"{contextual_response.provider_note}; "
+                "capture_mode=base_word_translation; "
+                f"context_variant_ignored={contextual_translation}"
+            )
+        else:
+            russian_translation = contextual_translation or base_translation
+            translation_note = (
+                f"{contextual_response.provider_note}; "
+                "capture_mode=contextual_single_word"
+            )
 
-    if client.is_configured():
-        base_raw = await client.translate(text=english_lemma)
-        if base_raw:
-            return _normalize_translation(base_raw), None
-
-    if lexicon:
-        return _normalize_translation(lexicon), None
-
-    return "перевод не найден", None
+    return russian_translation, translation_note, semantic_sentence
 
 
 async def capture_to_vocabulary(
@@ -118,7 +134,7 @@ async def capture_to_vocabulary(
     source_sentence: str | None,
     force_new_vocabulary_item: bool,
 ) -> CaptureDTO:
-    application_access.get_user_or_404(db=db, user_id=user_id)
+    user = application_access.get_user_or_404(db=db, user_id=user_id)
     capture = CaptureModel(
         user_id=user_id,
         selected_text=selected_text,
@@ -128,46 +144,45 @@ async def capture_to_vocabulary(
     )
     english_lemma = _normalize_english_lemma(capture.selected_text)
 
-    russian_translation, semantic_sentence = await _resolve_translation(
-        db=db,
+    russian_translation, _translation_note, semantic_sentence = await _generate_capture_ai_data(
+        capture=capture,
         english_lemma=english_lemma,
-        source_sentence=capture.source_sentence,
+        cefr_level=user.cefr_level,
+        db=db,
     )
     definition_resolution = await resolve_context_definition(
         db=db,
-        user_id=user_id,
         english_lemma=english_lemma,
         russian_translation=russian_translation,
         source_sentence=semantic_sentence,
     )
 
     with application_transaction.boundary(db=db):
-        existing = repository.get_latest_vocabulary_item_by_lemma(
+        existing_row = repository.get_latest_vocabulary_item_by_lemma(
             db,
             user_id=user_id,
             english_lemma=english_lemma,
         )
-        created_new = existing is None or capture.force_new_vocabulary_item
+        use_existing = existing_row is not None and not capture.force_new_vocabulary_item
 
-        if created_new:
-            vocabulary_item = repository.create_vocabulary_item(
-                db,
-                VocabularyItemCreate(
-                    user_id=user_id,
-                    english_lemma=english_lemma,
-                    russian_translation=russian_translation,
-                    context_definition_ru=definition_resolution.context_definition,
-                    context_definition_source=definition_resolution.source,
-                    context_definition_confidence=definition_resolution.confidence,
-                    definition_reused_from_item_id=definition_resolution.reused_from_item_id,
-                    source_sentence=capture.source_sentence,
-                    source_url=capture.source_url,
-                ),
-                auto_commit=False,
-            )
+        if use_existing:
+            uv, entry = existing_row
         else:
-            vocabulary_item = existing
+            entry, _ = repository.get_or_create_dictionary_entry(
+                db,
+                english_lemma=english_lemma,
+                russian_translation=russian_translation,
+                context_definition_ru=definition_resolution.context_definition,
+            )
+            uv, _ = repository.add_to_user_vocabulary(
+                db,
+                user_id=user_id,
+                entry_id=entry.id,
+                source_sentence=capture.source_sentence,
+                source_url=capture.source_url,
+            )
 
+        from app.modules.review.service.srs import srs_service as context_memory_public_api  # noqa: PLC0415
         context_memory_public_api.ensure_word_progress_entry(
             db=db,
             user_id=user_id,
@@ -181,9 +196,11 @@ async def capture_to_vocabulary(
             context_definition_ru=definition_resolution.context_definition,
             source_sentence=semantic_sentence,
             source_url=capture.source_url,
-            vocabulary_item_id=vocabulary_item.id,
+            vocabulary_item_id=uv.id,
         )
-    if created_new:
-        db.refresh(vocabulary_item)
 
-    return _to_capture_dto(vocabulary_item)
+    if not use_existing:
+        db.refresh(uv)
+        db.refresh(entry)
+
+    return _to_capture_dto(uv, entry)

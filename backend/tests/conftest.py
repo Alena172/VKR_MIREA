@@ -1,8 +1,8 @@
-from collections.abc import Generator
 import os
+from collections.abc import Generator
 
-os.environ.setdefault("TRANSLATION_STRICT_REMOTE", "false")
 os.environ.setdefault("TRUSTED_HOSTS", "localhost,127.0.0.1,backend,gateway,testserver,*.ngrok-free.dev")
+os.environ.setdefault("BOOTSTRAP_SCHEMA_ON_STARTUP", "false")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,13 +12,16 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.db import Base, get_db
 from app.main import app
-from app.modules.vocabulary.models.base_lexicon_models import BaseLexiconEntryModel
+from app.modules.identity.models import UserModel
 from app.modules.training.models import LearningSessionModel
-from app.modules.identity.models.users_models import UserModel
-from app.modules.vocabulary.models.items_models import VocabularyItemModel
+from app.modules.vocabulary.models import (
+    BaseLexiconEntryModel,
+    DictionaryEntryModel,
+    UserVocabularyModel,
+)
 
 # Keep imports for SQLAlchemy metadata registration.
-_ = (UserModel, VocabularyItemModel, LearningSessionModel, BaseLexiconEntryModel)
+_ = (UserModel, DictionaryEntryModel, UserVocabularyModel, LearningSessionModel, BaseLexiconEntryModel)
 
 
 test_engine = create_engine(

@@ -18,9 +18,11 @@ from app.modules.identity.service import (
     create_user,
     get_user_or_404,
     issue_token_for_email,
-    login_or_register as login_or_register_user,
     list_user_dtos,
     verify_token_payload,
+)
+from app.modules.identity.service import (
+    login_or_register as login_or_register_user,
 )
 
 router = APIRouter()

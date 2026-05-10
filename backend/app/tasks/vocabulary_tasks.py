@@ -45,7 +45,7 @@ def add_word_with_ai(
                 source_url=source_url,
             )
         )
-        return VocabularyItemRead.model_validate(item).model_dump()
+        return VocabularyItemRead.model_validate(item, from_attributes=True).model_dump()
     except Exception as exc:
         logger.exception("add_word_with_ai failed for user=%s lemma=%s", user_id, english_lemma)
         raise self.retry(exc=exc)
@@ -70,7 +70,10 @@ def capture_to_vocabulary_task(
 ) -> dict:
     """Run the full capture-to-vocabulary pipeline in a worker."""
     from app.core.db import SessionLocal
-    from app.modules.vocabulary.schemas import VocabularyFromCaptureResponse, VocabularyItemRead
+    from app.modules.vocabulary.schemas import (
+        VocabularyFromCaptureResponse,
+        VocabularyItemRead,
+    )
     from app.modules.vocabulary.service.capture import capture_to_vocabulary
 
     db = SessionLocal()
@@ -86,7 +89,7 @@ def capture_to_vocabulary_task(
             )
         )
         return VocabularyFromCaptureResponse(
-            vocabulary=VocabularyItemRead.model_validate(result.vocabulary),
+            vocabulary=VocabularyItemRead.model_validate(result.vocabulary, from_attributes=True),
         ).model_dump()
     except Exception as exc:
         logger.exception(

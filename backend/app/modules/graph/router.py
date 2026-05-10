@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.modules.identity.deps import get_current_user_id
 from app.modules.graph.schemas import (
     InterestUpsertRequest,
     InterestWordsResponse,
@@ -12,6 +11,7 @@ from app.modules.graph.schemas import (
     UserInterestsResponse,
 )
 from app.modules.graph.service.graph import graph_service
+from app.modules.identity.deps import get_current_user_id
 from app.modules.review.service.srs import srs_service
 
 router = APIRouter(prefix="/learning-graph", tags=["graph"])

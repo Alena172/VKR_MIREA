@@ -10,9 +10,9 @@ from collections.abc import Awaitable, Callable
 
 from app.modules.ai.schemas import (
     ExerciseSeed,
+    GeneratedExerciseItem,
     GenerateExercisesRequest,
     GenerateExercisesResponse,
-    GeneratedExerciseItem,
     TranslateGlossaryItem,
 )
 from app.modules.ai.service.translation import TranslationService
@@ -55,6 +55,7 @@ class ExerciseGenerator:
         remote_enabled: Callable[[], bool],
         chat_complete_async: Callable[..., Awaitable[str | None]],
         provider_unavailable_error: type[Exception],
+        translation_service: TranslationService,
         recent_sentences: dict[str, deque[str]],
     ) -> None:
         self._model = model
@@ -62,7 +63,7 @@ class ExerciseGenerator:
         self._remote_enabled = remote_enabled
         self._chat_complete_async = self._wrap_async_chat_complete(chat_complete_async)
         self._provider_unavailable_error = provider_unavailable_error
-        self._heuristic = TranslationService()
+        self._translation_service = translation_service
         self._recent_sentences = recent_sentences
 
     def _wrap_async_chat_complete(
@@ -350,7 +351,7 @@ class ExerciseGenerator:
                 if self._translation_contains_target(translated, seed.russian_translation):
                     return translated
 
-        translated = self._heuristic.heuristic_translate(
+        translated = self._translation_service.heuristic_translate(
             sentence_en,
             sentence_en,
             [

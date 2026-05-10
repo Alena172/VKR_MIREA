@@ -6,16 +6,16 @@ from sqlalchemy.orm import Session
 from app.core.application import application_access, application_transaction
 from app.modules.graph.repository import GraphRepository, graph_repository
 from app.modules.graph.schemas import (
+    InterestItem,
     InterestUpsertRequest,
+    InterestWordItem,
     InterestWordsResponse,
     SemanticUpsertRequest,
     SemanticUpsertResponse,
+    SenseAnchorItem,
     SenseAnchorsResponse,
     UserInterestsResponse,
     WordSenseRead,
-    InterestItem,
-    InterestWordItem,
-    SenseAnchorItem,
 )
 
 

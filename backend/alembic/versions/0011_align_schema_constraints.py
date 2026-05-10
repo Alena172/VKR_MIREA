@@ -5,17 +5,17 @@ Revises: 0010_drop_cluster_desc
 Create Date: 2026-04-08 00:00:00
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0011_align_schema_constraints"
-down_revision: Union[str, None] = "0010_drop_cluster_desc"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "0010_drop_cluster_desc"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def _index_exists(table_name: str, index_name: str) -> bool:

@@ -70,7 +70,7 @@ class UserDTO:
     created_at: datetime
 
     @staticmethod
-    def from_model(user: "UserModel") -> "UserDTO":
+    def from_model(user: UserModel) -> UserDTO:
         from app.modules.identity.models import UserModel
 
         if not isinstance(user, UserModel):

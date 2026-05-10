@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
-import re
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session

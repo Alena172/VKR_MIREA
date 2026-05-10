@@ -8,13 +8,12 @@ class Settings(BaseSettings):
 
     app_name: str = "VKR English Learning API"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/vkr_db"
+    bootstrap_schema_on_startup: bool = True
     ai_base_url: str = "http://localhost:11434/v1"
     ai_model: str = "llama3"
     ai_timeout_seconds: float = 20.0
     ai_max_retries: int = 1
-    libretranslate_url: str = "http://localhost:5000"
-    libretranslate_api_key: str | None = None
-    libretranslate_timeout_seconds: float = 5.0
+    translation_strict_remote: bool = True
     jwt_secret: str = "change_me"
     jwt_issuer: str = "vkr"
     jwt_access_ttl_minutes: int = 60 * 24

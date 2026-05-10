@@ -1,7 +1,11 @@
 from fastapi import APIRouter
 
 from app.modules.ai.facade import ai_facade
-from app.modules.ai.schemas import AIStatusResponse, ExplainErrorRequest, ExplainErrorResponse
+from app.modules.ai.schemas import (
+    AIStatusResponse,
+    ExplainErrorRequest,
+    ExplainErrorResponse,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
