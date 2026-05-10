@@ -185,21 +185,31 @@ class ExerciseGenerator:
         if len(lowered) <= 4:
             return lowered
         for suffix in (
-            "иями", "ями", "ами", "ями", "ого", "ему", "ому", "ыми", "ими",
-            "иях", "иях", "ах", "ях", "ой", "ей", "ою", "ею", "ия", "ья",
-            "ию", "ью", "иям", "ьям", "ию", "ью", "а", "я", "у", "ю", "ы", "и", "е", "о",
+            "иями", "ями", "ами", "ого", "ему", "ому", "ыми", "ими",
+            "иях", "ах", "ях", "ой", "ей", "ою", "ею", "ия", "ья",
+            "ию", "ью", "иям", "ьям",
+            "а", "я", "у", "ю", "ы", "и", "е", "о",
         ):
             if lowered.endswith(suffix) and len(lowered) - len(suffix) >= 4:
                 return lowered[: -len(suffix)]
         return lowered
 
     def _translation_contains_target(self, translated_text: str, target_translation: str) -> bool:
-        target_root = self._normalize_russian_token(target_translation)
-        if not target_root:
+        # Compare by common prefix of at least 4 chars — handles all Russian inflection patterns
+        # without a fragile hand-built stemmer.
+        target_norm = target_translation.strip().lower().replace("ё", "е")
+        target_norm = re.sub(r"[^а-яa-z]", "", target_norm)
+        if not target_norm:
             return True
+        prefix_len = max(4, len(target_norm) - 3)
+        target_prefix = target_norm[:prefix_len]
         translated_tokens = re.findall(r"[А-Яа-яЁёA-Za-z-]+", translated_text)
-        translated_roots = {self._normalize_russian_token(token) for token in translated_tokens}
-        return target_root in translated_roots
+        for token in translated_tokens:
+            token_norm = token.strip().lower().replace("ё", "е")
+            token_norm = re.sub(r"[^а-яa-z]", "", token_norm)
+            if token_norm[:prefix_len] == target_prefix:
+                return True
+        return False
 
     async def _generate_sentence_translation_pair_with_remote(
         self,
