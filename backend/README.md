@@ -162,6 +162,7 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 
 ### Vocabulary
 - GET    /api/v1/vocabulary/me
+- GET    /api/v1/vocabulary
 - POST   /api/v1/vocabulary/me           (202 Accepted, Celery task)
 - PUT    /api/v1/vocabulary/me/{item_id}
 - DELETE /api/v1/vocabulary/me/{item_id}
@@ -173,8 +174,11 @@ docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 
 ### Упражнения и сессии (модуль training)
 - POST /api/v1/exercises/me/generate     (202 Accepted, Celery task)
+- POST /api/v1/exercises/generate        (202 Accepted, Celery task)
 - POST /api/v1/sessions/submit
+- GET  /api/v1/sessions
 - GET  /api/v1/sessions/me
+- GET  /api/v1/sessions/{session_id}/answers
 - GET  /api/v1/sessions/me/{session_id}/answers
 
 ### Повторение и SRS (модуль review)
@@ -222,4 +226,4 @@ uv run pytest -q
 
 ## Дополнительные материалы
 
-Подробности по слоям, границам модулей и ограничениям среды выполнения смотри в [ARCHITECTURE.md](/d:/VKR/VKR_V3_Curs/backend/ARCHITECTURE.md).
+Подробности по слоям, границам модулей и ограничениям среды выполнения смотри в [ARCHITECTURE.md](ARCHITECTURE.md).

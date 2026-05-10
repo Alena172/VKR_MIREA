@@ -1,13 +1,13 @@
 # Диаграммы последовательности модулей серверной части
 
-Для отчета основными считаются диаграммы верхнего уровня по доменным модулям, AI-адаптеру и инфраструктурному слою задач:
+Для отчёта основными считаются диаграммы верхнего уровня по доменным модулям, AI-адаптеру и инфраструктурному слою задач:
 
-- `01_identity_module_sequence.puml` - модуль `identity`
-- `02_vocabulary_module_sequence.puml` - модуль `vocabulary`
-- `03_learning_module_sequence.puml` - модуль `learning`
-- `04_learning_graph_module_sequence.puml` - модуль `learning_graph`
-- `05_ai_services_module_sequence.puml` - AI-адаптер `ai_services`
-- `06_tasks_platform_sequence.puml` - технический слой `tasks`
+- `01_identity_module_sequence.puml` — модуль `identity`
+- `02_vocabulary_module_sequence.puml` — модуль `vocabulary`
+- `03_training_module_sequence.puml` — модуль `training`
+- `04_graph_module_sequence.puml` — модуль `graph`
+- `05_ai_module_sequence.puml` — AI-адаптер `ai`
+- `06_tasks_platform_sequence.puml` — технический слой `tasks`
 
 Дополнительно в каталоге сохранены более подробные сценарные диаграммы по подмодулям и отдельным потокам:
 
@@ -18,14 +18,14 @@
 - `05_capture_sequence.puml`
 - `06_exercise_engine_sequence.puml`
 - `07_learning_session_sequence.puml`
-- `08_context_memory_sequence.puml`
-- `09_learning_graph_sequence.puml`
+- `08_review_sequence.puml`
+- `09_graph_sequence.puml`
 - `10_tasks_sequence.puml`
-- `11_ai_services_sequence.puml`
+- `11_ai_sequence.puml`
 - `12_base_lexicon_sequence.puml`
 - `13_vocabulary_delete_sequence.puml`
 - `14_vocabulary_ai_add_sequence.puml`
 
-Их можно использовать как приложение или как детализирующие иллюстрации. Основная схема для пояснительной записки задается четырьмя доменными модулями, AI-адаптером и инфраструктурой задач.
+Их можно использовать как приложение или как детализирующие иллюстрации. Основная схема для пояснительной записки задаётся четырьмя доменными модулями, AI-адаптером и инфраструктурой задач.
 
 Во всех диаграммах подписи шагов описывают смысл действия для продукта и пользователя.

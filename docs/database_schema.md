@@ -59,25 +59,25 @@
 
 Статусы `due`, `mastered` и `troubled` вычисляются в логике приложения и пользовательском интерфейсе.
 
-### 5. `learning_graph` формирует семантический профиль пользователя
+### 5. Модуль `graph` формирует семантический профиль пользователя
 
 Семантический модуль хранит интересы, смыслы слов, связи словаря со смыслами и связи между смыслами. Его публичный API покрывает пользовательский поток:
 
-- интересы
-- создание или обновление семантической записи
-- слова из профиля интересов
-- смысловые связи
+- интересы (`/learning-graph/me/interests`)
+- создание или обновление семантической записи (`/learning-graph/me/semantic-upsert`)
+- слова из профиля интересов (`/learning-graph/me/interest-words`)
+- смысловые связи (`/learning-graph/me/anchors`)
 
-### 6. `context_memory` сфокусирован на повторении
+### 6. Модуль `review` сфокусирован на повторении
 
 Публичная часть модуля покрывает:
 
-- очередь повторения
+- очередь повторения (`word_progress` с наступившим `next_review_at`)
 - запуск сессии повторения
 - обновление прогресса повторения
-- список прогресса слов
-- план повторения
-- снимок прогресса
+- список прогресса слов с фильтрацией и сортировкой
+- план повторения (due + upcoming)
+- снимок прогресса (всего слов, освоено, проблемных)
 - сводка повторения
 
 ## Почему эта версия лучше подходит для диплома
@@ -91,7 +91,9 @@
 - семантический профиль через `learning_graph`
 - общий словарь (`dictionary_entries`) позволяет переиспользовать переводы между пользователями
 
-При этом схема остается ближе к демонстрируемому пользовательскому циклу и проще объясняется на защите.
+При этом схема остаётся ближе к демонстрируемому пользовательскому циклу и проще объясняется на защите.
+
+Нормализация словаря на `dictionary_entries` + `user_vocabulary` позволяет также переиспользовать переводы между пользователями без повторных вызовов AI: при добавлении слова, уже имеющегося в общем словаре, перевод и определение берутся из базы напрямую.
 
 ## Mermaid ER-диаграмма
 
@@ -175,7 +177,6 @@ erDiagram
         BIGINT user_id FK
         VARCHAR_64 cluster_key
         VARCHAR_120 name
-        TEXT description
         TIMESTAMP created_at
     }
 
@@ -195,7 +196,7 @@ erDiagram
     vocabulary_sense_links {
         BIGINT id PK
         BIGINT user_id FK
-        BIGINT user_vocabulary_id FK
+        BIGINT vocabulary_item_id FK
         BIGINT word_sense_id FK
         TIMESTAMP created_at
     }
@@ -236,7 +237,7 @@ erDiagram
     dictionary_entries ||--o{ user_vocabulary : referenced_by
     learning_sessions ||--o{ learning_session_answers : contains
     topic_clusters ||--o{ word_senses : groups
-    user_vocabulary ||--o{ vocabulary_sense_links : maps
+    user_vocabulary ||--o{ vocabulary_sense_links : vocabulary_item_id
     word_senses ||--o{ vocabulary_sense_links : maps
     word_senses ||--o{ sense_relations : left_side
     word_senses ||--o{ sense_relations : right_side
