@@ -143,6 +143,15 @@ def upgrade() -> None:
             bind.execute(sa.text(
                 "DELETE FROM vocabulary_sense_links WHERE user_vocabulary_id IS NULL"
             ))
+            # Deduplicate: keep lowest id per (user_id, user_vocabulary_id) before unique constraint.
+            bind.execute(sa.text("""
+                DELETE FROM vocabulary_sense_links
+                WHERE id NOT IN (
+                    SELECT MIN(id)
+                    FROM vocabulary_sense_links
+                    GROUP BY user_id, user_vocabulary_id
+                )
+            """))
 
         if _constraint_exists(bind, "vocabulary_sense_links", "uq_vocab_sense_link_user_vocab"):
             op.drop_constraint("uq_vocab_sense_link_user_vocab", "vocabulary_sense_links", type_="unique")

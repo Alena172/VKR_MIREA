@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, getErrorMessage, isAbortError, pollTask } from "../lib/api";
+import { api, getErrorMessage, isAbortError } from "../lib/api";
 import { useAbortControllers } from "./useAbortControllers";
 
 const NEXT_EXERCISE_BUFFER = 1;
@@ -26,9 +26,9 @@ export function useTrainingSession({ onError }) {
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
-  /** Генерирует упражнения через фоновую задачу backend и дожидается результата. */
+  /** Генерирует упражнения напрямую через backend и возвращает результат. */
   async function generateBatch(targetMode, batchSize, vocabularyIds, signal, { fastStart = false, incremental = false } = {}) {
-    const { task_id } = await api.generateExercisesMe(
+    const result = await api.generateExercisesMe(
       {
         size: batchSize,
         mode: targetMode,
@@ -38,13 +38,6 @@ export function useTrainingSession({ onError }) {
       },
       { signal },
     );
-    const result = await pollTask(task_id, {
-      intervalMs: 700,
-      maxAttempts: 90,
-      maxIntervalMs: 3000,
-      backoffFactor: 1.4,
-      signal,
-    });
     if (!result || !result.exercises || result.exercises.length === 0) {
       throw new Error("Не удалось получить задание.");
     }
