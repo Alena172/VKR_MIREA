@@ -69,10 +69,12 @@ async def _generate_capture_ai_data(
     db: Session,
 ) -> tuple[str, str, str | None]:
     if _is_single_word_capture(capture.selected_text):
-        fast_translation = lookup_translation(
-            db=db,
-            english_lemma=english_lemma,
-        ) or ai_service.fast_translate_single_word(english_lemma)
+        shared_translation = repository.find_shared_translation(db, english_lemma=english_lemma)
+        fast_translation = (
+            shared_translation
+            or lookup_translation(db=db, english_lemma=english_lemma)
+            or ai_service.fast_translate_single_word(english_lemma)
+        )
         if fast_translation:
             normalized_fast_translation = _normalize_translation(fast_translation)
             return (

@@ -104,16 +104,32 @@ def upgrade() -> None:
         ["cluster_key"],
         unique=False,
     )
-    _create_index_if_missing(
-        op.f("ix_mistake_events_mistake_tag"),
-        "mistake_events",
-        ["mistake_tag"],
-        unique=False,
+    bind = op.get_bind()
+    result = bind.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = current_schema() AND table_name = 'mistake_events'"
+        )
     )
+    if result.scalar() is not None:
+        _create_index_if_missing(
+            op.f("ix_mistake_events_mistake_tag"),
+            "mistake_events",
+            ["mistake_tag"],
+            unique=False,
+        )
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_mistake_events_mistake_tag"), table_name="mistake_events")
+    bind = op.get_bind()
+    result = bind.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = current_schema() AND table_name = 'mistake_events'"
+        )
+    )
+    if result.scalar() is not None:
+        op.drop_index(op.f("ix_mistake_events_mistake_tag"), table_name="mistake_events")
     op.drop_index(op.f("ix_topic_clusters_cluster_key"), table_name="topic_clusters")
     op.drop_index(op.f("ix_user_interests_interest_key"), table_name="user_interests")
     op.drop_index(

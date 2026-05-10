@@ -7,6 +7,7 @@ from app.core.application import application_access
 from app.modules.ai.schemas import TranslateWithContextRequest
 from app.modules.ai.facade import AIProviderUnavailableError, ai_facade as ai_service
 from app.modules.identity.service import get_user_or_404
+from app.modules.vocabulary import repository
 from app.modules.vocabulary.service.items import list_user_items
 from app.modules.vocabulary.schemas import TranslationResultDTO
 
@@ -24,6 +25,10 @@ def _build_translation_note(provider_note: str) -> str:
     return f"Translation completed ({provider_note})"
 
 
+def _is_single_token(text: str) -> bool:
+    return len(text.strip().split()) == 1
+
+
 async def translate_for_user(
     *,
     db: Session,
@@ -32,6 +37,14 @@ async def translate_for_user(
     source_context: str | None,
 ) -> TranslationResultDTO:
     user = get_user_or_404(db=db, user_id=user_id)
+
+    if _is_single_token(text) and not source_context:
+        shared = repository.find_shared_translation(db, english_lemma=text.strip())
+        if shared:
+            return TranslationResultDTO(
+                translated_text=shared,
+                note=_build_translation_note("glossary:shared_dictionary"),
+            )
 
     try:
         ai_response = await ai_service.translate_with_context_async(

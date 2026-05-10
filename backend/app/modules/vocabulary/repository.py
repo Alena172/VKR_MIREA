@@ -72,6 +72,30 @@ def get_or_create_dictionary_entry(
     return entry, True
 
 
+def find_shared_translation(
+    db: Session,
+    *,
+    english_lemma: str,
+) -> str | None:
+    """Возвращает наиболее популярный перевод из общего словаря для данной леммы."""
+    normalized = english_lemma.strip().lower()
+    if not normalized:
+        return None
+    row = db.execute(
+        select(
+            DictionaryEntryModel.russian_translation,
+            func.count(UserVocabularyModel.id).label("cnt"),
+            func.min(DictionaryEntryModel.id).label("first_id"),
+        )
+        .outerjoin(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
+        .where(DictionaryEntryModel.english_lemma == normalized)
+        .group_by(DictionaryEntryModel.russian_translation)
+        .order_by(func.count(UserVocabularyModel.id).desc(), func.min(DictionaryEntryModel.id).asc())
+        .limit(1)
+    ).first()
+    return row[0] if row else None
+
+
 def list_definition_candidates(
     db: Session,
     *,

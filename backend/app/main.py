@@ -1,5 +1,7 @@
 """Точка сборки FastAPI-приложения и общих middleware."""
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -11,6 +13,14 @@ from app.core.schema import ensure_database_schema_ready
 from app.modules.vocabulary.service.lexicon import ensure_seeded
 
 settings = get_settings()
+
+
+class _HealthcheckAccessLogFilter(logging.Filter):
+    """Скрывает шумные access-логи healthcheck-эндпоинта."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return '"GET /health HTTP/1.1" 200' not in message
 
 app = FastAPI(
     title="VKR English Learning API",
@@ -38,6 +48,10 @@ app.include_router(api_router)
 @app.on_event("startup")
 def ensure_base_lexicon_seeded() -> None:
     """Заполняет базовый локальный словарь при старте приложения."""
+
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(current_filter, _HealthcheckAccessLogFilter) for current_filter in access_logger.filters):
+        access_logger.addFilter(_HealthcheckAccessLogFilter())
 
     if not settings.bootstrap_schema_on_startup:
         return
