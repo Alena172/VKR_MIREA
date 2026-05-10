@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException
 
-from app.core.application import application_access, application_transaction
-from app.modules.graph.repository import GraphRepository, graph_repository
+from app.core.db import transaction
+from app.modules.graph.repository import GraphRepository
 from app.modules.graph.schemas import (
     InterestItem,
     InterestUpsertRequest,
@@ -22,48 +21,47 @@ from app.modules.graph.schemas import (
 class GraphService:
     """Application-сервис семантического профиля, интересов и смыслов слов."""
 
-    def __init__(self, repo: GraphRepository) -> None:
+    def __init__(self, repo: GraphRepository = Depends()) -> None:
         self._repo = repo
 
-    def list_interests(
-        self,
-        *,
-        db: Session,
-        current_user_id: int,
-    ) -> UserInterestsResponse:
-        application_access.get_user_or_404(db=db, user_id=current_user_id)
-        interests = self._repo.list_interests(db, current_user_id)
+    def _get_user_or_404(self, user_id: int):
+        from app.modules.identity.repository import IdentityRepository
+        user = IdentityRepository(self._repo._db).get_by_id(user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+
+    def list_interests(self, *, current_user_id: int) -> UserInterestsResponse:
+        self._get_user_or_404(current_user_id)
+        interests = self._repo.list_interests(current_user_id)
         return UserInterestsResponse(
             user_id=current_user_id,
-            interests=[InterestItem(interest=i.display_name, weight=i.weight) for i in interests],
+            interests=[InterestItem(interest=i.interest, weight=i.weight) for i in interests],
         )
 
     def upsert_interests(
         self,
         *,
-        db: Session,
         payload: InterestUpsertRequest,
         current_user_id: int,
     ) -> UserInterestsResponse:
-        application_access.get_user_or_404(db=db, user_id=current_user_id)
-        updated = self._repo.upsert_interests(db, user_id=current_user_id, interests=payload.interests)
+        self._get_user_or_404(current_user_id)
+        updated = self._repo.upsert_interests(current_user_id, payload.interests)
         return UserInterestsResponse(
             user_id=current_user_id,
-            interests=[InterestItem(interest=i.display_name, weight=i.weight) for i in updated],
+            interests=[InterestItem(interest=i.interest, weight=i.weight) for i in updated],
         )
 
     def semantic_upsert(
         self,
         *,
-        db: Session,
         payload: SemanticUpsertRequest,
         current_user_id: int,
     ) -> SemanticUpsertResponse:
-        application_access.get_user_or_404(db=db, user_id=current_user_id)
+        self._get_user_or_404(current_user_id)
         try:
-            with application_transaction.boundary(db=db):
+            with transaction(self._repo._db):
                 result = self._repo.semantic_upsert(
-                    db,
                     user_id=current_user_id,
                     english_lemma=payload.english_lemma,
                     russian_translation=payload.russian_translation,
@@ -90,14 +88,12 @@ class GraphService:
     def get_interest_words(
         self,
         *,
-        db: Session,
         limit: int,
         current_user_id: int,
         known_lemmas: set[str],
     ) -> InterestWordsResponse:
-        application_access.get_user_or_404(db=db, user_id=current_user_id)
+        self._get_user_or_404(current_user_id)
         items = self._repo.list_interest_words(
-            db,
             user_id=current_user_id,
             limit=limit,
             known_lemmas=known_lemmas,
@@ -120,14 +116,12 @@ class GraphService:
     def get_anchors(
         self,
         *,
-        db: Session,
         english_lemma: str,
         limit: int,
         current_user_id: int,
     ) -> SenseAnchorsResponse:
-        application_access.get_user_or_404(db=db, user_id=current_user_id)
+        self._get_user_or_404(current_user_id)
         anchors = self._repo.list_anchors(
-            db,
             user_id=current_user_id,
             english_lemma=english_lemma,
             limit=limit,
@@ -149,7 +143,6 @@ class GraphService:
     def register_vocabulary_semantics(
         self,
         *,
-        db: Session,
         user_id: int,
         english_lemma: str,
         russian_translation: str,
@@ -159,7 +152,6 @@ class GraphService:
         vocabulary_item_id: int | None,
     ) -> dict:
         result = self._repo.semantic_upsert(
-            db,
             user_id=user_id,
             english_lemma=english_lemma,
             russian_translation=russian_translation,
@@ -177,7 +169,6 @@ class GraphService:
     def register_mistake(
         self,
         *,
-        db: Session,
         user_id: int,
         english_lemma: str | None,
         prompt: str | None,
@@ -185,7 +176,6 @@ class GraphService:
         user_answer: str | None,
     ) -> None:
         self._repo.add_sense_error_event(
-            db,
             user_id=user_id,
             english_lemma=english_lemma,
             prompt=prompt,
@@ -193,33 +183,15 @@ class GraphService:
             user_answer=user_answer,
         )
 
-    def delete_vocabulary_links(
-        self,
-        *,
-        db: Session,
-        user_id: int,
-        vocabulary_item_id: int,
-    ) -> int:
+    def delete_vocabulary_links(self, *, user_id: int, vocabulary_item_id: int) -> int:
         return self._repo.delete_vocabulary_links(
-            db,
             user_id=user_id,
             vocabulary_item_id=vocabulary_item_id,
         )
 
-    def list_word_anchors(
-        self,
-        *,
-        db: Session,
-        user_id: int,
-        english_lemma: str,
-        limit: int,
-    ) -> list:
+    def list_word_anchors(self, *, user_id: int, english_lemma: str, limit: int) -> list:
         return self._repo.list_anchors(
-            db,
             user_id=user_id,
             english_lemma=english_lemma,
             limit=limit,
         )
-
-
-graph_service = GraphService(graph_repository)

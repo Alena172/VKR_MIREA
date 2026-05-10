@@ -1,9 +1,4 @@
-"""Celery tasks for vocabulary operations.
-
-These tasks offload slow AI calls (context definition generation,
-translation) from the HTTP request cycle so the user gets an
-immediate response and the heavy work happens in the background.
-"""
+"""Celery tasks for vocabulary operations."""
 from __future__ import annotations
 
 import asyncio
@@ -12,6 +7,7 @@ import logging
 from app.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
 
 @celery_app.task(
     bind=True,
@@ -28,29 +24,27 @@ def add_word_with_ai(
     source_sentence: str | None,
     source_url: str | None,
 ) -> dict:
-    """Create a vocabulary item with AI-generated context definition."""
     from app.core.db import SessionLocal
+    from app.modules.vocabulary.repository import VocabularyRepository
     from app.modules.vocabulary.schemas import VocabularyItemRead
-    from app.modules.vocabulary.service.items import create_item_with_ai
+    from app.modules.vocabulary.service.items import VocabularyService
 
-    db = SessionLocal()
-    try:
-        item = asyncio.run(
-            create_item_with_ai(
-                db=db,
-                user_id=user_id,
-                english_lemma=english_lemma,
-                russian_translation=russian_translation,
-                source_sentence=source_sentence,
-                source_url=source_url,
+    with SessionLocal() as db:
+        try:
+            service = VocabularyService(VocabularyRepository(db))
+            item = asyncio.run(
+                service.create_item_with_ai(
+                    user_id=user_id,
+                    english_lemma=english_lemma,
+                    russian_translation=russian_translation,
+                    source_sentence=source_sentence,
+                    source_url=source_url,
+                )
             )
-        )
-        return VocabularyItemRead.model_validate(item, from_attributes=True).model_dump()
-    except Exception as exc:
-        logger.exception("add_word_with_ai failed for user=%s lemma=%s", user_id, english_lemma)
-        raise self.retry(exc=exc)
-    finally:
-        db.close()
+            return VocabularyItemRead.model_validate(item, from_attributes=True).model_dump()
+        except Exception as exc:
+            logger.exception("add_word_with_ai failed for user=%s lemma=%s", user_id, english_lemma)
+            raise self.retry(exc=exc)
 
 
 @celery_app.task(
@@ -68,35 +62,29 @@ def capture_to_vocabulary_task(
     source_sentence: str | None,
     force_new_vocabulary_item: bool,
 ) -> dict:
-    """Run the full capture-to-vocabulary pipeline in a worker."""
     from app.core.db import SessionLocal
-    from app.modules.vocabulary.schemas import (
-        VocabularyFromCaptureResponse,
-        VocabularyItemRead,
-    )
-    from app.modules.vocabulary.service.capture import capture_to_vocabulary
+    from app.modules.vocabulary.repository import VocabularyRepository
+    from app.modules.vocabulary.schemas import VocabularyFromCaptureResponse, VocabularyItemRead
+    from app.modules.vocabulary.service.items import VocabularyService
 
-    db = SessionLocal()
-    try:
-        result = asyncio.run(
-            capture_to_vocabulary(
-                db=db,
-                user_id=user_id,
-                selected_text=selected_text,
-                source_url=source_url,
-                source_sentence=source_sentence,
-                force_new_vocabulary_item=force_new_vocabulary_item,
+    with SessionLocal() as db:
+        try:
+            service = VocabularyService(VocabularyRepository(db))
+            result, _ = asyncio.run(
+                service.capture_to_vocabulary(
+                    user_id=user_id,
+                    selected_text=selected_text,
+                    source_url=source_url,
+                    source_sentence=source_sentence,
+                    force_new_vocabulary_item=force_new_vocabulary_item,
+                )
             )
-        )
-        return VocabularyFromCaptureResponse(
-            vocabulary=VocabularyItemRead.model_validate(result.vocabulary, from_attributes=True),
-        ).model_dump()
-    except Exception as exc:
-        logger.exception(
-            "capture_to_vocabulary failed for user=%s text=%s",
-            user_id,
-            selected_text,
-        )
-        raise self.retry(exc=exc)
-    finally:
-        db.close()
+            return VocabularyFromCaptureResponse(
+                vocabulary=VocabularyItemRead.model_validate(result, from_attributes=True),
+            ).model_dump()
+        except Exception as exc:
+            logger.exception(
+                "capture_to_vocabulary failed for user=%s text=%s",
+                user_id, selected_text,
+            )
+            raise self.retry(exc=exc)

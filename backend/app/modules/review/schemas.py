@@ -91,6 +91,7 @@ class WordProgressDeleteResponse(BaseModel):
     user_id: int
     word: str
     progress_deleted: bool
+    removed_from_difficult_words: bool = False
 
 
 class ProgressSnapshot(BaseModel):

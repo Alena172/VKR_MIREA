@@ -1,7 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
-from app.core.db import get_db
 from app.modules.identity.deps import get_current_user_id
 from app.modules.identity.schemas import (
     LoginOrRegisterRequest,
@@ -14,32 +12,25 @@ from app.modules.identity.schemas import (
     UserCreate,
     UserRead,
 )
-from app.modules.identity.service import (
-    create_user,
-    get_user_or_404,
-    issue_token_for_email,
-    list_user_dtos,
-    verify_token_payload,
-)
-from app.modules.identity.service import (
-    login_or_register as login_or_register_user,
-)
+from app.modules.identity.service import IdentityService
 
 router = APIRouter()
 
 
 @router.post("/auth/token", response_model=TokenResponse)
-def token(payload: TokenRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    return issue_token_for_email(db=db, email=payload.email)
+def token(
+    payload: TokenRequest,
+    service: IdentityService = Depends(),
+) -> TokenResponse:
+    return service.issue_token_for_email(email=payload.email)
 
 
 @router.post("/auth/login-or-register", response_model=LoginOrRegisterResponse)
 def login_or_register(
     payload: LoginOrRegisterRequest,
-    db: Session = Depends(get_db),
+    service: IdentityService = Depends(),
 ) -> LoginOrRegisterResponse:
-    return login_or_register_user(
-        db=db,
+    return service.login_or_register(
         email=payload.email,
         full_name=payload.full_name,
         cefr_level=payload.cefr_level,
@@ -47,8 +38,11 @@ def login_or_register(
 
 
 @router.post("/auth/verify", response_model=TokenVerifyResponse)
-def verify(payload: TokenVerifyRequest) -> TokenVerifyResponse:
-    return verify_token_payload(payload.token)
+def verify(
+    payload: TokenVerifyRequest,
+    service: IdentityService = Depends(),
+) -> TokenVerifyResponse:
+    return service.verify_token_payload(payload.token)
 
 
 @router.get("/auth/me", response_model=TokenIdentityResponse)
@@ -62,15 +56,21 @@ def ping() -> dict[str, str]:
 
 
 @router.get("/users", response_model=list[UserRead])
-def list_users(db: Session = Depends(get_db)) -> list[UserRead]:
-    return [UserRead.model_validate(user) for user in list_user_dtos(db)]
+def list_users(service: IdentityService = Depends()) -> list[UserRead]:
+    return [UserRead.model_validate(user) for user in service.list_user_dtos()]
 
 
 @router.get("/users/{user_id}", response_model=UserRead)
-def get_user(user_id: int, db: Session = Depends(get_db)) -> UserRead:
-    return UserRead.model_validate(get_user_or_404(db=db, user_id=user_id))
+def get_user(
+    user_id: int,
+    service: IdentityService = Depends(),
+) -> UserRead:
+    return UserRead.model_validate(service.get_user_or_404(user_id=user_id))
 
 
 @router.post("/users", response_model=UserRead)
-def create_user_endpoint(payload: UserCreate, db: Session = Depends(get_db)) -> UserRead:
-    return UserRead.model_validate(create_user(db, payload))
+def create_user_endpoint(
+    payload: UserCreate,
+    service: IdentityService = Depends(),
+) -> UserRead:
+    return UserRead.model_validate(service.create_user(payload))

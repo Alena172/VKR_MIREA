@@ -1,73 +1,27 @@
+"""Backward-compat shim — translation logic lives in VocabularyService."""
 from __future__ import annotations
 
-from fastapi import HTTPException
-from sqlalchemy.orm import Session
-
 from app.core.application import application_access
-from app.modules.ai.schemas import TranslateWithContextRequest
-from app.modules.ai.facade import AIProviderUnavailableError, ai_facade as ai_service
-from app.modules.identity.service import get_user_or_404
-from app.modules.vocabulary import repository
-from app.modules.vocabulary.service.items import list_user_items
 from app.modules.vocabulary.schemas import TranslationResultDTO
-
-
-def _build_translation_note(provider_note: str) -> str:
-    normalized = provider_note.strip().lower()
-    if normalized.startswith("local_heuristic"):
-        return f"Local heuristic translation used ({provider_note})"
-    if normalized.startswith("ai_disambiguation:"):
-        return f"AI disambiguation used ({provider_note})"
-    if normalized.startswith("ai_translation:"):
-        return f"AI translation used ({provider_note})"
-    if normalized.startswith("glossary"):
-        return f"Glossary translation used ({provider_note})"
-    return f"Translation completed ({provider_note})"
-
-
-def _is_single_token(text: str) -> bool:
-    return len(text.strip().split()) == 1
 
 
 async def translate_for_user(
     *,
-    db: Session,
     user_id: int,
     text: str,
     source_context: str | None,
+    _service=None,
 ) -> TranslationResultDTO:
-    user = get_user_or_404(db=db, user_id=user_id)
-
-    if _is_single_token(text) and not source_context:
-        shared = repository.find_shared_translation(db, english_lemma=text.strip())
-        if shared:
-            return TranslationResultDTO(
-                translated_text=shared,
-                note=_build_translation_note("glossary:shared_dictionary"),
-            )
-
-    try:
-        ai_response = await ai_service.translate_with_context_async(
-            TranslateWithContextRequest(
-                text=text,
-                cefr_level=user.cefr_level,
-                source_context=source_context,
-                glossary=[
-                    {
-                        "english_term": item.english_lemma,
-                        "russian_translation": item.russian_translation,
-                        "source_sentence": item.source_sentence,
-                    }
-                    for item in list_user_items(db=db, user_id=user_id)[:50]
-                ],
-            )
+    """Thin shim used by legacy tests."""
+    if _service is None:
+        raise RuntimeError(
+            "translate_for_user requires a VocabularyService instance. "
+            "Use VocabularyService.translate_for_user() directly."
         )
-    except AIProviderUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    return TranslationResultDTO(
-        translated_text=ai_response.translated_text,
-        note=_build_translation_note(ai_response.provider_note),
+    return await _service.translate_for_user(
+        user_id=user_id,
+        text=text,
+        source_context=source_context,
     )
 
 

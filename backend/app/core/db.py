@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from contextlib import contextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -18,10 +19,20 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Создает DB-сессию для FastAPI-зависимостей и закрывает ее после запроса."""
-
+    """FastAPI dependency: открывает сессию на время запроса и закрывает её после."""
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+
+@contextmanager
+def transaction(db: Session):
+    """Атомарный блок: коммит при успехе, откат при ошибке."""
+    try:
+        yield
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise

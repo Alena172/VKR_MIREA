@@ -4,9 +4,11 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
+from fastapi import Depends
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.db import get_db
 from app.modules.graph.models import (
     SenseErrorEventModel,
     SenseRelationModel,
@@ -87,6 +89,9 @@ class GraphRepository:
         }),
     }
 
+    def __init__(self, db: Session = Depends(get_db)) -> None:
+        self._db = db
+
     def _normalize_lemma(self, value: str) -> str:
         return self._WORD_RE.sub("", (value or "").strip().lower())
 
@@ -137,76 +142,75 @@ class GraphRepository:
         key = self._normalize_interest_key(fallback_token) or "general"
         return TopicInference(key=key, display_name=self._display_name(key), confidence=0.25)
 
-    def _ensure_cluster(self, db: Session, *, user_id: int, topic: TopicInference) -> TopicClusterModel:
-        row = db.scalar(select(TopicClusterModel).where(TopicClusterModel.user_id == user_id, TopicClusterModel.cluster_key == topic.key))
+    def _ensure_cluster(self, *, user_id: int, topic: TopicInference) -> TopicClusterModel:
+        row = self._db.scalar(select(TopicClusterModel).where(TopicClusterModel.user_id == user_id, TopicClusterModel.cluster_key == topic.key))
         if row is not None:
             return row
         row = TopicClusterModel(user_id=user_id, cluster_key=topic.key, name=topic.display_name)
-        db.add(row)
-        db.flush()
+        self._db.add(row)
+        self._db.flush()
         return row
 
-    def _increase_interest(self, db: Session, *, user_id: int, topic: TopicInference) -> None:
-        row = db.scalar(select(UserInterestModel).where(UserInterestModel.user_id == user_id, UserInterestModel.interest_key == topic.key))
+    def _increase_interest(self, *, user_id: int, topic: TopicInference) -> None:
+        row = self._db.scalar(select(UserInterestModel).where(UserInterestModel.user_id == user_id, UserInterestModel.interest_key == topic.key))
         boost = max(0.1, topic.confidence)
         if row is None:
-            db.add(UserInterestModel(user_id=user_id, interest_key=topic.key, display_name=topic.display_name, weight=round(boost, 4)))
-            db.flush()
+            self._db.add(UserInterestModel(user_id=user_id, interest_key=topic.key, display_name=topic.display_name, weight=round(boost, 4)))
+            self._db.flush()
             return
         row.weight = round(min(10.0, row.weight + boost), 4)
         row.display_name = topic.display_name
-        db.flush()
+        self._db.flush()
 
     def _pair_ids(self, left_id: int, right_id: int) -> tuple[int, int]:
         return (left_id, right_id) if left_id < right_id else (right_id, left_id)
 
-    def _upsert_relation(self, db: Session, *, user_id: int, left_sense_id: int, right_sense_id: int, relation_type: str, score: float) -> None:
+    def _upsert_relation(self, *, user_id: int, left_sense_id: int, right_sense_id: int, relation_type: str, score: float) -> None:
         if left_sense_id == right_sense_id:
             return
         left_id, right_id = self._pair_ids(left_sense_id, right_sense_id)
-        existing = db.scalar(select(SenseRelationModel).where(
+        existing = self._db.scalar(select(SenseRelationModel).where(
             SenseRelationModel.user_id == user_id,
             SenseRelationModel.left_sense_id == left_id,
             SenseRelationModel.right_sense_id == right_id,
         ))
         if existing is None:
-            db.add(SenseRelationModel(user_id=user_id, left_sense_id=left_id, right_sense_id=right_id, relation_type=relation_type, score=round(score, 4)))
-            db.flush()
+            self._db.add(SenseRelationModel(user_id=user_id, left_sense_id=left_id, right_sense_id=right_id, relation_type=relation_type, score=round(score, 4)))
+            self._db.flush()
             return
         if score > existing.score:
             existing.score = round(score, 4)
             existing.relation_type = relation_type
-            db.flush()
+            self._db.flush()
 
-    def _sync_simple_relations(self, db: Session, *, user_id: int, sense: WordSenseModel) -> None:
-        candidates = list(db.scalars(select(WordSenseModel).where(
+    def _sync_simple_relations(self, *, user_id: int, sense: WordSenseModel) -> None:
+        candidates = list(self._db.scalars(select(WordSenseModel).where(
             WordSenseModel.user_id == user_id,
             WordSenseModel.id != sense.id,
             or_(WordSenseModel.english_lemma == sense.english_lemma, WordSenseModel.topic_cluster_id == sense.topic_cluster_id),
         )))
         for candidate in candidates:
             if candidate.english_lemma == sense.english_lemma and candidate.semantic_key != sense.semantic_key:
-                self._upsert_relation(db, user_id=user_id, left_sense_id=sense.id, right_sense_id=candidate.id, relation_type="polysemy_variant", score=0.95)
+                self._upsert_relation(user_id=user_id, left_sense_id=sense.id, right_sense_id=candidate.id, relation_type="polysemy_variant", score=0.95)
             elif sense.topic_cluster_id is not None and candidate.topic_cluster_id == sense.topic_cluster_id:
-                self._upsert_relation(db, user_id=user_id, left_sense_id=sense.id, right_sense_id=candidate.id, relation_type="same_interest", score=0.55)
+                self._upsert_relation(user_id=user_id, left_sense_id=sense.id, right_sense_id=candidate.id, relation_type="same_interest", score=0.55)
 
-    def list_interests(self, db: Session, user_id: int) -> list[InterestItem]:
-        rows = list(db.scalars(select(UserInterestModel).where(UserInterestModel.user_id == user_id).order_by(UserInterestModel.weight.desc(), UserInterestModel.id.asc())))
+    def list_interests(self, user_id: int) -> list[InterestItem]:
+        rows = list(self._db.scalars(select(UserInterestModel).where(UserInterestModel.user_id == user_id).order_by(UserInterestModel.weight.desc(), UserInterestModel.id.asc())))
         return [InterestItem(interest=row.display_name, weight=row.weight) for row in rows]
 
-    def upsert_interests(self, db: Session, user_id: int, interests: list[InterestItem]) -> list[InterestItem]:
-        db.query(UserInterestModel).filter(UserInterestModel.user_id == user_id).delete()
+    def upsert_interests(self, user_id: int, interests: list[InterestItem]) -> list[InterestItem]:
+        self._db.query(UserInterestModel).filter(UserInterestModel.user_id == user_id).delete()
         for interest in interests:
             key = self._normalize_interest_key(interest.interest)
             if not key:
                 continue
-            db.add(UserInterestModel(user_id=user_id, interest_key=key, display_name=interest.interest.strip(), weight=interest.weight))
-        db.commit()
-        return self.list_interests(db, user_id)
+            self._db.add(UserInterestModel(user_id=user_id, interest_key=key, display_name=interest.interest.strip(), weight=interest.weight))
+        self._db.commit()
+        return self.list_interests(user_id)
 
     def semantic_upsert(
         self,
-        db: Session,
         *,
         user_id: int,
         english_lemma: str,
@@ -217,54 +221,51 @@ class GraphRepository:
         topic_hint: str | None = None,
         vocabulary_item_id: int | None = None,
     ) -> SemanticUpsertResult:
-        """Создает смысл слова или переиспользует существующий semantic key."""
-
         lemma = self._normalize_lemma(english_lemma)
         translation = (russian_translation or "").strip()
         if not lemma or not translation:
             raise ValueError("english_lemma and russian_translation are required")
 
         topic = self._infer_topic(english_lemma=lemma, russian_translation=translation, context_definition_ru=context_definition_ru, source_sentence=source_sentence, topic_hint=topic_hint)
-        cluster = self._ensure_cluster(db, user_id=user_id, topic=topic)
+        cluster = self._ensure_cluster(user_id=user_id, topic=topic)
         semantic_key = self._semantic_key(russian_translation=translation, source_sentence=source_sentence, context_definition=context_definition_ru, topic_key=topic.key)
 
-        existing = db.scalar(select(WordSenseModel).where(WordSenseModel.user_id == user_id, WordSenseModel.english_lemma == lemma, WordSenseModel.semantic_key == semantic_key))
+        existing = self._db.scalar(select(WordSenseModel).where(WordSenseModel.user_id == user_id, WordSenseModel.english_lemma == lemma, WordSenseModel.semantic_key == semantic_key))
         existing_link = None
         if vocabulary_item_id is not None:
-            existing_link = db.scalar(select(VocabularySenseLinkModel).where(VocabularySenseLinkModel.user_id == user_id, VocabularySenseLinkModel.vocabulary_item_id == vocabulary_item_id))
+            existing_link = self._db.scalar(select(VocabularySenseLinkModel).where(VocabularySenseLinkModel.user_id == user_id, VocabularySenseLinkModel.vocabulary_item_id == vocabulary_item_id))
 
         if existing is None:
             sense = WordSenseModel(user_id=user_id, english_lemma=lemma, semantic_key=semantic_key, russian_translation=translation, context_definition_ru=context_definition_ru, source_sentence=source_sentence, source_url=source_url, topic_cluster_id=cluster.id)
-            db.add(sense)
-            db.flush()
+            self._db.add(sense)
+            self._db.flush()
             created_new = True
             duplicate_of_id = None
         else:
             sense = existing
             if sense.topic_cluster_id != cluster.id:
                 sense.topic_cluster_id = cluster.id
-                db.flush()
+                self._db.flush()
             created_new = False
             duplicate_of_id = existing.id
 
         if vocabulary_item_id is not None:
             if existing_link is None:
-                db.add(VocabularySenseLinkModel(user_id=user_id, vocabulary_item_id=vocabulary_item_id, word_sense_id=sense.id))
-                db.flush()
+                self._db.add(VocabularySenseLinkModel(user_id=user_id, vocabulary_item_id=vocabulary_item_id, word_sense_id=sense.id))
+                self._db.flush()
             elif existing_link.word_sense_id != sense.id:
                 existing_link.word_sense_id = sense.id
-                db.flush()
+                self._db.flush()
 
-        self._increase_interest(db, user_id=user_id, topic=topic)
-        self._sync_simple_relations(db, user_id=user_id, sense=sense)
-        db.flush()
-        db.refresh(sense)
+        self._increase_interest(user_id=user_id, topic=topic)
+        self._sync_simple_relations(user_id=user_id, sense=sense)
+        self._db.flush()
+        self._db.refresh(sense)
 
         return SemanticUpsertResult(sense=sense, created_new=created_new, duplicate_of_id=duplicate_of_id, cluster=cluster)
 
     def add_sense_error_event(
         self,
-        db: Session,
         *,
         user_id: int,
         english_lemma: str | None,
@@ -276,31 +277,29 @@ class GraphRepository:
         lemma = self._normalize_lemma(english_lemma or "")
         if not lemma:
             return None
-        sense = db.scalar(select(WordSenseModel).where(WordSenseModel.user_id == user_id, WordSenseModel.english_lemma == lemma).order_by(WordSenseModel.id.desc()))
+        sense = self._db.scalar(select(WordSenseModel).where(WordSenseModel.user_id == user_id, WordSenseModel.english_lemma == lemma).order_by(WordSenseModel.id.desc()))
         row = SenseErrorEventModel(user_id=user_id, session_id=session_id, english_lemma=lemma, word_sense_id=sense.id if sense is not None else None, mistake_tag="learning_session_error", prompt=prompt, expected_answer=expected_answer, user_answer=user_answer)
-        db.add(row)
-        db.flush()
+        self._db.add(row)
+        self._db.flush()
         return row
 
-    def delete_vocabulary_links(self, db: Session, *, user_id: int, vocabulary_item_id: int) -> int:
-        rows = list(db.scalars(select(VocabularySenseLinkModel).where(VocabularySenseLinkModel.user_id == user_id, VocabularySenseLinkModel.vocabulary_item_id == vocabulary_item_id)))
+    def delete_vocabulary_links(self, *, user_id: int, vocabulary_item_id: int) -> int:
+        rows = list(self._db.scalars(select(VocabularySenseLinkModel).where(VocabularySenseLinkModel.user_id == user_id, VocabularySenseLinkModel.vocabulary_item_id == vocabulary_item_id)))
         for row in rows:
-            db.delete(row)
+            self._db.delete(row)
         if rows:
-            db.flush()
+            self._db.flush()
         return len(rows)
 
-    def list_interest_words(self, db: Session, *, user_id: int, limit: int, known_lemmas: set[str] | None = None) -> list[InterestWordItem]:
-        """Возвращает лучшие слова, связанные с текущим профилем интересов."""
-
-        interests = {row.interest_key: row.weight for row in db.scalars(select(UserInterestModel).where(UserInterestModel.user_id == user_id))}
+    def list_interest_words(self, *, user_id: int, limit: int, known_lemmas: set[str] | None = None) -> list[InterestWordItem]:
+        interests = {row.interest_key: row.weight for row in self._db.scalars(select(UserInterestModel).where(UserInterestModel.user_id == user_id))}
         if not interests:
             return []
 
-        clusters = {row.id: row for row in db.scalars(select(TopicClusterModel).where(TopicClusterModel.user_id == user_id))}
+        clusters = {row.id: row for row in self._db.scalars(select(TopicClusterModel).where(TopicClusterModel.user_id == user_id))}
         known_lemmas = known_lemmas or set()
         best_by_lemma: dict[str, InterestWordItem] = {}
-        for sense in db.scalars(select(WordSenseModel).where(WordSenseModel.user_id == user_id)):
+        for sense in self._db.scalars(select(WordSenseModel).where(WordSenseModel.user_id == user_id)):
             lemma = sense.english_lemma.strip().lower()
             if not lemma:
                 continue
@@ -318,18 +317,16 @@ class GraphRepository:
         items = sorted(best_by_lemma.values(), key=lambda row: (row.score, row.english_lemma), reverse=True)
         return items[:limit]
 
-    def list_anchors(self, db: Session, *, user_id: int, english_lemma: str, limit: int) -> list[SenseAnchorItem]:
-        """Возвращает semantic anchors для леммы пользователя."""
-
+    def list_anchors(self, *, user_id: int, english_lemma: str, limit: int) -> list[SenseAnchorItem]:
         lemma = self._normalize_lemma(english_lemma)
         if not lemma:
             return []
 
-        source = db.scalar(select(WordSenseModel).where(WordSenseModel.user_id == user_id, WordSenseModel.english_lemma == lemma).order_by(WordSenseModel.id.desc()))
+        source = self._db.scalar(select(WordSenseModel).where(WordSenseModel.user_id == user_id, WordSenseModel.english_lemma == lemma).order_by(WordSenseModel.id.desc()))
         if source is None:
             return []
 
-        relations = list(db.scalars(select(SenseRelationModel).where(
+        relations = list(self._db.scalars(select(SenseRelationModel).where(
             SenseRelationModel.user_id == user_id,
             or_(SenseRelationModel.left_sense_id == source.id, SenseRelationModel.right_sense_id == source.id),
         )))
@@ -339,7 +336,7 @@ class GraphRepository:
         }
         neighbors = {
             row.id: row
-            for row in db.scalars(select(WordSenseModel).where(WordSenseModel.user_id == user_id, WordSenseModel.id.in_(neighbor_ids)))
+            for row in self._db.scalars(select(WordSenseModel).where(WordSenseModel.user_id == user_id, WordSenseModel.id.in_(neighbor_ids)))
         } if neighbor_ids else {}
 
         anchors: list[SenseAnchorItem] = []
@@ -352,6 +349,3 @@ class GraphRepository:
 
         anchors.sort(key=lambda row: (row.relation_type != "polysemy_variant", -row.score, row.english_lemma))
         return anchors[:limit]
-
-
-graph_repository = GraphRepository()

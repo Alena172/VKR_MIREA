@@ -1,209 +1,459 @@
 from __future__ import annotations
 
-from fastapi import HTTPException
-from sqlalchemy.orm import Session
+import re
+from typing import TYPE_CHECKING
+
+from fastapi import Depends, HTTPException
 
 from app.celery_app import enqueue_task
-from app.core.application import (
-    AsyncTaskResponse,
-    application_access,
-    application_transaction,
-)
-from app.modules.graph.service.graph import graph_service as learning_graph_public_api
-from app.modules.vocabulary import repository
+from app.core.application import AsyncTaskResponse, application_access
+from app.core.db import transaction
+from app.modules.ai.facade import AIProviderUnavailableError
+from app.modules.ai.facade import ai_facade as ai_service
+from app.modules.ai.schemas import TranslateWithContextRequest
+from app.modules.vocabulary.repository import VocabularyRepository
 from app.modules.vocabulary.schemas import (
+    TranslationResultDTO,
     VocabularyFromCaptureRequest,
     VocabularyItemCreate,
     VocabularyItemDTO,
     VocabularyItemUpdateMe,
 )
 from app.modules.vocabulary.service.definition import resolve_context_definition
+from app.modules.vocabulary.service.lexicon import lookup_translation
+
+if TYPE_CHECKING:
+    from app.modules.graph.service.graph import GraphService
+    from app.modules.review.service.srs import SRSService
+
+_ENGLISH_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
+_RUSSIAN_TOKEN_RE = re.compile(r"[А-Яа-яЁё-]+")
 
 
 def _to_dto(uv, entry) -> VocabularyItemDTO:
     return VocabularyItemDTO.from_model(uv, entry)
 
 
-def list_items(
+def _normalize_english_lemma(text: str) -> str:
+    return text.strip().split()[0].lower()
+
+
+def _normalize_translation(text: str) -> str:
+    value = text.strip()
+    if value.startswith("[RU]"):
+        value = value.replace("[RU]", "", 1).strip()
+    return value or "перевод не найден"
+
+
+def _english_tokens(text: str | None) -> list[str]:
+    return [token.lower() for token in _ENGLISH_TOKEN_RE.findall(text or "")]
+
+
+def _russian_tokens(text: str | None) -> list[str]:
+    return [token.lower() for token in _RUSSIAN_TOKEN_RE.findall(text or "")]
+
+
+def _is_single_word_capture(text: str) -> bool:
+    return len(_english_tokens(text)) == 1
+
+
+def _looks_like_context_phrase_expansion(
     *,
-    db: Session,
-    requested_user_id: int | None,
-    current_user_id: int,
-) -> list[VocabularyItemDTO]:
-    target_user_id = application_access.resolve_target_user_id(
-        requested_user_id=requested_user_id,
-        current_user_id=current_user_id,
-    )
-    return [_to_dto(uv, entry) for uv, entry in repository.list_user_vocabulary(db, user_id=target_user_id)]
+    base_translation: str,
+    contextual_translation: str,
+) -> bool:
+    base_tokens = _russian_tokens(base_translation)
+    contextual_tokens = _russian_tokens(contextual_translation)
+    if not base_tokens or not contextual_tokens:
+        return False
+    if base_tokens == contextual_tokens:
+        return False
+    if len(base_tokens) == 1 and len(contextual_tokens) >= 2:
+        return True
+    return False
 
 
-def list_user_items(*, db: Session, user_id: int) -> list[VocabularyItemDTO]:
-    return [_to_dto(uv, entry) for uv, entry in repository.list_user_vocabulary(db, user_id=user_id)]
+def _build_translation_note(provider_note: str) -> str:
+    normalized = provider_note.strip().lower()
+    if normalized.startswith("local_heuristic"):
+        return f"Local heuristic translation used ({provider_note})"
+    if normalized.startswith("ai_disambiguation:"):
+        return f"AI disambiguation used ({provider_note})"
+    if normalized.startswith("ai_translation:"):
+        return f"AI translation used ({provider_note})"
+    if normalized.startswith("glossary"):
+        return f"Glossary translation used ({provider_note})"
+    return f"Translation completed ({provider_note})"
 
 
-def get_translation_map_for_user(
-    db: Session,
-    *,
-    user_id: int,
-    english_lemmas: list[str],
-) -> dict[str, str]:
-    return repository.get_translation_map(db, user_id=user_id, english_lemmas=english_lemmas)
+def _is_single_token(text: str) -> bool:
+    return len(text.strip().split()) == 1
 
 
-def get_definition_map_for_user(
-    db: Session,
-    *,
-    user_id: int,
-    english_lemmas: list[str],
-) -> dict[str, str]:
-    return repository.get_definition_map(db, user_id=user_id, english_lemmas=english_lemmas)
+class VocabularyService:
+    def __init__(
+        self,
+        repo: VocabularyRepository = Depends(),
+    ) -> None:
+        self._repo = repo
+        self._graph_service: GraphService | None = None
+        self._srs_service: SRSService | None = None
 
+    def _graph(self) -> GraphService:
+        if self._graph_service is None:
+            from app.modules.graph.service.graph import GraphService
+            from app.modules.graph.repository import GraphRepository
+            self._graph_service = GraphService(GraphRepository(self._repo._db))
+        return self._graph_service
 
-def list_english_lemmas_for_user(db: Session, *, user_id: int) -> list[str]:
-    return repository.list_english_lemmas(db, user_id=user_id)
+    def _srs(self) -> SRSService:
+        if self._srs_service is None:
+            from app.modules.review.repository import ReviewRepository
+            from app.modules.review.service.scoring import RecommendationScoringService
+            from app.modules.review.service.srs import SRSService
+            from app.modules.training.repository import TrainingRepository
+            review_repo = ReviewRepository(self._repo._db)
+            training_repo = TrainingRepository(self._repo._db)
+            self._srs_service = SRSService(
+                repo=review_repo,
+                training_repo=training_repo,
+                scoring_service=RecommendationScoringService(
+                    review_repo=review_repo,
+                    training_repo=training_repo,
+                ),
+                vocabulary_service=self,
+            )
+        return self._srs_service
 
+    # ------------------------------------------------------------------
+    # Vocabulary items
+    # ------------------------------------------------------------------
 
-def get_latest_item_by_lemma(
-    db: Session,
-    *,
-    user_id: int,
-    english_lemma: str,
-) -> VocabularyItemDTO | None:
-    row = repository.get_latest_vocabulary_item_by_lemma(db, user_id=user_id, english_lemma=english_lemma)
-    return _to_dto(row[0], row[1]) if row is not None else None
+    def list_items(
+        self,
+        *,
+        requested_user_id: int | None,
+        current_user_id: int,
+    ) -> list[VocabularyItemDTO]:
+        target_user_id = application_access.resolve_target_user_id(
+            requested_user_id=requested_user_id,
+            current_user_id=current_user_id,
+        )
+        return [_to_dto(uv, entry) for uv, entry in self._repo.list_user_vocabulary(user_id=target_user_id)]
 
+    def list_user_items(self, *, user_id: int) -> list[VocabularyItemDTO]:
+        return [_to_dto(uv, entry) for uv, entry in self._repo.list_user_vocabulary(user_id=user_id)]
 
-def queue_add_item(
-    *,
-    db: Session,
-    payload: VocabularyItemCreate,
-    current_user_id: int,
-) -> AsyncTaskResponse:
-    target_user_id = application_access.resolve_target_user_id(
-        requested_user_id=payload.user_id,
-        current_user_id=current_user_id,
-    )
-    application_access.get_user_or_404(db=db, user_id=target_user_id)
+    def get_translation_map_for_user(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
+        return self._repo.get_translation_map(user_id=user_id, english_lemmas=english_lemmas)
 
-    from app.tasks.vocabulary_tasks import add_word_with_ai
+    def get_definition_map_for_user(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
+        return self._repo.get_definition_map(user_id=user_id, english_lemmas=english_lemmas)
 
-    task = enqueue_task(
-        add_word_with_ai,
-        owner_user_id=current_user_id,
-        kwargs={
-            "user_id": target_user_id,
-            "english_lemma": payload.english_lemma.strip().lower(),
-            "russian_translation": payload.russian_translation.strip(),
-            "source_sentence": payload.source_sentence.strip() if payload.source_sentence else None,
-            "source_url": payload.source_url.strip() if payload.source_url else None,
-        },
-    )
-    return AsyncTaskResponse(task_id=task.id)
+    def list_english_lemmas_for_user(self, *, user_id: int) -> list[str]:
+        return self._repo.list_english_lemmas(user_id=user_id)
 
+    def get_latest_item_by_lemma(self, *, user_id: int, english_lemma: str) -> VocabularyItemDTO | None:
+        row = self._repo.get_latest_vocabulary_item_by_lemma(user_id=user_id, english_lemma=english_lemma)
+        return _to_dto(row[0], row[1]) if row is not None else None
 
-def queue_add_item_from_capture(
-    *,
-    db: Session,
-    payload: VocabularyFromCaptureRequest,
-    current_user_id: int,
-) -> AsyncTaskResponse:
-    target_user_id = application_access.resolve_target_user_id(
-        requested_user_id=payload.user_id,
-        current_user_id=current_user_id,
-    )
-    application_access.get_user_or_404(db=db, user_id=target_user_id)
+    def queue_add_item(
+        self,
+        *,
+        payload: VocabularyItemCreate,
+        current_user_id: int,
+    ) -> AsyncTaskResponse:
+        target_user_id = application_access.resolve_target_user_id(
+            requested_user_id=payload.user_id,
+            current_user_id=current_user_id,
+        )
+        application_access.get_user_or_404(user_id=target_user_id, db=self._repo._db)
 
-    from app.tasks.vocabulary_tasks import capture_to_vocabulary_task
+        from app.tasks.vocabulary_tasks import add_word_with_ai
 
-    task = enqueue_task(
-        capture_to_vocabulary_task,
-        owner_user_id=current_user_id,
-        kwargs={
-            "user_id": target_user_id,
-            "selected_text": payload.selected_text,
-            "source_url": payload.source_url,
-            "source_sentence": payload.source_sentence,
-            "force_new_vocabulary_item": payload.force_new_vocabulary_item,
-        },
-    )
-    return AsyncTaskResponse(task_id=task.id)
+        task = enqueue_task(
+            add_word_with_ai,
+            owner_user_id=current_user_id,
+            kwargs={
+                "user_id": target_user_id,
+                "english_lemma": payload.english_lemma.strip().lower(),
+                "russian_translation": payload.russian_translation.strip(),
+                "source_sentence": payload.source_sentence.strip() if payload.source_sentence else None,
+                "source_url": payload.source_url.strip() if payload.source_url else None,
+            },
+        )
+        return AsyncTaskResponse(task_id=task.id)
 
+    def queue_add_item_from_capture(
+        self,
+        *,
+        payload: VocabularyFromCaptureRequest,
+        current_user_id: int,
+    ) -> AsyncTaskResponse:
+        target_user_id = application_access.resolve_target_user_id(
+            requested_user_id=payload.user_id,
+            current_user_id=current_user_id,
+        )
+        application_access.get_user_or_404(user_id=target_user_id, db=self._repo._db)
 
-async def create_item_with_ai(
-    *,
-    db: Session,
-    user_id: int,
-    english_lemma: str,
-    russian_translation: str,
-    source_sentence: str | None,
-    source_url: str | None,
-) -> VocabularyItemDTO:
-    application_access.get_user_or_404(db=db, user_id=user_id)
+        from app.tasks.vocabulary_tasks import capture_to_vocabulary_task
 
-    normalized_lemma = english_lemma.strip().lower()
-    normalized_translation = russian_translation.strip()
-    normalized_sentence = source_sentence.strip() if source_sentence else None
-    normalized_url = source_url.strip() if source_url else None
+        task = enqueue_task(
+            capture_to_vocabulary_task,
+            owner_user_id=current_user_id,
+            kwargs={
+                "user_id": target_user_id,
+                "selected_text": payload.selected_text,
+                "source_url": payload.source_url,
+                "source_sentence": payload.source_sentence,
+                "force_new_vocabulary_item": payload.force_new_vocabulary_item,
+            },
+        )
+        return AsyncTaskResponse(task_id=task.id)
 
-    definition_resolution = await resolve_context_definition(
-        db=db,
-        english_lemma=normalized_lemma,
-        russian_translation=normalized_translation,
-        source_sentence=normalized_sentence,
-    )
+    async def create_item_with_ai(
+        self,
+        *,
+        user_id: int,
+        english_lemma: str,
+        russian_translation: str,
+        source_sentence: str | None,
+        source_url: str | None,
+    ) -> VocabularyItemDTO:
+        application_access.get_user_or_404(user_id=user_id, db=self._repo._db)
 
-    with application_transaction.boundary(db=db):
-        entry, _ = repository.get_or_create_dictionary_entry(
-            db,
+        normalized_lemma = english_lemma.strip().lower()
+        normalized_translation = russian_translation.strip()
+        normalized_sentence = source_sentence.strip() if source_sentence else None
+        normalized_url = source_url.strip() if source_url else None
+
+        definition_resolution = await resolve_context_definition(
+            repo=self._repo,
             english_lemma=normalized_lemma,
             russian_translation=normalized_translation,
-            context_definition_ru=definition_resolution.context_definition,
-        )
-        uv, _ = repository.add_to_user_vocabulary(
-            db,
-            user_id=user_id,
-            entry_id=entry.id,
             source_sentence=normalized_sentence,
-            source_url=normalized_url,
         )
 
-    return _to_dto(uv, entry)
+        with transaction(self._repo._db):
+            entry, _ = self._repo.get_or_create_dictionary_entry(
+                english_lemma=normalized_lemma,
+                russian_translation=normalized_translation,
+                context_definition_ru=definition_resolution.context_definition,
+            )
+            uv, _ = self._repo.add_to_user_vocabulary(
+                user_id=user_id,
+                entry_id=entry.id,
+                source_sentence=normalized_sentence,
+                source_url=normalized_url,
+            )
 
+        return _to_dto(uv, entry)
 
-def update_item(
-    *,
-    db: Session,
-    item_id: int,
-    payload: VocabularyItemUpdateMe,
-    current_user_id: int,
-) -> VocabularyItemDTO:
-    row = repository.get_user_vocabulary_item(db, user_id=current_user_id, item_id=item_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Vocabulary item not found")
-    uv, entry = row
-    repository.update_user_vocabulary_item(
-        db, uv,
-        source_sentence=payload.source_sentence,
-        source_url=payload.source_url,
-    )
-    return _to_dto(uv, entry)
-
-
-def delete_item(
-    *,
-    db: Session,
-    item_id: int,
-    current_user_id: int,
-) -> dict[str, bool]:
-    row = repository.get_user_vocabulary_item(db, user_id=current_user_id, item_id=item_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Vocabulary item not found")
-    uv, _ = row
-    with application_transaction.boundary(db=db):
-        learning_graph_public_api.delete_vocabulary_links(
-            db=db,
-            user_id=current_user_id,
-            vocabulary_item_id=uv.id,
+    def update_item(
+        self,
+        *,
+        item_id: int,
+        payload: VocabularyItemUpdateMe,
+        current_user_id: int,
+    ) -> VocabularyItemDTO:
+        row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Vocabulary item not found")
+        uv, entry = row
+        self._repo.update_user_vocabulary_item(
+            uv,
+            source_sentence=payload.source_sentence,
+            source_url=payload.source_url,
         )
-        repository.delete_user_vocabulary_item(db, uv)
-    return {"deleted": True}
+        return _to_dto(uv, entry)
+
+    def delete_item(self, *, item_id: int, current_user_id: int) -> dict[str, bool]:
+        row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Vocabulary item not found")
+        uv, _ = row
+        with transaction(self._repo._db):
+            self._graph().delete_vocabulary_links(
+                user_id=current_user_id,
+                vocabulary_item_id=uv.id,
+            )
+            self._repo.delete_user_vocabulary_item(uv)
+        return {"deleted": True}
+
+    # ------------------------------------------------------------------
+    # Capture pipeline
+    # ------------------------------------------------------------------
+
+    async def _generate_capture_ai_data(
+        self,
+        *,
+        selected_text: str,
+        source_sentence: str | None,
+        english_lemma: str,
+        cefr_level: str,
+    ) -> tuple[str, str, str | None]:
+        if _is_single_word_capture(selected_text):
+            shared_translation = self._repo.find_shared_translation(english_lemma=english_lemma)
+            fast_translation = (
+                shared_translation
+                or lookup_translation(repo=self._repo, english_lemma=english_lemma)
+                or ai_service.fast_translate_single_word(english_lemma)
+            )
+            if fast_translation:
+                return (
+                    _normalize_translation(fast_translation),
+                    "fast_local_word_translation; local_definition",
+                    None,
+                )
+
+        contextual_response = await ai_service.translate_with_context_async(
+            TranslateWithContextRequest(
+                text=english_lemma,
+                cefr_level=cefr_level,
+                source_context=source_sentence,
+            )
+        )
+        contextual_translation = _normalize_translation(contextual_response.translated_text)
+        translation_note = contextual_response.provider_note
+        semantic_sentence = source_sentence
+        russian_translation = contextual_translation
+
+        if _is_single_word_capture(selected_text):
+            base_response = await ai_service.translate_with_context_async(
+                TranslateWithContextRequest(
+                    text=english_lemma,
+                    cefr_level=cefr_level,
+                    source_context=None,
+                )
+            )
+            base_translation = _normalize_translation(base_response.translated_text)
+            if _looks_like_context_phrase_expansion(
+                base_translation=base_translation,
+                contextual_translation=contextual_translation,
+            ):
+                russian_translation = base_translation
+                semantic_sentence = None
+                translation_note = (
+                    f"{contextual_response.provider_note}; "
+                    "capture_mode=base_word_translation; "
+                    f"context_variant_ignored={contextual_translation}"
+                )
+            else:
+                russian_translation = contextual_translation or base_translation
+                translation_note = (
+                    f"{contextual_response.provider_note}; "
+                    "capture_mode=contextual_single_word"
+                )
+
+        return russian_translation, translation_note, semantic_sentence
+
+    async def capture_to_vocabulary(
+        self,
+        *,
+        user_id: int,
+        selected_text: str,
+        source_url: str | None,
+        source_sentence: str | None,
+        force_new_vocabulary_item: bool,
+    ) -> tuple[VocabularyItemDTO, bool]:
+        user = application_access.get_user_or_404(user_id=user_id, db=self._repo._db)
+        normalized_url = source_url.strip() if source_url else None
+        normalized_sentence = source_sentence.strip() if source_sentence else None
+        english_lemma = _normalize_english_lemma(selected_text)
+
+        russian_translation, _note, semantic_sentence = await self._generate_capture_ai_data(
+            selected_text=selected_text,
+            source_sentence=normalized_sentence,
+            english_lemma=english_lemma,
+            cefr_level=user.cefr_level,
+        )
+        definition_resolution = await resolve_context_definition(
+            repo=self._repo,
+            english_lemma=english_lemma,
+            russian_translation=russian_translation,
+            source_sentence=semantic_sentence,
+        )
+
+        with transaction(self._repo._db):
+            existing_row = self._repo.get_latest_vocabulary_item_by_lemma(
+                user_id=user_id,
+                english_lemma=english_lemma,
+            )
+            use_existing = existing_row is not None and not force_new_vocabulary_item
+
+            if use_existing:
+                uv, entry = existing_row
+            else:
+                entry, _ = self._repo.get_or_create_dictionary_entry(
+                    english_lemma=english_lemma,
+                    russian_translation=russian_translation,
+                    context_definition_ru=definition_resolution.context_definition,
+                )
+                uv, _ = self._repo.add_to_user_vocabulary(
+                    user_id=user_id,
+                    entry_id=entry.id,
+                    source_sentence=normalized_sentence,
+                    source_url=normalized_url,
+                )
+
+            self._srs().ensure_word_progress_entry(word=english_lemma, user_id=user_id)
+            self._graph().register_vocabulary_semantics(
+                user_id=user_id,
+                english_lemma=english_lemma,
+                russian_translation=russian_translation,
+                context_definition_ru=definition_resolution.context_definition,
+                source_sentence=semantic_sentence,
+                source_url=normalized_url,
+                vocabulary_item_id=uv.id,
+            )
+
+        return _to_dto(uv, entry), not use_existing
+
+    # ------------------------------------------------------------------
+    # Translation
+    # ------------------------------------------------------------------
+
+    async def translate_for_user(
+        self,
+        *,
+        user_id: int,
+        text: str,
+        source_context: str | None,
+    ) -> TranslationResultDTO:
+        from app.modules.identity.repository import IdentityRepository
+        user_model = IdentityRepository(self._repo._db).get_by_id(user_id)
+        if user_model is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if _is_single_token(text) and not source_context:
+            shared = self._repo.find_shared_translation(english_lemma=text.strip())
+            if shared:
+                return TranslationResultDTO(
+                    translated_text=shared,
+                    note=_build_translation_note("glossary:shared_dictionary"),
+                )
+
+        try:
+            ai_response = await ai_service.translate_with_context_async(
+                TranslateWithContextRequest(
+                    text=text,
+                    cefr_level=user_model.cefr_level,
+                    source_context=source_context,
+                    glossary=[
+                        {
+                            "english_term": item.english_lemma,
+                            "russian_translation": item.russian_translation,
+                            "source_sentence": item.source_sentence,
+                        }
+                        for item in self.list_user_items(user_id=user_id)[:50]
+                    ],
+                )
+            )
+        except AIProviderUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        return TranslationResultDTO(
+            translated_text=ai_response.translated_text,
+            note=_build_translation_note(ai_response.provider_note),
+        )

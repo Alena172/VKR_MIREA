@@ -10,7 +10,6 @@ from app.core.api import api_router
 from app.core.config import get_settings
 from app.core.db import SessionLocal, engine
 from app.core.schema import ensure_database_schema_ready
-from app.modules.vocabulary.service.lexicon import ensure_seeded
 
 settings = get_settings()
 
@@ -58,11 +57,9 @@ def ensure_base_lexicon_seeded() -> None:
 
     ensure_database_schema_ready(engine=engine, database_url=settings.database_url)
 
-    db = SessionLocal()
-    try:
+    from app.modules.vocabulary.service.lexicon import ensure_seeded
+    with SessionLocal() as db:
         ensure_seeded(db=db)
-    finally:
-        db.close()
 
 
 @app.get("/health", tags=["system"])

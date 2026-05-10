@@ -1,42 +1,36 @@
+from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.db import get_db
 from app.modules.identity.models import UserModel
 from app.modules.identity.schemas import UserCreate
 
 
-def list_users(db: Session) -> list[UserModel]:
-    """Возвращает пользователей от новых к старым."""
+class IdentityRepository:
+    def __init__(self, db: Session = Depends(get_db)) -> None:
+        self._db = db
 
-    query = select(UserModel).order_by(UserModel.id.desc())
-    return list(db.scalars(query))
+    def list_users(self) -> list[UserModel]:
+        query = select(UserModel).order_by(UserModel.id.desc())
+        return list(self._db.scalars(query))
 
+    def get_by_id(self, user_id: int) -> UserModel | None:
+        return self._db.get(UserModel, user_id)
 
-def get_user_by_id(db: Session, user_id: int) -> UserModel | None:
-    """Возвращает пользователя по первичному ключу."""
+    def get_by_email(self, email: str) -> UserModel | None:
+        query = select(UserModel).where(UserModel.email == email)
+        return self._db.scalar(query)
 
-    return db.get(UserModel, user_id)
-
-
-def get_user_by_email(db: Session, email: str) -> UserModel | None:
-    """Возвращает пользователя по уникальному email."""
-
-    query = select(UserModel).where(UserModel.email == email)
-    return db.scalar(query)
-
-
-def create_user(db: Session, payload: UserCreate) -> UserModel:
-    """Создает пользователя и сразу фиксирует транзакцию.
-
-    Raises DuplicateEmailError если email уже занят.
-    """
-    user = UserModel(**payload.model_dump())
-    db.add(user)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise
-    db.refresh(user)
-    return user
+    def create(self, payload: UserCreate) -> UserModel:
+        """Raises IntegrityError if email already taken."""
+        user = UserModel(**payload.model_dump())
+        self._db.add(user)
+        try:
+            self._db.commit()
+        except IntegrityError:
+            self._db.rollback()
+            raise
+        self._db.refresh(user)
+        return user

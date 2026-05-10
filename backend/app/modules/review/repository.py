@@ -4,9 +4,11 @@ import re
 from datetime import datetime, timedelta
 from typing import Literal
 
+from fastapi import Depends
 from sqlalchemy import asc, desc, func, select
 from sqlalchemy.orm import Session
 
+from app.core.db import get_db
 from app.modules.review.models import WordProgressModel
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
@@ -24,20 +26,20 @@ class ReviewRepository:
 
     _SRS_STEPS_DAYS = [1, 3, 7, 14, 30, 60]
 
+    def __init__(self, db: Session = Depends(get_db)) -> None:
+        self._db = db
+
     def update_word_progress(
         self,
-        db: Session,
         user_id: int,
         word: str,
         is_correct: bool,
     ) -> WordProgressModel | None:
-        """Обновляет счетчики и дату следующего повторения по SRS."""
-
         normalized = _normalize_valid_word(word)
         if not normalized:
             return None
 
-        row = db.scalar(
+        row = self._db.scalar(
             select(WordProgressModel).where(
                 WordProgressModel.user_id == user_id,
                 WordProgressModel.word == normalized,
@@ -54,8 +56,8 @@ class ReviewRepository:
                 last_reviewed_at=now,
                 next_review_at=now,
             )
-            db.add(row)
-            db.flush()
+            self._db.add(row)
+            self._db.flush()
 
         row.last_reviewed_at = now
         if is_correct:
@@ -68,19 +70,12 @@ class ReviewRepository:
             row.next_review_at = now
         return row
 
-    def ensure_word_progress(
-        self,
-        db: Session,
-        user_id: int,
-        word: str,
-    ) -> WordProgressModel | None:
-        """Создает запись прогресса для слова, если ее еще нет."""
-
+    def ensure_word_progress(self, user_id: int, word: str) -> WordProgressModel | None:
         normalized = _normalize_valid_word(word)
         if not normalized:
             return None
 
-        row = db.scalar(
+        row = self._db.scalar(
             select(WordProgressModel).where(
                 WordProgressModel.user_id == user_id,
                 WordProgressModel.word == normalized,
@@ -98,36 +93,26 @@ class ReviewRepository:
             last_reviewed_at=now,
             next_review_at=now,
         )
-        db.add(row)
-        db.flush()
+        self._db.add(row)
+        self._db.flush()
         return row
 
-    def get_word_progress(
-        self,
-        db: Session,
-        user_id: int,
-        word: str,
-    ) -> WordProgressModel | None:
+    def get_word_progress(self, user_id: int, word: str) -> WordProgressModel | None:
         normalized = _normalize_valid_word(word)
         if not normalized:
             return None
-        return db.scalar(
+        return self._db.scalar(
             select(WordProgressModel).where(
                 WordProgressModel.user_id == user_id,
                 WordProgressModel.word == normalized,
             )
         )
 
-    def get_word_progress_map(
-        self,
-        db: Session,
-        user_id: int,
-        words: list[str],
-    ) -> dict[str, WordProgressModel]:
+    def get_word_progress_map(self, user_id: int, words: list[str]) -> dict[str, WordProgressModel]:
         normalized = [w for w in (_normalize_valid_word(item) for item in words) if w]
         if not normalized:
             return {}
-        rows = list(db.scalars(
+        rows = list(self._db.scalars(
             select(WordProgressModel).where(
                 WordProgressModel.user_id == user_id,
                 WordProgressModel.word.in_(normalized),
@@ -135,16 +120,9 @@ class ReviewRepository:
         ))
         return {row.word: row for row in rows}
 
-    def list_due_word_progress(
-        self,
-        db: Session,
-        user_id: int,
-        limit: int,
-    ) -> list[WordProgressModel]:
-        """Возвращает слова, которые нужно повторить сейчас."""
-
+    def list_due_word_progress(self, user_id: int, limit: int) -> list[WordProgressModel]:
         now = datetime.utcnow()
-        return list(db.scalars(
+        return list(self._db.scalars(
             select(WordProgressModel)
             .where(
                 WordProgressModel.user_id == user_id,
@@ -154,9 +132,9 @@ class ReviewRepository:
             .limit(limit)
         ))
 
-    def count_due_word_progress(self, db: Session, user_id: int) -> int:
+    def count_due_word_progress(self, user_id: int) -> int:
         now = datetime.utcnow()
-        return int(db.scalar(
+        return int(self._db.scalar(
             select(func.count(WordProgressModel.id)).where(
                 WordProgressModel.user_id == user_id,
                 WordProgressModel.next_review_at <= now,
@@ -165,14 +143,13 @@ class ReviewRepository:
 
     def list_upcoming_word_progress(
         self,
-        db: Session,
         user_id: int,
         horizon: timedelta,
         limit: int,
     ) -> list[WordProgressModel]:
         now = datetime.utcnow()
         end = now + horizon
-        return list(db.scalars(
+        return list(self._db.scalars(
             select(WordProgressModel)
             .where(
                 WordProgressModel.user_id == user_id,
@@ -185,7 +162,6 @@ class ReviewRepository:
 
     def list_word_progress(
         self,
-        db: Session,
         user_id: int,
         limit: int,
         offset: int,
@@ -209,14 +185,14 @@ class ReviewRepository:
 
         primary_order = asc(primary_col) if sort_order == "asc" else desc(primary_col)
         query = query.order_by(primary_order, WordProgressModel.next_review_at.asc()).offset(offset).limit(limit)
-        return list(db.scalars(query))
+        return list(self._db.scalars(query))
 
-    def delete_word_progress(self, db: Session, user_id: int, word: str) -> bool:
+    def delete_word_progress(self, user_id: int, word: str) -> bool:
         normalized = _normalize_valid_word(word)
         if not normalized:
             return False
 
-        row = db.scalar(
+        row = self._db.scalar(
             select(WordProgressModel).where(
                 WordProgressModel.user_id == user_id,
                 WordProgressModel.word == normalized,
@@ -225,9 +201,6 @@ class ReviewRepository:
         if row is None:
             return False
 
-        db.delete(row)
-        db.flush()
+        self._db.delete(row)
+        self._db.flush()
         return True
-
-
-review_repository = ReviewRepository()

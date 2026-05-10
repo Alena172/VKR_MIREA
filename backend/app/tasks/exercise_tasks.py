@@ -1,7 +1,4 @@
-"""Celery tasks for exercise generation.
-
-Offloads AI exercise generation from the HTTP request cycle.
-"""
+"""Celery tasks for exercise generation."""
 from __future__ import annotations
 
 import asyncio
@@ -44,35 +41,33 @@ def generate_exercises_for_user(
     fast_start: bool = False,
     incremental: bool = False,
 ) -> dict:
-    """Generate exercises for a user and return them as a serialisable dict.
-
-    The result matches ExerciseGenerateResponse schema.
-    """
     from app.core.db import SessionLocal
-    from app.modules.training.service.exercises import generate_for_user
+    from app.modules.graph.repository import GraphRepository
+    from app.modules.identity.repository import IdentityRepository
+    from app.modules.training.service.exercises import TrainingService
+    from app.modules.vocabulary.repository import VocabularyRepository
 
-    db = SessionLocal()
-    try:
-        response = asyncio.run(
-            generate_for_user(
-                db=db,
-                user_id=user_id,
-                vocabulary_ids=vocabulary_ids,
-                size=size,
-                mode=mode,
-                fast_start=fast_start,
-                incremental=incremental,
+    with SessionLocal() as db:
+        try:
+            service = TrainingService(
+                identity_repo=IdentityRepository(db),
+                vocab_repo=VocabularyRepository(db),
+                graph_repo=GraphRepository(db),
             )
-        )
-        return _exercise_result_to_dict(response)
-
-    except Exception as exc:
-        logger.exception(
-            "generate_exercises_for_user failed for user=%s mode=%s size=%s",
-            user_id,
-            mode,
-            size,
-        )
-        raise self.retry(exc=exc)
-    finally:
-        db.close()
+            response = asyncio.run(
+                service.generate_for_user(
+                    user_id=user_id,
+                    vocabulary_ids=vocabulary_ids,
+                    size=size,
+                    mode=mode,
+                    fast_start=fast_start,
+                    incremental=incremental,
+                )
+            )
+            return _exercise_result_to_dict(response)
+        except Exception as exc:
+            logger.exception(
+                "generate_exercises_for_user failed for user=%s mode=%s size=%s",
+                user_id, mode, size,
+            )
+            raise self.retry(exc=exc)

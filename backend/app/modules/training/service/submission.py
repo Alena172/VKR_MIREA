@@ -3,16 +3,15 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from sqlalchemy.orm import Session
+from fastapi import Depends
 
-from app.core.application import application_transaction
+from app.core.db import transaction
 from app.modules.ai.facade import ai_facade as ai_service
 from app.modules.ai.schemas import ExplainErrorRequest
-from app.modules.graph.service.graph import graph_service as learning_graph_public_api
+from app.modules.graph.repository import GraphRepository
+from app.modules.review.repository import ReviewRepository
 from app.modules.review.service.srs import WordProgressUpdate
-from app.modules.review.service.srs import srs_service as context_memory_public_api
-from app.modules.training import repository
-from app.modules.training.repository import AnswerPersistPayload
+from app.modules.training.repository import AnswerPersistPayload, TrainingRepository
 from app.modules.training.schemas import (
     SessionAnswer,
     SessionAnswerFeedbackDTO,
@@ -31,8 +30,6 @@ from app.modules.training.service.evaluation import (
 
 @dataclass
 class EvaluatedAnswer:
-    """Ответ пользователя после проверки и подготовки к сохранению."""
-
     exercise_id: int
     exercise_type: str | None
     target_word: str | None
@@ -118,14 +115,12 @@ async def _evaluate_answer(answer: SessionAnswer) -> EvaluatedAnswer:
                 exercise_id=answer.exercise_id,
                 explanation_ru=explanation_ru,
             )
-
         progress_word = extract_progress_word(
             target_word=answer.target_word,
             prompt=answer.prompt,
             expected_answer=answer.expected_answer,
             vocabulary_words=set(),
         )
-
         return EvaluatedAnswer(
             exercise_id=answer.exercise_id,
             exercise_type=answer.exercise_type or simple_exercise_type,
@@ -239,7 +234,6 @@ async def _evaluate_answer(answer: SessionAnswer) -> EvaluatedAnswer:
 async def _evaluate_answers(answers: list[SessionAnswer]) -> list[EvaluatedAnswer]:
     if not answers:
         return []
-
     semaphore = asyncio.Semaphore(4)
 
     async def evaluate_with_limit(answer: SessionAnswer) -> EvaluatedAnswer:
@@ -265,92 +259,86 @@ def _collect_feedback(
     return incorrect_feedback, advice_feedback
 
 
-def _update_progress(
-    *,
-    db: Session,
-    user_id: int,
-    evaluated_answers: list[EvaluatedAnswer],
-) -> None:
-    progress_updates: list[WordProgressUpdate] = []
-    for item in evaluated_answers:
-        if item.progress_word:
-            progress_updates.append(
-                WordProgressUpdate(
-                    word=item.progress_word,
-                    is_correct=item.is_correct,
+class SubmissionService:
+    def __init__(
+        self,
+        training_repo: TrainingRepository = Depends(),
+        review_repo: ReviewRepository = Depends(),
+        graph_repo: GraphRepository = Depends(),
+    ) -> None:
+        self._training_repo = training_repo
+        self._review_repo = review_repo
+        self._graph_repo = graph_repo
+
+    def _update_progress(
+        self,
+        *,
+        user_id: int,
+        evaluated_answers: list[EvaluatedAnswer],
+    ) -> None:
+        progress_updates: list[WordProgressUpdate] = []
+        for item in evaluated_answers:
+            if item.progress_word:
+                progress_updates.append(
+                    WordProgressUpdate(word=item.progress_word, is_correct=item.is_correct)
                 )
+            if item.progress_word and not item.is_correct:
+                self._graph_repo.add_sense_error_event(
+                    user_id=user_id,
+                    english_lemma=item.progress_word,
+                    prompt=item.prompt,
+                    expected_answer=item.expected_answer,
+                    user_answer=item.user_answer,
+                )
+
+        for update in progress_updates:
+            self._review_repo.update_word_progress(
+                user_id=user_id, word=update.word, is_correct=update.is_correct
             )
 
-        if item.progress_word and not item.is_correct:
-            learning_graph_public_api.register_mistake(
-                db=db,
-                user_id=user_id,
-                english_lemma=item.progress_word,
-                prompt=item.prompt,
-                expected_answer=item.expected_answer,
-                user_answer=item.user_answer,
-            )
-
-    context_memory_public_api.update_learning_progress(
-        db=db,
-        user_id=user_id,
-        updates=progress_updates,
-    )
-
-
-def _persist_session(
-    *,
-    db: Session,
-    user_id: int,
-    evaluated_answers: list[EvaluatedAnswer],
-):
-    total = len(evaluated_answers)
-    correct = sum(1 for item in evaluated_answers if item.is_correct)
-    return repository.create_session_with_answers(
-        db,
-        user_id=user_id,
-        total=total,
-        correct=correct,
-        accuracy=round((correct / total), 4) if total else 0.0,
-        answers=[
-            AnswerPersistPayload(
-                exercise_id=item.exercise_id,
-                exercise_type=item.exercise_type,
-                target_word=item.target_word,
-                prompt=item.prompt,
-                expected_answer=item.expected_answer,
-                user_answer=item.user_answer,
-                is_correct=item.is_correct,
-                explanation_ru=item.explanation_ru,
-            )
-            for item in evaluated_answers
-        ],
-        auto_commit=False,
-    )
-
-
-async def submit(
-    *,
-    db: Session,
-    user_id: int,
-    answers: list[SessionAnswer],
-) -> SessionSubmitResultDTO:
-    normalized_answers = _dedupe_answers(answers)
-    evaluated_answers = await _evaluate_answers(normalized_answers)
-    incorrect_feedback, advice_feedback = _collect_feedback(evaluated_answers)
-    with application_transaction.boundary(db=db):
-        _update_progress(
-            db=db,
+    def _persist_session(
+        self,
+        *,
+        user_id: int,
+        evaluated_answers: list[EvaluatedAnswer],
+    ):
+        total = len(evaluated_answers)
+        correct = sum(1 for item in evaluated_answers if item.is_correct)
+        return self._training_repo.create_session_with_answers(
             user_id=user_id,
-            evaluated_answers=evaluated_answers,
+            total=total,
+            correct=correct,
+            accuracy=round((correct / total), 4) if total else 0.0,
+            answers=[
+                AnswerPersistPayload(
+                    exercise_id=item.exercise_id,
+                    exercise_type=item.exercise_type,
+                    target_word=item.target_word,
+                    prompt=item.prompt,
+                    expected_answer=item.expected_answer,
+                    user_answer=item.user_answer,
+                    is_correct=item.is_correct,
+                    explanation_ru=item.explanation_ru,
+                )
+                for item in evaluated_answers
+            ],
+            auto_commit=False,
         )
-        session_row = _persist_session(
-            db=db,
-            user_id=user_id,
-            evaluated_answers=evaluated_answers,
+
+    async def submit(
+        self,
+        *,
+        user_id: int,
+        answers: list[SessionAnswer],
+    ) -> SessionSubmitResultDTO:
+        normalized_answers = _dedupe_answers(answers)
+        evaluated_answers = await _evaluate_answers(normalized_answers)
+        incorrect_feedback, advice_feedback = _collect_feedback(evaluated_answers)
+        with transaction(self._training_repo._db):
+            self._update_progress(user_id=user_id, evaluated_answers=evaluated_answers)
+            session_row = self._persist_session(user_id=user_id, evaluated_answers=evaluated_answers)
+        return SessionSubmitResultDTO(
+            session=session_row,
+            incorrect_feedback=incorrect_feedback,
+            advice_feedback=advice_feedback,
         )
-    return SessionSubmitResultDTO(
-        session=session_row,
-        incorrect_feedback=incorrect_feedback,
-        advice_feedback=advice_feedback,
-    )

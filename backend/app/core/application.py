@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-
 from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-
-from app.modules.identity.repository import get_user_by_id
 
 
 class AsyncTaskResponse(BaseModel):
@@ -33,31 +29,14 @@ class ApplicationAccess:
             raise HTTPException(status_code=403, detail="Forbidden")
         return target_user_id
 
-    def get_user_or_404(self, *, db: Session, user_id: int):
+    def get_user_or_404(self, *, user_id: int, db: Session):
         """Возвращает пользователя или останавливает HTTP-запрос с 404."""
+        from app.modules.identity.repository import IdentityRepository
 
-        user = get_user_by_id(db, user_id)
+        user = IdentityRepository(db).get_by_id(user_id)
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
         return user
 
 
 application_access = ApplicationAccess()
-
-
-class ApplicationTransaction:
-    """Единая транзакционная граница для application-сервисов."""
-
-    @contextmanager
-    def boundary(self, *, db: Session):
-        """Коммитит успешный сценарий и откатывает транзакцию при ошибке."""
-
-        try:
-            yield
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-
-
-application_transaction = ApplicationTransaction()

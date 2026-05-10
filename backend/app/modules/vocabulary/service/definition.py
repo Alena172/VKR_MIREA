@@ -3,10 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from sqlalchemy.orm import Session
-
 from app.modules.ai.facade import ai_facade as ai_service
-from app.modules.vocabulary import repository
+from app.modules.vocabulary.repository import VocabularyRepository
 
 _GENERIC_TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'-]*")
 _REUSE_CONFIDENCE_THRESHOLD = 0.72
@@ -51,13 +49,12 @@ def _score_definition_candidate(*, candidate, russian_translation: str, source_s
 
 def find_reusable_definition(
     *,
-    db: Session,
+    repo: VocabularyRepository,
     english_lemma: str,
     russian_translation: str,
     source_sentence: str | None,
 ) -> DefinitionResolution | None:
-    """Ищет подходящее определение в общем словаре (без привязки к пользователю)."""
-    candidates = repository.list_definition_candidates(db, english_lemma=english_lemma)
+    candidates = repo.list_definition_candidates(english_lemma=english_lemma)
     best_candidate = None
     best_score = 0.0
     for candidate in candidates:
@@ -82,15 +79,14 @@ def find_reusable_definition(
 
 async def resolve_context_definition(
     *,
-    db: Session,
+    repo: VocabularyRepository,
     english_lemma: str,
     russian_translation: str,
     source_sentence: str | None,
     cefr_level: str | None = None,
 ) -> DefinitionResolution:
-    """Переиспользует определение из общего словаря или генерирует новое через AI."""
     reusable = find_reusable_definition(
-        db=db,
+        repo=repo,
         english_lemma=english_lemma,
         russian_translation=russian_translation,
         source_sentence=source_sentence,

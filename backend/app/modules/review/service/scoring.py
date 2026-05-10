@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy.orm import Session
+from fastapi import Depends
 
 from app.modules.review.models import matches_review_status_filter
-from app.modules.review.repository import _normalize_valid_word, review_repository
-from app.modules.training.repository import list_recent_incorrect_words
+from app.modules.review.repository import ReviewRepository, _normalize_valid_word
+from app.modules.training.repository import TrainingRepository
 
 
 @dataclass
@@ -19,10 +19,18 @@ class RecommendationScoreSnapshot:
 
 
 class RecommendationScoringService:
-    def build_snapshot(self, *, db: Session, user_id: int, limit: int) -> RecommendationScoreSnapshot:
-        recent_errors = list_recent_incorrect_words(db, user_id=user_id, limit=limit * 5, unique=False)
-        candidate_rows = review_repository.list_word_progress(
-            db, user_id=user_id, limit=max(limit * 3, 10), offset=0, q=None,
+    def __init__(
+        self,
+        review_repo: ReviewRepository = Depends(),
+        training_repo: TrainingRepository = Depends(),
+    ) -> None:
+        self._review_repo = review_repo
+        self._training_repo = training_repo
+
+    def build_snapshot(self, *, user_id: int, limit: int) -> RecommendationScoreSnapshot:
+        recent_errors = self._training_repo.list_recent_incorrect_words(user_id=user_id, limit=limit * 5, unique=False)
+        candidate_rows = self._review_repo.list_word_progress(
+            user_id=user_id, limit=max(limit * 3, 10), offset=0, q=None,
             sort_by="error_count", sort_order="desc",
         )
         troubled_rows = [
@@ -48,12 +56,9 @@ class RecommendationScoringService:
                 scores[word] = scores.get(word, 0.0) + 0.75
 
         now = datetime.utcnow()
-        progress_map = review_repository.get_word_progress_map(db, user_id=user_id, words=list(scores.keys()))
+        progress_map = self._review_repo.get_word_progress_map(user_id=user_id, words=list(scores.keys()))
         for word, progress in progress_map.items():
             if progress.next_review_at <= now:
                 scores[word] = scores.get(word, 0.0) + 1.25
 
         return RecommendationScoreSnapshot(scores=scores)
-
-
-recommendation_scoring_service = RecommendationScoringService()

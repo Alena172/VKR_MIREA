@@ -1,57 +1,86 @@
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
 
-from app.core.application import AsyncTaskResponse, application_access
-from app.core.db import get_db
+from app.core.application import application_access
 from app.modules.identity.deps import get_current_user_id
-from app.modules.training import repository
+from app.modules.training.repository import TrainingRepository
 from app.modules.training.schemas import (
     ExerciseGenerateRequest,
     ExerciseGenerateRequestMe,
+    ExerciseGenerateResponse,
+    ExerciseItem,
     SessionAnswerRead,
     SessionHistoryResponse,
     SessionSubmitRequest,
     SessionSubmitResponse,
     SessionSummary,
 )
-from app.modules.training.service.exercises import queue_generation
-from app.modules.training.service.submission import submit
+from app.modules.training.service.exercises import TrainingService
+from app.modules.training.service.submission import SubmissionService
 
 router = APIRouter()
 
 
-@router.post("/exercises/me/generate", response_model=AsyncTaskResponse, status_code=202)
-def generate_me(
+@router.post("/exercises/me/generate", response_model=ExerciseGenerateResponse)
+async def generate_me(
     payload: ExerciseGenerateRequestMe,
     current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-) -> AsyncTaskResponse:
-    return queue_generation(
-        db=db,
-        payload=ExerciseGenerateRequest(
-            user_id=current_user_id,
-            vocabulary_ids=payload.vocabulary_ids,
-            size=payload.size,
-            fast_start=payload.fast_start,
-            incremental=payload.incremental,
-            mode=payload.mode,
-        ),
-        current_user_id=current_user_id,
+    service: TrainingService = Depends(),
+) -> ExerciseGenerateResponse:
+    result = await service.generate_for_user(
+        user_id=current_user_id,
+        vocabulary_ids=payload.vocabulary_ids,
+        size=payload.size,
+        mode=payload.mode,
+        fast_start=payload.fast_start,
+        incremental=payload.incremental,
+    )
+    return ExerciseGenerateResponse(
+        exercises=[
+            ExerciseItem(
+                prompt=e.prompt,
+                answer=e.answer,
+                exercise_type=e.exercise_type,
+                target_word=e.target_word,
+                options=e.options,
+            )
+            for e in result.exercises
+        ],
+        note=result.note,
     )
 
 
-@router.post("/exercises/generate", response_model=AsyncTaskResponse, status_code=202)
-def generate(
+@router.post("/exercises/generate", response_model=ExerciseGenerateResponse)
+async def generate(
     payload: ExerciseGenerateRequest,
     current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-) -> AsyncTaskResponse:
-    return queue_generation(
-        db=db,
-        payload=payload,
+    service: TrainingService = Depends(),
+) -> ExerciseGenerateResponse:
+    target_user_id = application_access.resolve_target_user_id(
+        requested_user_id=payload.user_id,
         current_user_id=current_user_id,
+    )
+    result = await service.generate_for_user(
+        user_id=target_user_id,
+        vocabulary_ids=payload.vocabulary_ids,
+        size=payload.size,
+        mode=payload.mode,
+        fast_start=payload.fast_start,
+        incremental=payload.incremental,
+    )
+    return ExerciseGenerateResponse(
+        exercises=[
+            ExerciseItem(
+                prompt=e.prompt,
+                answer=e.answer,
+                exercise_type=e.exercise_type,
+                target_word=e.target_word,
+                options=e.options,
+            )
+            for e in result.exercises
+        ],
+        note=result.note,
     )
 
 
@@ -59,11 +88,11 @@ def generate(
 def list_sessions(
     user_id: int | None = Query(default=None, ge=1),
     current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
+    repo: TrainingRepository = Depends(),
 ) -> list[SessionSummary]:
     if user_id is not None and user_id != current_user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    return repository.list_sessions(db, user_id=user_id or current_user_id)
+    return repo.list_sessions(user_id=user_id or current_user_id)
 
 
 @router.get("/sessions/me", response_model=SessionHistoryResponse)
@@ -75,7 +104,7 @@ def list_my_sessions(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
+    repo: TrainingRepository = Depends(),
 ) -> SessionHistoryResponse:
     if min_accuracy is not None and max_accuracy is not None and min_accuracy > max_accuracy:
         raise HTTPException(status_code=400, detail="min_accuracy cannot be greater than max_accuracy")
@@ -85,8 +114,7 @@ def list_my_sessions(
     created_from = datetime.combine(date_from, time.min) if date_from is not None else None
     created_to = datetime.combine(date_to + timedelta(days=1), time.min) if date_to is not None else None
 
-    items = repository.list_sessions_paginated(
-        db,
+    items = repo.list_sessions_paginated(
         user_id=current_user_id,
         limit=limit,
         offset=offset,
@@ -95,8 +123,7 @@ def list_my_sessions(
         created_from=created_from,
         created_to=created_to,
     )
-    total = repository.count_sessions(
-        db,
+    total = repo.count_sessions(
         user_id=current_user_id,
         min_accuracy=min_accuracy,
         max_accuracy=max_accuracy,
@@ -111,16 +138,12 @@ def list_session_answers(
     session_id: int,
     user_id: int | None = Query(default=None, ge=1),
     current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
+    repo: TrainingRepository = Depends(),
 ) -> list[SessionAnswerRead]:
     if user_id is not None and user_id != current_user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
     target_user_id = user_id or current_user_id
-    answers = repository.list_answers_by_session(
-        db,
-        session_id=session_id,
-        user_id=target_user_id,
-    )
+    answers = repo.list_answers_by_session(session_id=session_id, user_id=target_user_id)
     if answers is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return answers
@@ -130,13 +153,9 @@ def list_session_answers(
 def list_my_session_answers(
     session_id: int,
     current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
+    repo: TrainingRepository = Depends(),
 ) -> list[SessionAnswerRead]:
-    answers = repository.list_answers_by_session(
-        db,
-        session_id=session_id,
-        user_id=current_user_id,
-    )
+    answers = repo.list_answers_by_session(session_id=session_id, user_id=current_user_id)
     if answers is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return answers
@@ -146,14 +165,13 @@ def list_my_session_answers(
 async def submit_session(
     payload: SessionSubmitRequest,
     current_user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
+    service: SubmissionService = Depends(),
 ) -> SessionSubmitResponse:
     target_user_id = application_access.resolve_target_user_id(
         requested_user_id=payload.user_id,
         current_user_id=current_user_id,
     )
-    result = await submit(
-        db=db,
+    result = await service.submit(
         user_id=target_user_id,
         answers=payload.answers,
     )
