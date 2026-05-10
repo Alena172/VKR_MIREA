@@ -38,6 +38,60 @@ function normalizeSpaces(text) {
   return (text || "").replace(/\s+/g, " ").trim();
 }
 
+function isBlockContextElement(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+
+  const blockTags = new Set([
+    "P",
+    "DIV",
+    "LI",
+    "ARTICLE",
+    "SECTION",
+    "MAIN",
+    "ASIDE",
+    "TD",
+    "TH",
+    "BLOCKQUOTE",
+    "FIGCAPTION",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+  ]);
+
+  if (blockTags.has(element.tagName)) {
+    return true;
+  }
+
+  const display = window.getComputedStyle(element).display;
+  return display === "block" || display === "list-item" || display === "table-cell";
+}
+
+function getSelectionContainer(range) {
+  const baseNode = range?.commonAncestorContainer;
+  let current =
+    baseNode?.nodeType === Node.ELEMENT_NODE ? baseNode : baseNode?.parentElement || null;
+
+  while (current && current !== document.body) {
+    if (isBlockContextElement(current)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+
+  return current || document.body;
+}
+
+function getSelectionContainerText(range) {
+  const container = getSelectionContainer(range);
+  const rawText = container?.innerText || container?.textContent || "";
+  return normalizeSpaces(rawText);
+}
+
 function extractSentenceFromText(fullText, selectedText) {
   if (!fullText || !selectedText) {
     return "";
@@ -89,8 +143,7 @@ function getSelectionContext() {
   }
 
   const rect = range.getBoundingClientRect();
-  const anchorNode = selection.anchorNode;
-  const containerText = normalizeSpaces(anchorNode?.textContent || "");
+  const containerText = getSelectionContainerText(range);
   const sourceSentence = extractSentenceFromText(containerText, selectedText);
   const signature = `${selectedText}::${sourceSentence}::${Math.round(rect.left)}::${Math.round(rect.top)}`;
 
