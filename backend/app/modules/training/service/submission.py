@@ -349,7 +349,6 @@ async def submit(
             user_id=user_id,
             evaluated_answers=evaluated_answers,
         )
-    db.refresh(session_row)
     return SessionSubmitResultDTO(
         session=session_row,
         incorrect_feedback=incorrect_feedback,

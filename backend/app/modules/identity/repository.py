@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.identity.models import UserModel
@@ -26,10 +27,16 @@ def get_user_by_email(db: Session, email: str) -> UserModel | None:
 
 
 def create_user(db: Session, payload: UserCreate) -> UserModel:
-    """Создает пользователя и сразу фиксирует транзакцию."""
+    """Создает пользователя и сразу фиксирует транзакцию.
 
+    Raises DuplicateEmailError если email уже занят.
+    """
     user = UserModel(**payload.model_dump())
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise
     db.refresh(user)
     return user

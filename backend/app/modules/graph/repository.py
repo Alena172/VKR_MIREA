@@ -257,6 +257,8 @@ class GraphRepository:
 
         self._increase_interest(db, user_id=user_id, topic=topic)
         self._sync_simple_relations(db, user_id=user_id, sense=sense)
+        db.flush()
+        db.refresh(sense)
 
         return SemanticUpsertResult(sense=sense, created_new=created_new, duplicate_of_id=duplicate_of_id, cluster=cluster)
 

@@ -75,7 +75,6 @@ class SRSService:
         if normalized is None:
             raise HTTPException(status_code=400, detail="Word must be a single english token")
         progress = review_repository.update_word_progress(db, user_id=user_id, word=normalized, is_correct=payload.is_correct)
-        db.refresh(progress)
         return progress
 
     def submit_review_queue_bulk(

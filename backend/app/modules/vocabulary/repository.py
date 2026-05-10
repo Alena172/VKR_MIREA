@@ -69,6 +69,7 @@ def get_or_create_dictionary_entry(
     )
     db.add(entry)
     db.flush()
+    db.refresh(entry)
     return entry, True
 
 
@@ -167,6 +168,7 @@ def add_to_user_vocabulary(
     )
     db.add(item)
     db.flush()
+    db.refresh(item)
     return item, True
 
 

@@ -76,7 +76,6 @@ class GraphService:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        db.refresh(result.sense)
         return SemanticUpsertResponse(
             user_id=current_user_id,
             created_new_sense=result.created_new,

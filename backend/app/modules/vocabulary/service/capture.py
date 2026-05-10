@@ -201,8 +201,4 @@ async def capture_to_vocabulary(
             vocabulary_item_id=uv.id,
         )
 
-    if not use_existing:
-        db.refresh(uv)
-        db.refresh(entry)
-
     return _to_capture_dto(uv, entry)

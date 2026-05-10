@@ -167,8 +167,6 @@ async def create_item_with_ai(
             source_url=normalized_url,
         )
 
-    db.refresh(uv)
-    db.refresh(entry)
     return _to_dto(uv, entry)
 
 

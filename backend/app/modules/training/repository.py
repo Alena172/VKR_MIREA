@@ -152,9 +152,9 @@ def create_session_with_answers(
 
     if auto_commit:
         db.commit()
-        db.refresh(session_row)
     else:
         db.flush()
+    db.refresh(session_row)
     return session_row
 
 

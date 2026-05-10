@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import HTTPException
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError  # re-raised from repository
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -83,7 +83,6 @@ def create_user(db: Session, payload: UserCreate) -> UserDTO:
     try:
         user = repository.create_user(db, payload)
     except IntegrityError:
-        db.rollback()
         raise HTTPException(status_code=409, detail="Email already exists") from None
     return UserDTO.from_model(user)
 
