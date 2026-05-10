@@ -1477,3 +1477,184 @@ def test_learning_graph_uses_semantic_profile_for_interest_words(client):
     assert obtain_item["primary_signal"] == "InterestProfile"
 
 
+# ---------------------------------------------------------------------------
+# Тесты: переиспользование перевода из общего словаря без вызова AI
+# ---------------------------------------------------------------------------
+
+def test_translate_single_word_uses_shared_dictionary_not_ai(client, db):
+    """Если слово уже есть в общем словаре, перевод возвращается без вызова AI."""
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from app.modules.identity.models import UserModel
+    from app.modules.vocabulary import repository
+    from app.modules.vocabulary.service.translation import translate_for_user
+
+    # Создаём пользователя в тестовой БД напрямую.
+    user = UserModel(email="shared-dict-svc@example.com", full_name="SVC User", cefr_level="B1")
+    db.add(user)
+    db.flush()
+
+    # Помещаем слово в общий словарь напрямую.
+    entry, _ = repository.get_or_create_dictionary_entry(
+        db,
+        english_lemma="journey",
+        russian_translation="путешествие",
+        context_definition_ru=None,
+    )
+    repository.add_to_user_vocabulary(db, user_id=user.id, entry_id=entry.id, source_sentence=None, source_url=None)
+    db.commit()
+
+    # При запросе без контекста AI не должен вызываться.
+    mock = AsyncMock()
+    from app.modules.vocabulary.service import translation as translation_module
+    original = translation_module.ai_service.translate_with_context_async
+    translation_module.ai_service.translate_with_context_async = mock
+    try:
+        result = asyncio.run(translate_for_user(db=db, user_id=user.id, text="journey", source_context=None))
+    finally:
+        translation_module.ai_service.translate_with_context_async = original
+
+    assert result.translated_text == "путешествие"
+    assert "Glossary translation used" in result.note
+    mock.assert_not_called()
+
+
+def test_translate_with_context_still_calls_ai(client, db):
+    """Если передан контекст, AI вызывается даже для слова из общего словаря."""
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from app.modules.ai.schemas import TranslateWithContextResponse
+    from app.modules.identity.models import UserModel
+    from app.modules.vocabulary import repository
+    from app.modules.vocabulary.service.translation import translate_for_user
+
+    user = UserModel(email="shared-ctx-svc@example.com", full_name="Ctx User", cefr_level="B1")
+    db.add(user)
+    db.flush()
+
+    entry, _ = repository.get_or_create_dictionary_entry(
+        db, english_lemma="light", russian_translation="свет", context_definition_ru=None
+    )
+    repository.add_to_user_vocabulary(db, user_id=user.id, entry_id=entry.id, source_sentence=None, source_url=None)
+    db.commit()
+
+    ai_response = TranslateWithContextResponse(translated_text="лёгкий", provider_note="ai_disambiguation:test-model")
+    mock = AsyncMock(return_value=ai_response)
+    from app.modules.vocabulary.service import translation as translation_module
+    original = translation_module.ai_service.translate_with_context_async
+    translation_module.ai_service.translate_with_context_async = mock
+    try:
+        result = asyncio.run(
+            translate_for_user(db=db, user_id=user.id, text="light", source_context="The bag is very light.")
+        )
+    finally:
+        translation_module.ai_service.translate_with_context_async = original
+
+    assert result.translated_text == "лёгкий"
+    mock.assert_called_once()
+
+
+def test_capture_repeated_word_skips_ai_translation(db):
+    """При повторном capture того же слова (reuse-режим) AI для перевода не вызывается."""
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from app.modules.identity.models import UserModel
+    from app.modules.vocabulary import repository
+    from app.modules.vocabulary.service import capture as capture_module
+    from app.modules.vocabulary.service.capture import capture_to_vocabulary
+
+    user = UserModel(email="capture-reuse-svc@example.com", full_name="Reuse Svc", cefr_level="A2")
+    db.add(user)
+    db.flush()
+    db.commit()
+
+    # Первый capture — слово сохраняется через heuristic (нет AI).
+    result1 = asyncio.run(
+        capture_to_vocabulary(
+            db=db,
+            user_id=user.id,
+            selected_text="apple",
+            source_url=None,
+            source_sentence="I eat an apple every day.",
+            force_new_vocabulary_item=False,
+        )
+    )
+    assert result1.vocabulary.english_lemma == "apple"
+    saved_translation = result1.vocabulary.russian_translation
+
+    # Второй capture — слово уже в словаре, AI не должен вызываться.
+    mock = AsyncMock()
+    original = capture_module.ai_service.translate_with_context_async
+    capture_module.ai_service.translate_with_context_async = mock
+    try:
+        result2 = asyncio.run(
+            capture_to_vocabulary(
+                db=db,
+                user_id=user.id,
+                selected_text="apple",
+                source_url=None,
+                source_sentence="apple pie is delicious",
+                force_new_vocabulary_item=False,
+            )
+        )
+    finally:
+        capture_module.ai_service.translate_with_context_async = original
+
+    assert result2.vocabulary.russian_translation == saved_translation
+    items = repository.list_user_vocabulary(db, user_id=user.id)
+    assert len(items) == 1  # новая запись не создана
+    mock.assert_not_called()
+
+
+def test_capture_new_word_already_in_shared_dictionary_skips_ai(db):
+    """Новый пользователь захватывает слово, которое уже есть в общем словаре — AI не нужен."""
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from app.modules.identity.models import UserModel
+    from app.modules.vocabulary import repository
+    from app.modules.vocabulary.service import capture as capture_module
+    from app.modules.vocabulary.service.capture import capture_to_vocabulary
+
+    # Пользователь 1 — добавляет слово в общий словарь.
+    user1 = UserModel(email="shared-cap-svc-1@example.com", full_name="Cap 1", cefr_level="B1")
+    db.add(user1)
+    db.flush()
+    entry, _ = repository.get_or_create_dictionary_entry(
+        db, english_lemma="truck", russian_translation="грузовик", context_definition_ru=None
+    )
+    repository.add_to_user_vocabulary(db, user_id=user1.id, entry_id=entry.id, source_sentence=None, source_url=None)
+    db.commit()
+
+    # Пользователь 2 — делает capture того же слова.
+    user2 = UserModel(email="shared-cap-svc-2@example.com", full_name="Cap 2", cefr_level="A2")
+    db.add(user2)
+    db.flush()
+    db.commit()
+
+    mock = AsyncMock()
+    original = capture_module.ai_service.translate_with_context_async
+    capture_module.ai_service.translate_with_context_async = mock
+    try:
+        result = asyncio.run(
+            capture_to_vocabulary(
+                db=db,
+                user_id=user2.id,
+                selected_text="truck",
+                source_url=None,
+                source_sentence="The truck drove down the highway.",
+                force_new_vocabulary_item=False,
+            )
+        )
+    finally:
+        capture_module.ai_service.translate_with_context_async = original
+
+    assert result.vocabulary.russian_translation == "грузовик"
+    user2_items = repository.list_user_vocabulary(db, user_id=user2.id)
+    assert len(user2_items) == 1
+    mock.assert_not_called()
+
+
