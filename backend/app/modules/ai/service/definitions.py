@@ -47,16 +47,12 @@ class DefinitionService:
         self,
         *,
         english_lemma: str,
-        russian_translation: str,
         source_sentence: str | None,
-    ) -> str:
-        extracted = self._extract_definition_from_source_sentence(
+    ) -> str | None:
+        return self._extract_definition_from_source_sentence(
             english_lemma=english_lemma,
             source_sentence=source_sentence,
         )
-        if extracted:
-            return extracted
-        return f"Something described as '{russian_translation}' in Russian, used in the intended learning context."
 
     def sanitize_context_definition(
         self,
@@ -65,12 +61,11 @@ class DefinitionService:
         russian_translation: str,
         source_sentence: str | None,
         definition: str | None,
-    ) -> str:
+    ) -> str | None:
         cleaned = (definition or "").strip().strip('"')
         if not cleaned:
             return self._fallback_context_definition(
                 english_lemma=english_lemma,
-                russian_translation=russian_translation,
                 source_sentence=source_sentence,
             )
 
@@ -92,6 +87,12 @@ class DefinitionService:
             cleaned,
             flags=re.IGNORECASE,
         )
+        cleaned = re.sub(
+            r"Something described as ['\"].+?['\"] in Russian,?\s*used in the intended learning context\.?\s*",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
         cleaned = cleaned.replace("Example context:", "").strip(" -,:;")
 
         extracted = self._extract_definition_from_source_sentence(
@@ -108,7 +109,6 @@ class DefinitionService:
 
         return self._fallback_context_definition(
             english_lemma=english_lemma,
-            russian_translation=russian_translation,
             source_sentence=source_sentence,
         )
 
@@ -118,7 +118,7 @@ class DefinitionService:
         english_lemma: str,
         russian_translation: str,
         source_sentence: str | None,
-    ) -> str:
+    ) -> str | None:
         return self.sanitize_context_definition(
             english_lemma=english_lemma,
             russian_translation=russian_translation,
@@ -133,7 +133,7 @@ class DefinitionService:
         russian_translation: str,
         source_sentence: str | None,
         cefr_level: str | None = None,
-    ) -> str:
+    ) -> str | None:
         """Генерирует английское определение конкретного смысла слова."""
 
         content = await self._chat_complete_async(
@@ -159,10 +159,9 @@ class DefinitionService:
                 source_sentence=source_sentence,
                 definition=content,
             )
-            if len(cleaned) >= 20:
+            if cleaned and len(cleaned) >= 20:
                 return cleaned
         return self._fallback_context_definition(
             english_lemma=english_lemma,
-            russian_translation=russian_translation,
             source_sentence=source_sentence,
         )

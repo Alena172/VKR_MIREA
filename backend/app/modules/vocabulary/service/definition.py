@@ -12,7 +12,7 @@ _REUSE_CONFIDENCE_THRESHOLD = 0.72
 
 @dataclass(frozen=True)
 class DefinitionResolution:
-    context_definition: str
+    context_definition: str | None
     source: str
     confidence: str
 

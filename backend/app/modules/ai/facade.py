@@ -206,7 +206,7 @@ class AIFacade:
         russian_translation: str,
         source_sentence: str | None,
         cefr_level: str | None = None,
-    ) -> str:
+    ) -> str | None:
         return self._run_sync(
             self._definition_service.generate_context_definition_async(
                 english_lemma=english_lemma,
@@ -223,7 +223,7 @@ class AIFacade:
         russian_translation: str,
         source_sentence: str | None,
         cefr_level: str | None = None,
-    ) -> str:
+    ) -> str | None:
         return await self._definition_service.generate_context_definition_async(
             english_lemma=english_lemma,
             russian_translation=russian_translation,
@@ -237,7 +237,7 @@ class AIFacade:
         english_lemma: str,
         russian_translation: str,
         source_sentence: str | None,
-    ) -> str:
+    ) -> str | None:
         return self._definition_service.generate_context_definition_fast(
             english_lemma=english_lemma,
             russian_translation=russian_translation,

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, getErrorMessage, isAbortError } from "../lib/api";
 import { useAbortControllers } from "./useAbortControllers";
 
-const NEXT_EXERCISE_BUFFER = 1;
+const NEXT_EXERCISE_BUFFER = 2;
 
 /** Управляет тренировкой: генерацией, prefetch-буфером и отправкой ответов. */
 export function useTrainingSession({ onError }) {
@@ -23,6 +23,7 @@ export function useTrainingSession({ onError }) {
   const [isTrainingActive, setIsTrainingActive] = useState(false);
   const [generationNote, setGenerationNote] = useState("");
   const { abortAllRequests, registerController, releaseController } = useAbortControllers();
+  const prefetchInFlight = useRef(0);
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
@@ -45,6 +46,7 @@ export function useTrainingSession({ onError }) {
   }
 
   function resetSessionState() {
+    prefetchInFlight.current = 0;
     abortAllRequests();
     setCurrentExercise(null);
     setCurrentIndex(0);
@@ -84,7 +86,7 @@ export function useTrainingSession({ onError }) {
           initialBatchSize,
           nextVocabularyIds,
           controller.signal,
-          { fastStart: true, incremental: true },
+          { fastStart: false, incremental: true },
         );
         setMode(nextMode);
         setSize(nextSize);
@@ -198,41 +200,42 @@ export function useTrainingSession({ onError }) {
   }
 
   useEffect(() => {
-    // Поддерживаем небольшой буфер, чтобы следующее упражнение уже было готово.
-    if (!isTrainingActive || loadingCurrent || loadingPrefetch) {
+    // Поддерживаем буфер следующих упражнений, запуская параллельные запросы.
+    if (!isTrainingActive || loadingCurrent) {
       return undefined;
     }
 
     const remaining = size - fetchedCount;
-    if (remaining <= 0 || bufferExercises.length >= NEXT_EXERCISE_BUFFER) {
+    const needed = Math.min(remaining, NEXT_EXERCISE_BUFFER - bufferExercises.length - prefetchInFlight.current);
+    if (needed <= 0) {
       return undefined;
     }
 
-    const controller = registerController();
+    prefetchInFlight.current += needed;
+    const controllers = Array.from({ length: needed }, () => registerController());
     setLoadingPrefetch(true);
-    const batchSize = 1;
 
-    generateBatch(mode, batchSize, selectedVocabularyIds, controller.signal, { incremental: true })
-      .then(({ exercises: batch, note }) => {
-        setBufferExercises((prev) => [...prev, ...batch]);
-        setFetchedCount((prev) => prev + batch.length);
-        if (note) {
-          setGenerationNote(note);
-        }
-      })
-      .catch((error) => {
-        if (!isAbortError(error)) {
-          onError(getErrorMessage(error));
-        }
-      })
-      .finally(() => {
-        releaseController(controller);
-        setLoadingPrefetch(false);
-      });
+    const fetches = controllers.map((controller) =>
+      generateBatch(mode, 1, selectedVocabularyIds, controller.signal, { incremental: true })
+        .then(({ exercises: batch, note }) => {
+          setBufferExercises((prev) => [...prev, ...batch]);
+          setFetchedCount((prev) => prev + batch.length);
+          if (note) setGenerationNote(note);
+        })
+        .catch((error) => {
+          if (!isAbortError(error)) onError(getErrorMessage(error));
+        })
+        .finally(() => {
+          prefetchInFlight.current -= 1;
+          releaseController(controller);
+        }),
+    );
+
+    Promise.allSettled(fetches).finally(() => setLoadingPrefetch(false));
 
     return () => {
-      controller.abort();
-      releaseController(controller);
+      prefetchInFlight.current -= controllers.length;
+      controllers.forEach((c) => { c.abort(); releaseController(c); });
     };
   }, [bufferExercises.length, currentIndex, fetchedCount, isTrainingActive, loadingCurrent, mode, onError, selectedVocabularyIds, size]);
   const answerReady = useMemo(() => {

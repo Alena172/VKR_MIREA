@@ -160,18 +160,6 @@ async def _evaluate_answer(answer: SessionAnswer) -> EvaluatedAnswer:
         )
         if semantic_ok:
             evaluated_is_correct = True
-            ai_hint = await ai_service.suggest_improvement_async(
-                ExplainErrorRequest(
-                    english_prompt=answer.prompt,
-                    user_answer=answer.user_answer,
-                    expected_answer=answer.expected_answer,
-                )
-            )
-            explanation_ru = ai_hint.explanation_ru
-            advice_feedback = SessionAnswerFeedbackDTO(
-                exercise_id=answer.exercise_id,
-                explanation_ru=explanation_ru,
-            )
             advice_added = True
 
     if not evaluated_is_correct and answer.prompt and answer.expected_answer:
