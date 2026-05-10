@@ -37,35 +37,42 @@
           <span id="authBadge" class="badge badge-idle">Не выполнена</span>
         </div>
 
-        <label>
-          Email
-          <input id="email" type="email" placeholder="user@example.com" autocomplete="username" />
-        </label>
+        <div id="authForm">
+          <label>
+            Email
+            <input id="email" type="email" placeholder="user@example.com" autocomplete="username" />
+          </label>
 
-        <label>
-          Имя
-          <input id="fullName" type="text" placeholder="Как к вам обращаться" autocomplete="name" />
-        </label>
+          <label>
+            Имя
+            <input id="fullName" type="text" placeholder="Как к вам обращаться" autocomplete="name" />
+          </label>
 
-        <label>
-          Пароль
-          <input id="password" type="password" placeholder="Минимум 8 символов" autocomplete="current-password" />
-        </label>
+          <label>
+            Пароль
+            <input id="password" type="password" placeholder="Минимум 8 символов" autocomplete="current-password" />
+          </label>
 
-        <div class="actions actions-auth">
-          <button id="registerBtn" type="button" class="button-secondary">Регистрация</button>
-          <button id="loginBtn" type="button">Войти</button>
-          <button id="logoutBtn" type="button" class="button-ghost">Выйти</button>
+          <div class="actions actions-auth">
+            <button id="registerBtn" type="button" class="button-secondary">Регистрация</button>
+            <button id="loginBtn" type="button">Войти</button>
+          </div>
         </div>
 
-        <div class="status-grid">
-          <div>
-            <span class="status-label">Пользователь</span>
-            <span id="userEmailValue" class="status-value">-</span>
+        <div id="authSession" class="auth-session auth-session-hidden">
+          <div class="status-grid">
+            <div>
+              <span class="status-label">Пользователь</span>
+              <span id="userEmailValue" class="status-value">-</span>
+            </div>
+            <div>
+              <span class="status-label">User ID</span>
+              <span id="userIdValue" class="status-value">-</span>
+            </div>
           </div>
-          <div>
-            <span class="status-label">User ID</span>
-            <span id="userIdValue" class="status-value">-</span>
+
+          <div class="actions">
+            <button id="logoutBtn" type="button" class="button-ghost">Выйти</button>
           </div>
         </div>
       </section>

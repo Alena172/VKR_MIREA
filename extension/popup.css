@@ -124,7 +124,16 @@ input:focus {
 }
 
 .actions-auth {
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
+}
+
+.auth-session {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-session-hidden {
+  display: none;
 }
 
 button {

@@ -13,6 +13,8 @@ const elements = {
   studyingEnabled: document.getElementById("studyingEnabled"),
   studyingBadge: document.getElementById("studyingBadge"),
   authBadge: document.getElementById("authBadge"),
+  authForm: document.getElementById("authForm"),
+  authSession: document.getElementById("authSession"),
   email: document.getElementById("email"),
   fullName: document.getElementById("fullName"),
   password: document.getElementById("password"),
@@ -137,8 +139,15 @@ function updateStudyingUi(enabled) {
 function updateAuthUi({ loggedIn, email = "-", userId = "-" }) {
   elements.authBadge.textContent = loggedIn ? "Выполнена" : "Не выполнена";
   elements.authBadge.className = `badge ${loggedIn ? "badge-ok" : "badge-idle"}`;
+  elements.authForm.hidden = loggedIn;
+  elements.authSession.classList.toggle("auth-session-hidden", !loggedIn);
   elements.userEmailValue.textContent = email || "-";
   elements.userIdValue.textContent = userId ? String(userId) : "-";
+
+  if (!loggedIn) {
+    elements.fullName.value = "";
+    elements.password.value = "";
+  }
 }
 
 async function syncIdentity() {
