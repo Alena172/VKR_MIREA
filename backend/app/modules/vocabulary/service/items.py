@@ -292,7 +292,10 @@ class VocabularyService:
         english_lemma: str,
         cefr_level: str,
     ) -> tuple[str, str, str | None]:
-        if _is_single_word_capture(selected_text):
+        # Fast local lookup only when there is no context sentence — context means
+        # the user is capturing a specific sense (e.g. "book" as "бронировать"),
+        # so the generic dictionary meaning would be wrong.
+        if _is_single_word_capture(selected_text) and not source_sentence:
             shared_translation = self._repo.find_shared_translation(english_lemma=english_lemma)
             fast_translation = (
                 shared_translation
@@ -379,9 +382,15 @@ class VocabularyService:
                 user_id=user_id,
                 english_lemma=english_lemma,
             )
-            use_existing = existing_row is not None and not force_new_vocabulary_item
+            # Reuse the existing entry only when the translation matches — same sense.
+            # A different translation means a new context/polysemy sense: create a new entry.
+            same_sense = (
+                existing_row is not None
+                and not force_new_vocabulary_item
+                and existing_row[1].russian_translation == russian_translation
+            )
 
-            if use_existing:
+            if same_sense:
                 uv, entry = existing_row
             else:
                 entry, _ = self._repo.get_or_create_dictionary_entry(
@@ -407,7 +416,7 @@ class VocabularyService:
                 vocabulary_item_id=uv.id,
             )
 
-        return _to_dto(uv, entry), not use_existing
+        return _to_dto(uv, entry), not same_sense
 
     # ------------------------------------------------------------------
     # Translation
