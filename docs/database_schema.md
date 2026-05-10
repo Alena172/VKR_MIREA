@@ -95,12 +95,28 @@
 
 Нормализация словаря на `dictionary_entries` + `user_vocabulary` позволяет также переиспользовать переводы между пользователями без повторных вызовов AI: при добавлении слова, уже имеющегося в общем словаре, перевод и определение берутся из базы напрямую.
 
+## Уникальные ограничения
+
+| Таблица | Constraint | Поля |
+|---|---|---|
+| `users` | UK | `email` |
+| `base_lexicon_entries` | UK | `english_lemma` |
+| `dictionary_entries` | UK | `(english_lemma, russian_translation)` |
+| `user_vocabulary` | UK | `(user_id, entry_id)` |
+| `word_progress` | UK | `(user_id, word)` |
+| `learning_session_answers` | UK | `(session_id, exercise_id)` |
+| `user_interests` | UK | `(user_id, interest_key)` |
+| `topic_clusters` | UK | `(user_id, cluster_key)` |
+| `word_senses` | UK | `(user_id, english_lemma, semantic_key)` |
+| `vocabulary_sense_links` | UK | `(user_id, vocabulary_item_id)` |
+| `sense_relations` | UK | `(user_id, left_sense_id, right_sense_id)` |
+
 ## Mermaid ER-диаграмма
 
 ```mermaid
 erDiagram
     users {
-        BIGINT id PK
+        INTEGER id PK
         VARCHAR_320 email UK
         VARCHAR_200 full_name
         VARCHAR_2 cefr_level
@@ -108,14 +124,14 @@ erDiagram
     }
 
     base_lexicon_entries {
-        BIGINT id PK
+        INTEGER id PK
         VARCHAR_200 english_lemma UK
         VARCHAR_200 russian_translation
         TIMESTAMP created_at
     }
 
     dictionary_entries {
-        BIGINT id PK
+        INTEGER id PK
         VARCHAR_200 english_lemma
         VARCHAR_200 russian_translation
         TEXT context_definition_ru
@@ -123,17 +139,17 @@ erDiagram
     }
 
     user_vocabulary {
-        BIGINT id PK
-        BIGINT user_id FK
-        BIGINT entry_id FK
+        INTEGER id PK
+        INTEGER user_id FK
+        INTEGER entry_id FK
         TEXT source_sentence
         VARCHAR_2000 source_url
         TIMESTAMP added_at
     }
 
     word_progress {
-        BIGINT id PK
-        BIGINT user_id FK
+        INTEGER id PK
+        INTEGER user_id FK
         VARCHAR_200 word
         INTEGER error_count
         INTEGER correct_streak
@@ -142,8 +158,8 @@ erDiagram
     }
 
     learning_sessions {
-        BIGINT id PK
-        BIGINT user_id FK
+        INTEGER id PK
+        INTEGER user_id FK
         INTEGER total
         INTEGER correct
         FLOAT accuracy
@@ -151,8 +167,8 @@ erDiagram
     }
 
     learning_session_answers {
-        BIGINT id PK
-        BIGINT session_id FK
+        INTEGER id PK
+        INTEGER session_id FK
         INTEGER exercise_id
         VARCHAR_64 exercise_type
         VARCHAR_200 target_word
@@ -164,8 +180,8 @@ erDiagram
     }
 
     user_interests {
-        BIGINT id PK
-        BIGINT user_id FK
+        INTEGER id PK
+        INTEGER user_id FK
         VARCHAR_64 interest_key
         VARCHAR_120 display_name
         FLOAT weight
@@ -173,50 +189,50 @@ erDiagram
     }
 
     topic_clusters {
-        BIGINT id PK
-        BIGINT user_id FK
+        INTEGER id PK
+        INTEGER user_id FK
         VARCHAR_64 cluster_key
         VARCHAR_120 name
         TIMESTAMP created_at
     }
 
     word_senses {
-        BIGINT id PK
-        BIGINT user_id FK
+        INTEGER id PK
+        INTEGER user_id FK
         VARCHAR_200 english_lemma
         VARCHAR_120 semantic_key
         VARCHAR_200 russian_translation
         TEXT context_definition_ru
         TEXT source_sentence
         VARCHAR_2000 source_url
-        BIGINT topic_cluster_id FK
+        INTEGER topic_cluster_id FK
         TIMESTAMP created_at
     }
 
     vocabulary_sense_links {
-        BIGINT id PK
-        BIGINT user_id FK
-        BIGINT vocabulary_item_id FK
-        BIGINT word_sense_id FK
+        INTEGER id PK
+        INTEGER user_id FK
+        INTEGER vocabulary_item_id FK
+        INTEGER word_sense_id FK
         TIMESTAMP created_at
     }
 
     sense_relations {
-        BIGINT id PK
-        BIGINT user_id FK
-        BIGINT left_sense_id FK
-        BIGINT right_sense_id FK
+        INTEGER id PK
+        INTEGER user_id FK
+        INTEGER left_sense_id FK
+        INTEGER right_sense_id FK
         VARCHAR_64 relation_type
         FLOAT score
         TIMESTAMP created_at
     }
 
     sense_error_events {
-        BIGINT id PK
-        BIGINT user_id FK
-        BIGINT session_id FK
+        INTEGER id PK
+        INTEGER user_id FK
+        INTEGER session_id FK
         VARCHAR_200 english_lemma
-        BIGINT word_sense_id FK
+        INTEGER word_sense_id FK
         VARCHAR_120 mistake_tag
         TEXT prompt
         VARCHAR_1000 expected_answer
@@ -234,13 +250,13 @@ erDiagram
     users ||--o{ sense_relations : has
     users ||--o{ sense_error_events : has
 
-    dictionary_entries ||--o{ user_vocabulary : referenced_by
-    learning_sessions ||--o{ learning_session_answers : contains
-    topic_clusters ||--o{ word_senses : groups
+    dictionary_entries ||--o{ user_vocabulary : entry_id
+    learning_sessions ||--o{ learning_session_answers : session_id
+    topic_clusters ||--o{ word_senses : topic_cluster_id
     user_vocabulary ||--o{ vocabulary_sense_links : vocabulary_item_id
-    word_senses ||--o{ vocabulary_sense_links : maps
-    word_senses ||--o{ sense_relations : left_side
-    word_senses ||--o{ sense_relations : right_side
-    learning_sessions ||--o{ sense_error_events : records
-    word_senses ||--o{ sense_error_events : classifies
+    word_senses ||--o{ vocabulary_sense_links : word_sense_id
+    word_senses ||--o{ sense_relations : left_sense_id
+    word_senses ||--o{ sense_relations : right_sense_id
+    learning_sessions ||--o{ sense_error_events : session_id
+    word_senses ||--o{ sense_error_events : word_sense_id
 ```
