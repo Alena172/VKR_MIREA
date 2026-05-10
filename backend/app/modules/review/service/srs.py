@@ -38,7 +38,7 @@ def _dedupe_keep_order(values: list[str]) -> list[str]:
 
 
 class SRSService:
-    """Application-сервис SRS, очереди повторения и прогресса слов."""
+    """Сервис уровня application для SRS, очереди повторения и прогресса слов."""
 
     def __init__(
         self,

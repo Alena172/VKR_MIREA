@@ -1,1 +1,1 @@
-# Celery tasks package
+# Пакет Celery-задач

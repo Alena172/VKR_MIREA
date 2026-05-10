@@ -142,7 +142,7 @@ class TrainingService:
             raise ValueError("Vocabulary is empty. Add words before generating exercises.")
 
         if mode in {"word_definition_match", "word_scramble"}:
-            # Для этих режимов один смысл на лемму — иначе в подборке окажутся два "book"
+            # Для этих режимов берем один смысл на лемму, иначе в подборке окажутся два "book".
             vocabulary_items = _dedupe_vocabulary_by_lemma(vocabulary_items)
 
         if mode == "word_definition_match":

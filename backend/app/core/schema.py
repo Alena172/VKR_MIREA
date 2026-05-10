@@ -108,8 +108,6 @@ def ensure_database_schema_ready(*, engine: Engine, database_url: str) -> None:
         if shared_dictionary_ready and sense_error_events_exists:
             return
 
-        # Если 0013 была проставлена вручную, но таблицы не появились,
-        # откатываем stamp и даем Alembic повторно выполнить migration body.
         if current_version == "0013_shared_dictionary":
             conn.execute(
                 text(

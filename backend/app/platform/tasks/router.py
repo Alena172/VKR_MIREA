@@ -1,8 +1,3 @@
-"""Task status polling endpoint.
-
-Clients submit a task_id returned by an async endpoint and poll
-GET /tasks/{task_id} until status is SUCCESS or FAILURE.
-"""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,9 +20,9 @@ def get_task_status(
     task_id: str,
     current_user_id: int = Depends(get_current_user_id),
 ) -> TaskStatusResponse:
-    """Poll the status of a background Celery task.
+    """Возвращает текущий статус фоновой Celery-задачи.
 
-    Returns the task result once it reaches SUCCESS state.
+    Когда задача доходит до `SUCCESS`, вместе со статусом возвращается и результат.
     """
     from app.celery_app import (
         _LOCAL_TASK_RESULTS,
@@ -77,5 +72,5 @@ def get_task_status(
         error_msg = str(exc) if exc else "Unknown error"
         return TaskStatusResponse(task_id=task_id, status=status, error=error_msg)
 
-    # PENDING / STARTED / RETRY
+    # Промежуточные состояния без готового результата.
     return TaskStatusResponse(task_id=task_id, status=status)

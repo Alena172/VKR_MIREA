@@ -1,4 +1,4 @@
-"""remove capture table and context list fields
+"""Удалить таблицу capture и поля списков контекста
 
 Revision ID: 0008_rm_capture_ctx_lists
 Revises: 0007_session_answer_meta
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0008_rm_capture_ctx_lists"
 down_revision: str | None = "0007_session_answer_meta"
 branch_labels: str | Sequence[str] | None = None

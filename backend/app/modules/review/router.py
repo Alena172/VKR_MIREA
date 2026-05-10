@@ -229,10 +229,6 @@ def review_summary_me(
     return ReviewSummary(**result)
 
 
-# ---------------------------------------------------------------------------
-# Fixed-path context endpoints (must come before /{user_id} to avoid conflict)
-# ---------------------------------------------------------------------------
-
 @router.get("/context/review-summary", response_model=ReviewSummary)
 def review_summary(
     user_id: int | None = Query(default=None, ge=1),
@@ -258,10 +254,6 @@ def progress(
     result = service.get_progress_snapshot(user_id=user_id, current_user_id=current_user_id)
     return ProgressSnapshot(**result)
 
-
-# ---------------------------------------------------------------------------
-# User-id parameterized endpoints (legacy API surface used by tests)
-# ---------------------------------------------------------------------------
 
 @router.get("/context/{user_id}", response_model=UserContextRead)
 def get_user_context(

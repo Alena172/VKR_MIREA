@@ -63,7 +63,7 @@ class VocabularyFromCaptureRequest(BaseModel):
 
 
 class VocabularyFromCaptureRequestMe(BaseModel):
-    """Capture-запрос для текущего пользователя."""
+    """Запрос capture-сценария для текущего пользователя."""
 
     selected_text: str = Field(min_length=1, max_length=2000)
     source_url: str | None = Field(default=None, max_length=2000)
@@ -111,7 +111,7 @@ class VocabularyItemDTO:
     @staticmethod
     def from_model(uv: UserVocabularyModel, entry: DictionaryEntryModel | None) -> VocabularyItemDTO:
         if entry is None:
-            # Фраза: данные хранятся прямо в user_vocabulary
+            # Фраза: данные хранятся прямо в `user_vocabulary`.
             return VocabularyItemDTO(
                 id=uv.id,
                 user_id=uv.user_id,

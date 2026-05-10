@@ -1,4 +1,3 @@
-"""Celery tasks for exercise generation."""
 from __future__ import annotations
 
 import asyncio

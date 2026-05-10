@@ -54,6 +54,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
+  // Все сетевые запросы к backend выполняем из service worker расширения,
+  // чтобы не зависеть от origin текущей веб-страницы и ее CORS-ограничений.
   requestJson(message.path, {
     method: message.method || "GET",
     payload: message.payload || null,

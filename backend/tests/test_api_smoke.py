@@ -378,7 +378,7 @@ def test_study_flow_capture_to_vocabulary_orchestrates_modules(client):
     assert flow_data["created_new_vocabulary_item"] is True
     assert flow_data["queued_for_review"] is True
 
-    # Second call should reuse existing vocabulary item by default.
+    # Повторный вызов по умолчанию должен переиспользовать существующую словарную запись.
     flow_resp_repeat = client.post(
         "/api/v1/vocabulary/from-capture",
         json={
@@ -392,7 +392,7 @@ def test_study_flow_capture_to_vocabulary_orchestrates_modules(client):
     repeat_data = flow_resp_repeat.json()
     assert repeat_data["created_new_vocabulary_item"] is False
 
-    # Force mode should create a new vocabulary item.
+    # В режиме force должна создаваться новая словарная запись.
     flow_resp_forced = client.post(
         "/api/v1/vocabulary/from-capture",
         json={
@@ -585,7 +585,7 @@ def test_review_queue_submit_updates_word_progress(client):
         headers=headers,
     )
 
-    # First incorrect review creates due word and difficult-word signal.
+    # Первая ошибка на повторении создает due-слово и сигнал "сложного" слова.
     first_submit = client.post(
         f"/api/v1/context/{user_id}/review-queue/submit",
         json={"word": "through", "is_correct": False},
@@ -602,7 +602,7 @@ def test_review_queue_submit_updates_word_progress(client):
     assert context_resp.status_code == 200
     assert "through" in context_resp.json()["difficult_words"]
 
-    # Correct review should move next_review_at forward and remove it from due queue.
+    # Корректный ответ должен сдвинуть `next_review_at` вперед и убрать слово из due-очереди.
     second_submit = client.post(
         f"/api/v1/context/{user_id}/review-queue/submit",
         json={"word": "through", "is_correct": True},
@@ -661,7 +661,7 @@ def test_word_progress_filters_by_status_and_query(client):
     user_id = create_user(client, "progress-filter@example.com", "Filter User", "B1")
     headers = auth_headers(client, "progress-filter@example.com")
 
-    # Troubled and due word.
+    # Проблемное слово, уже попавшее в очередь повторения.
     for _ in range(3):
         client.post(
             f"/api/v1/context/{user_id}/review-queue/submit",
@@ -669,7 +669,7 @@ def test_word_progress_filters_by_status_and_query(client):
             headers=headers,
         )
 
-    # Mastered and upcoming word.
+    # Освоенное слово, следующее повторение которого запланировано на будущее.
     for _ in range(3):
         client.post(
             f"/api/v1/context/{user_id}/review-queue/submit",

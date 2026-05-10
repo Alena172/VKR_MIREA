@@ -1,4 +1,3 @@
-"""Celery tasks for vocabulary operations."""
 from __future__ import annotations
 
 import asyncio

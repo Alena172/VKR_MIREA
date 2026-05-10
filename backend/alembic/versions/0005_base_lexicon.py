@@ -1,4 +1,4 @@
-"""base lexicon foundation
+"""Базовая схема offline-лексикона
 
 Revision ID: 0005_base_lexicon
 Revises: 0004_learning_graph_relations

@@ -1,9 +1,9 @@
-"""Celery application factory with a lightweight local fallback.
+"""Фабрика Celery-приложения с легковесным локальным fallback-режимом.
 
-Import this module to get the configured Celery instance.
-Tasks are auto-discovered from app.tasks.* when Celery is installed.
-In test environments without Celery, tasks still expose `.delay(...)`
-and store in-memory results that can be polled through `/tasks/{task_id}`.
+Импорт этого модуля возвращает уже настроенный экземпляр Celery.
+Когда Celery установлен, задачи автоматически подхватываются из `app.tasks.*`.
+В тестах и локальной среде без Celery задачи все равно поддерживают `.delay(...)`
+и сохраняют результаты в памяти, чтобы их можно было опрашивать через `/tasks/{task_id}`.
 """
 from __future__ import annotations
 

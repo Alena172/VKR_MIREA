@@ -76,6 +76,8 @@ function getSelectionContainer(range) {
   let current =
     baseNode?.nodeType === Node.ELEMENT_NODE ? baseNode : baseNode?.parentElement || null;
 
+  // Поднимаемся к ближайшему блочному контейнеру, чтобы контекст не обрывался
+  // на одном текстовом узле внутри `span`, `a` или другого inline-элемента.
   while (current && current !== document.body) {
     if (isBlockContextElement(current)) {
       return current;
@@ -88,6 +90,8 @@ function getSelectionContainer(range) {
 
 function getSelectionContainerText(range) {
   const container = getSelectionContainer(range);
+  // `innerText` лучше отражает видимый пользователю текст и склеивает inline-узлы
+  // в цельную строку; `textContent` оставляем как запасной вариант.
   const rawText = container?.innerText || container?.textContent || "";
   return normalizeSpaces(rawText);
 }
@@ -105,6 +109,7 @@ function extractSentenceFromText(fullText, selectedText) {
     return normalizedFull.slice(0, 500);
   }
 
+  // Ищем естественные границы предложения вокруг выделения.
   const separators = [".", "!", "?", "\n"];
   let start = 0;
   let end = normalizedFull.length;
@@ -145,6 +150,8 @@ function getSelectionContext() {
   const rect = range.getBoundingClientRect();
   const containerText = getSelectionContainerText(range);
   const sourceSentence = extractSentenceFromText(containerText, selectedText);
+  // Сигнатура помогает не запрашивать перевод повторно для того же выделения,
+  // если пользователь случайно кликает рядом с уже открытым пузырем.
   const signature = `${selectedText}::${sourceSentence}::${Math.round(rect.left)}::${Math.round(rect.top)}`;
 
   return {

@@ -1,4 +1,4 @@
-"""add user password hash
+"""Добавить `password_hash` пользователю
 
 Revision ID: 0014_add_user_password_hash
 Revises: 0013_shared_dictionary

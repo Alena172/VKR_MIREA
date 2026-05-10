@@ -74,6 +74,8 @@ async function ensureContentScriptInjected() {
     return;
   }
 
+  // При повторной инъекции content script сам защитится от двойной инициализации,
+  // поэтому здесь можно безопасно подготавливать вкладку после логина и toggle.
   await chrome.scripting.insertCSS({
     target: { tabId: tab.id },
     files: ["content.css"],
@@ -95,6 +97,8 @@ async function ensureActiveTabUsesCurrentExtensionVersion() {
     return false;
   }
 
+  // После обновления расширения старый content context на вкладке может стать
+  // невалидным, поэтому один раз перезагружаем страницу и фиксируем новую версию.
   await chrome.tabs.reload(tab.id);
   await storageSet({ [STORAGE_KEYS.activeContentVersion]: EXTENSION_VERSION });
   return true;
@@ -139,6 +143,8 @@ function updateStudyingUi(enabled) {
 function updateAuthUi({ loggedIn, email = "-", userId = "-" }) {
   elements.authBadge.textContent = loggedIn ? "Выполнена" : "Не выполнена";
   elements.authBadge.className = `badge ${loggedIn ? "badge-ok" : "badge-idle"}`;
+  // После входа оставляем только сводку по сессии, чтобы popup не дублировал форму
+  // и не создавал ощущение, что логин все еще требуется.
   elements.authForm.hidden = loggedIn;
   elements.authSession.classList.toggle("auth-session-hidden", !loggedIn);
   elements.userEmailValue.textContent = email || "-";
@@ -156,6 +162,8 @@ async function syncIdentity() {
     return null;
   }
 
+  // Всегда синхронизируем `/auth/me`, чтобы popup показывал актуальные данные
+  // пользователя даже после перезапуска браузера.
   const identity = await requestJson("/auth/me");
   await storageSet({
     [STORAGE_KEYS.userId]: identity.user_id,
@@ -246,6 +254,8 @@ async function login() {
       userId: auth.user_id,
     });
     elements.password.value = "";
+    // Сразу готовим активную вкладку, чтобы после входа можно было выделять
+    // слова без отдельного ручного обновления страницы.
     await ensureActiveTabUsesCurrentExtensionVersion().catch(() => false);
     await ensureContentScriptInjected().catch(() => {});
     setOutput(`Вход выполнен. Пользователь #${auth.user_id}.`);
@@ -292,6 +302,8 @@ async function register() {
       userId: auth.user_id,
     });
     elements.password.value = "";
+    // После регистрации сценарий тот же, что и после входа: готовим вкладку
+    // заранее, чтобы пользователь сразу мог начать выделять слова.
     await ensureActiveTabUsesCurrentExtensionVersion().catch(() => false);
     await ensureContentScriptInjected().catch(() => {});
     setOutput(`Аккаунт создан. Пользователь #${auth.user_id}.`);

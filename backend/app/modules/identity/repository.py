@@ -24,7 +24,7 @@ class IdentityRepository:
         return self._db.scalar(query)
 
     def create(self, payload: UserCreate, *, password_hash: str | None) -> UserModel:
-        """Raises IntegrityError if email already taken."""
+        """Создает пользователя; при занятом email наружу поднимется `IntegrityError`."""
         user = UserModel(
             email=normalize_email(str(payload.email)),
             full_name=payload.full_name,

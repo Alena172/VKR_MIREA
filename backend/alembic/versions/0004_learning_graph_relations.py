@@ -1,4 +1,4 @@
-"""learning graph relations
+"""Связи для learning graph
 
 Revision ID: 0004_learning_graph_relations
 Revises: 0003_learning_graph
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0004_learning_graph_relations"
 down_revision: str | None = "0003_learning_graph"
 branch_labels: str | Sequence[str] | None = None

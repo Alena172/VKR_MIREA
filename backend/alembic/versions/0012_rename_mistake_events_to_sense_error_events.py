@@ -1,4 +1,4 @@
-"""rename mistake events to sense error events
+"""Переименовать mistake events в sense error events
 
 Revision ID: 0012_rename_mistake_events_to_sense_error_events
 Revises: 0011_align_schema_constraints
@@ -37,7 +37,7 @@ def upgrade() -> None:
     bind = op.get_bind()
 
     if _table_exists(bind, "sense_error_events"):
-        # Already renamed (or created fresh) — just ensure correct indexes exist.
+        # Таблица уже переименована или создана с нуля — проверяем только нужные индексы.
         for idx in [
             "ix_sense_error_events_id", "ix_sense_error_events_user_id",
             "ix_sense_error_events_session_id", "ix_sense_error_events_english_lemma",
@@ -50,7 +50,7 @@ def upgrade() -> None:
         return
 
     if not _table_exists(bind, "mistake_events"):
-        # Neither old nor new table exists — create sense_error_events from scratch.
+        # Ни старой, ни новой таблицы нет — создаем `sense_error_events` с нуля.
         op.create_table(
             "sense_error_events",
             sa.Column("id", sa.Integer(), nullable=False),
@@ -77,7 +77,7 @@ def upgrade() -> None:
         op.create_index(op.f("ix_sense_error_events_created_at"), "sense_error_events", ["created_at"], unique=False)
         return
 
-    # Normal path: rename mistake_events → sense_error_events.
+    # Обычный сценарий: переименовываем `mistake_events` в `sense_error_events`.
     op.rename_table("mistake_events", "sense_error_events")
     for idx in [
         "ix_mistake_events_id", "ix_mistake_events_user_id", "ix_mistake_events_session_id",

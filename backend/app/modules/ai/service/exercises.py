@@ -195,8 +195,8 @@ class ExerciseGenerator:
         return lowered
 
     def _translation_contains_target(self, translated_text: str, target_translation: str) -> bool:
-        # Compare by common prefix of at least 4 chars — handles all Russian inflection patterns
-        # without a fragile hand-built stemmer.
+        # Сравниваем по общему префиксу длиной минимум 4 символа:
+        # это покрывает большинство русских словоформ без хрупкого самодельного стеммера.
         target_norm = target_translation.strip().lower().replace("ё", "е")
         target_norm = re.sub(r"[^а-яa-z]", "", target_norm)
         if not target_norm:

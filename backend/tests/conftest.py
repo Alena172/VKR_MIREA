@@ -20,7 +20,7 @@ from app.modules.vocabulary.models import (
     UserVocabularyModel,
 )
 
-# Keep imports for SQLAlchemy metadata registration.
+# Сохраняем импорты, чтобы SQLAlchemy зарегистрировал metadata всех моделей.
 _ = (UserModel, DictionaryEntryModel, UserVocabularyModel, LearningSessionModel, BaseLexiconEntryModel)
 
 

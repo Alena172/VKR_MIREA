@@ -1,4 +1,4 @@
-"""learning graph foundation
+"""Базовая схема learning graph
 
 Revision ID: 0003_learning_graph
 Revises: 0002_ctx_def_vocab
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0003_learning_graph"
 down_revision: str | None = "0002_ctx_def_vocab"
 branch_labels: str | Sequence[str] | None = None

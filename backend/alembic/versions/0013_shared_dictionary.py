@@ -1,4 +1,4 @@
-"""shared dictionary: dictionary_entries + user_vocabulary
+"""Общий словарь: `dictionary_entries` + `user_vocabulary`
 
 Revision ID: 0013_shared_dictionary
 Revises: 0012_rename_mistake_events_to_sense_error_events
@@ -52,7 +52,7 @@ def _constraint_exists(bind, table_name: str, constraint_name: str) -> bool:
 def upgrade() -> None:
     bind = op.get_bind()
 
-    # 1. Create shared dictionary table
+    # 1. Создаем таблицу общего словаря.
     if not _table_exists(bind, "dictionary_entries"):
         op.create_table(
             "dictionary_entries",
@@ -70,7 +70,7 @@ def upgrade() -> None:
         op.create_index(op.f("ix_dictionary_entries_id"), "dictionary_entries", ["id"], unique=False)
         op.create_index(op.f("ix_dictionary_entries_english_lemma"), "dictionary_entries", ["english_lemma"], unique=False)
 
-    # 2. Create personal vocabulary link table
+    # 2. Создаем таблицу связей с личным словарем.
     if not _table_exists(bind, "user_vocabulary"):
         op.create_table(
             "user_vocabulary",
@@ -89,7 +89,7 @@ def upgrade() -> None:
         op.create_index(op.f("ix_user_vocabulary_user_id"), "user_vocabulary", ["user_id"], unique=False)
         op.create_index(op.f("ix_user_vocabulary_entry_id"), "user_vocabulary", ["entry_id"], unique=False)
 
-    # 3. Migrate vocabulary_items → dictionary_entries (idempotent via ON CONFLICT).
+    # 3. Переносим `vocabulary_items` → `dictionary_entries` с идемпотентностью через `ON CONFLICT`.
     if _table_exists(bind, "vocabulary_items"):
         bind.execute(sa.text("""
             INSERT INTO dictionary_entries (english_lemma, russian_translation, context_definition_ru, created_at)
@@ -109,7 +109,7 @@ def upgrade() -> None:
             ON CONFLICT (english_lemma, russian_translation) DO NOTHING
         """))
 
-        # 4. Migrate user_vocabulary rows (idempotent via ON CONFLICT).
+        # 4. Переносим строки `user_vocabulary` с идемпотентностью через `ON CONFLICT`.
         bind.execute(sa.text("""
             INSERT INTO user_vocabulary (user_id, entry_id, source_sentence, source_url, added_at)
             SELECT DISTINCT ON (vi.user_id, de.id)
@@ -122,7 +122,7 @@ def upgrade() -> None:
             ON CONFLICT (user_id, entry_id) DO NOTHING
         """))
 
-        # 5. Rewire vocabulary_sense_links → user_vocabulary.
+        # 5. Перепривязываем `vocabulary_sense_links` к `user_vocabulary`.
         if not _column_exists(bind, "vocabulary_sense_links", "user_vocabulary_id"):
             op.add_column(
                 "vocabulary_sense_links",
@@ -143,7 +143,8 @@ def upgrade() -> None:
             bind.execute(sa.text(
                 "DELETE FROM vocabulary_sense_links WHERE user_vocabulary_id IS NULL"
             ))
-            # Deduplicate: keep lowest id per (user_id, user_vocabulary_id) before unique constraint.
+            # Дедупликация: перед уникальным ограничением оставляем минимальный id
+            # для каждой пары `(user_id, user_vocabulary_id)`.
             bind.execute(sa.text("""
                 DELETE FROM vocabulary_sense_links
                 WHERE id NOT IN (
@@ -172,7 +173,7 @@ def upgrade() -> None:
         if not _constraint_exists(bind, "vocabulary_sense_links", "vocabulary_sense_links_vocabulary_item_id_fkey"):
             op.create_foreign_key("vocabulary_sense_links_vocabulary_item_id_fkey", "vocabulary_sense_links", "user_vocabulary", ["vocabulary_item_id"], ["id"])
 
-        # 6. Drop vocabulary_items and its leftover constraints/indexes.
+        # 6. Удаляем `vocabulary_items` и оставшиеся ограничения/индексы.
         if _constraint_exists(bind, "vocabulary_items", "fk_vocabulary_definition_reused_from_item"):
             op.drop_constraint("fk_vocabulary_definition_reused_from_item", "vocabulary_items", type_="foreignkey")
         if _column_exists(bind, "vocabulary_items", "definition_reused_from_item_id"):
@@ -188,7 +189,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Restore vocabulary_items
+    # Восстанавливаем `vocabulary_items`.
     op.create_table(
         "vocabulary_items",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -216,7 +217,7 @@ def downgrade() -> None:
 
     bind = op.get_bind()
 
-    # Re-populate vocabulary_items from user_vocabulary + dictionary_entries
+    # Снова наполняем `vocabulary_items` данными из `user_vocabulary` + `dictionary_entries`.
     bind.execute(sa.text("""
         INSERT INTO vocabulary_items (user_id, english_lemma, russian_translation, context_definition_ru, source_sentence, source_url)
         SELECT uv.user_id, de.english_lemma, de.russian_translation, de.context_definition_ru,
@@ -225,7 +226,7 @@ def downgrade() -> None:
         JOIN dictionary_entries de ON de.id = uv.entry_id
     """))
 
-    # Restore vocabulary_sense_links FK back to vocabulary_items
+    # Возвращаем внешний ключ `vocabulary_sense_links` обратно на `vocabulary_items`.
     op.add_column(
         "vocabulary_sense_links",
         sa.Column("old_vocab_item_id", sa.Integer(), nullable=True),
@@ -277,7 +278,7 @@ def downgrade() -> None:
         ondelete="SET NULL",
     )
 
-    # Drop new tables
+    # Удаляем новые таблицы.
     op.drop_index(op.f("ix_user_vocabulary_entry_id"), table_name="user_vocabulary")
     op.drop_index(op.f("ix_user_vocabulary_user_id"), table_name="user_vocabulary")
     op.drop_index(op.f("ix_user_vocabulary_id"), table_name="user_vocabulary")

@@ -1,4 +1,4 @@
-"""drop topic cluster description
+"""Удалить описание topic cluster
 
 Revision ID: 0010_drop_cluster_desc
 Revises: 0009_drop_user_contexts
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0010_drop_cluster_desc"
 down_revision: str | None = "0009_drop_user_contexts"
 branch_labels: str | Sequence[str] | None = None

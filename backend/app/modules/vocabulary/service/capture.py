@@ -1,4 +1,3 @@
-"""Backward-compat shim — capture logic lives in VocabularyService."""
 from __future__ import annotations
 
 from app.modules.vocabulary.schemas import CaptureDTO, VocabularyItemDTO
@@ -13,7 +12,7 @@ async def capture_to_vocabulary(
     force_new_vocabulary_item: bool,
     _service=None,
 ) -> CaptureDTO:
-    """Thin shim used by Celery tasks and legacy tests."""
+    """Тонкая совместимая обертка для Celery-задач и старых тестов."""
     if _service is None:
         raise RuntimeError(
             "capture_to_vocabulary requires a VocabularyService instance. "

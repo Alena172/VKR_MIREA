@@ -1,4 +1,4 @@
-"""add structured learning session answer metadata
+"""Добавить структурированные metadata ответов учебной сессии
 
 Revision ID: 0007_session_answer_meta
 Revises: 0006_vocab_def_meta
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0007_session_answer_meta"
 down_revision: str | None = "0006_vocab_def_meta"
 branch_labels: str | Sequence[str] | None = None

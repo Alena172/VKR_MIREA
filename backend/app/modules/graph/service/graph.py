@@ -19,7 +19,7 @@ from app.modules.graph.schemas import (
 
 
 class GraphService:
-    """Application-сервис семантического профиля, интересов и смыслов слов."""
+    """Сервис уровня application для семантического профиля, интересов и смыслов слов."""
 
     def __init__(self, repo: GraphRepository = Depends()) -> None:
         self._repo = repo

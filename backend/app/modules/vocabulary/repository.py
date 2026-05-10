@@ -40,7 +40,7 @@ class VocabularyRepository:
         self._db = db
 
     # ------------------------------------------------------------------
-    # DictionaryEntry — общий словарь
+    # DictionaryEntry — таблица общего словаря
     # ------------------------------------------------------------------
 
     def get_or_create_dictionary_entry(
@@ -113,7 +113,7 @@ class VocabularyRepository:
         ))
 
     # ------------------------------------------------------------------
-    # UserVocabulary — личный словарь
+    # UserVocabulary — таблица личного словаря
     # ------------------------------------------------------------------
 
     def get_user_vocabulary_item(
@@ -198,14 +198,14 @@ class VocabularyRepository:
 
     def list_user_vocabulary(self, *, user_id: int) -> list[tuple[UserVocabularyModel, DictionaryEntryModel | None]]:
         try:
-            # Words: joined with dictionary_entries
+            # Обычные слова: хранятся через связь с `dictionary_entries`.
             word_rows = self._db.execute(
                 select(UserVocabularyModel, DictionaryEntryModel)
                 .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
                 .where(UserVocabularyModel.user_id == user_id)
                 .order_by(UserVocabularyModel.added_at.desc())
             ).all()
-            # Phrases: entry_id IS NULL
+            # Фразы: лежат напрямую в `user_vocabulary`, поэтому `entry_id IS NULL`.
             phrase_rows = list(self._db.scalars(
                 select(UserVocabularyModel)
                 .where(
@@ -397,7 +397,7 @@ class VocabularyRepository:
         return result
 
     # ------------------------------------------------------------------
-    # BaseLexicon — офлайн словарь
+    # BaseLexicon — локальный офлайн-словарь
     # ------------------------------------------------------------------
 
     def get_base_lexicon_entry(self, *, english_lemma: str) -> BaseLexiconEntryModel | None:

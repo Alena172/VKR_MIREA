@@ -1,4 +1,4 @@
-"""phrases in user_vocabulary: nullable entry_id + phrase_en/ru columns
+"""Фразы в `user_vocabulary`: nullable `entry_id` и колонки `phrase_en/phrase_ru`
 
 Revision ID: 0015_phrases_in_user_vocabulary
 Revises: 0014_add_user_password_hash
@@ -53,24 +53,24 @@ def _index_exists(bind, index_name: str) -> bool:
 def upgrade() -> None:
     bind = op.get_bind()
 
-    # 1. Add phrase_en column
+    # 1. Добавляем колонку `phrase_en`.
     if not _column_exists(bind, "user_vocabulary", "phrase_en"):
         op.add_column(
             "user_vocabulary",
             sa.Column("phrase_en", sa.String(length=500), nullable=True),
         )
 
-    # 2. Add phrase_ru column
+    # 2. Добавляем колонку `phrase_ru`.
     if not _column_exists(bind, "user_vocabulary", "phrase_ru"):
         op.add_column(
             "user_vocabulary",
             sa.Column("phrase_ru", sa.String(length=500), nullable=True),
         )
 
-    # 3. Make entry_id nullable
+    # 3. Делаем `entry_id` nullable.
     op.alter_column("user_vocabulary", "entry_id", existing_type=sa.Integer(), nullable=True)
 
-    # 4. CHECK constraint: either entry_id or phrase_en must be set
+    # 4. CHECK-ограничение: должен быть заполнен либо `entry_id`, либо `phrase_en`.
     if not _constraint_exists(bind, "user_vocabulary", "ck_user_vocabulary_word_or_phrase"):
         op.create_check_constraint(
             "ck_user_vocabulary_word_or_phrase",
@@ -78,7 +78,7 @@ def upgrade() -> None:
             "(entry_id IS NOT NULL) OR (phrase_en IS NOT NULL)",
         )
 
-    # 5. Unique constraint for phrases: (user_id, phrase_en)
+    # 5. Уникальное ограничение для фраз: `(user_id, phrase_en)`.
     if not _constraint_exists(bind, "user_vocabulary", "uq_user_vocabulary_user_phrase"):
         op.create_unique_constraint(
             "uq_user_vocabulary_user_phrase",
@@ -86,7 +86,7 @@ def upgrade() -> None:
             ["user_id", "phrase_en"],
         )
 
-    # 6. Index on phrase_en for lookups
+    # 6. Индекс на `phrase_en` для поиска.
     if not _index_exists(bind, "ix_user_vocabulary_phrase_en"):
         op.create_index(
             "ix_user_vocabulary_phrase_en",
@@ -113,5 +113,5 @@ def downgrade() -> None:
     if _column_exists(bind, "user_vocabulary", "phrase_en"):
         op.drop_column("user_vocabulary", "phrase_en")
 
-    # Restore NOT NULL (all rows must have entry_id at this point)
+    # Возвращаем `NOT NULL`: на этом этапе у всех строк снова должен быть `entry_id`.
     op.alter_column("user_vocabulary", "entry_id", existing_type=sa.Integer(), nullable=False)

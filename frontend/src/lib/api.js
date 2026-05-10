@@ -221,7 +221,7 @@ export async function pollTask(
 }
 
 export const api = {
-  // Тонкий клиент backend API. Компоненты работают с методами, а не с URL строками.
+  // Тонкий клиент backend API: компоненты работают с методами, а не с URL-строками.
   getUsers: (options = {}) => request("/users", options),
   createUser: (payload, options = {}) => request("/users", { method: "POST", body: JSON.stringify(payload), ...options }),
   authRegister: (payload, options = {}) => request("/auth/register", { method: "POST", body: JSON.stringify(payload), ...options }),

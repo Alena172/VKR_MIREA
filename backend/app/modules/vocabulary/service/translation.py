@@ -1,4 +1,3 @@
-"""Backward-compat shim — translation logic lives in VocabularyService."""
 from __future__ import annotations
 
 from app.core.application import application_access
@@ -12,7 +11,7 @@ async def translate_for_user(
     source_context: str | None,
     _service=None,
 ) -> TranslationResultDTO:
-    """Thin shim used by legacy tests."""
+    """Тонкая совместимая обертка для старых тестов."""
     if _service is None:
         raise RuntimeError(
             "translate_for_user requires a VocabularyService instance. "

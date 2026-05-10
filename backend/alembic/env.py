@@ -24,7 +24,7 @@ from app.modules.vocabulary.models import (
     UserVocabularyModel,
 )
 
-# Register models for metadata discovery.
+# Регистрируем модели, чтобы Alembic видел их metadata.
 _ = (
     UserModel,
     DictionaryEntryModel,
@@ -54,9 +54,6 @@ target_metadata = Base.metadata
 
 
 def ensure_alembic_version_column_width(connection) -> None:
-    # Older databases may have alembic_version.version_num limited to varchar(32),
-    # while our revision identifiers are longer. Widen it before Alembic updates
-    # the version row during migration.
     if connection.dialect.name != "postgresql":
         return
 

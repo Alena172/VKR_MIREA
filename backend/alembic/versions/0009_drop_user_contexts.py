@@ -1,4 +1,4 @@
-"""drop redundant user_contexts table
+"""Удалить избыточную таблицу user_contexts
 
 Revision ID: 0009_drop_user_contexts
 Revises: 0008_remove_capture_and_context_lists
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0009_drop_user_contexts"
 down_revision: str | None = "0008_rm_capture_ctx_lists"
 branch_labels: str | Sequence[str] | None = None

@@ -1,4 +1,4 @@
-"""align practical schema constraints
+"""Выравнивание практических ограничений схемы
 
 Revision ID: 0011_align_schema_constraints
 Revises: 0010_drop_cluster_desc
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0011_align_schema_constraints"
 down_revision: str | None = "0010_drop_cluster_desc"
 branch_labels: str | Sequence[str] | None = None

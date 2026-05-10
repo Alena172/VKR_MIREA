@@ -1,9 +1,5 @@
 #!/bin/sh
 set -e
-
-# If alembic_version already shows 0013 but the new shared-dictionary tables
-# are missing, the migration was stamped without completing. Roll back the
-# stamp so it reruns on container startup.
 python - <<'EOF'
 import os
 import sqlalchemy

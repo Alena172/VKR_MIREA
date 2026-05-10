@@ -1,4 +1,4 @@
-"""add context definition to vocabulary
+"""Добавить context definition в vocabulary
 
 Revision ID: 0002_ctx_def_vocab
 Revises: 0001_initial_schema
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0002_ctx_def_vocab"
 down_revision: str | None = "0001_initial_schema"
 branch_labels: str | Sequence[str] | None = None

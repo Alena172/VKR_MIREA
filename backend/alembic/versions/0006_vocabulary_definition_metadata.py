@@ -1,4 +1,4 @@
-"""add vocabulary definition metadata
+"""Добавить metadata для vocabulary definition
 
 Revision ID: 0006_vocab_def_meta
 Revises: 0005_base_lexicon
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0006_vocab_def_meta"
 down_revision: str | None = "0005_base_lexicon"
 branch_labels: str | Sequence[str] | None = None

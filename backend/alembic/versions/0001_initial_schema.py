@@ -1,4 +1,4 @@
-"""initial schema
+"""Начальная схема
 
 Revision ID: 0001_initial_schema
 Revises:
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
+# Идентификаторы ревизии, которые использует Alembic.
 revision: str = "0001_initial_schema"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None

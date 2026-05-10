@@ -76,14 +76,14 @@ def _looks_like_context_phrase_expansion(
 def _build_translation_note(provider_note: str) -> str:
     normalized = provider_note.strip().lower()
     if normalized.startswith("local_heuristic"):
-        return f"Local heuristic translation used ({provider_note})"
+        return f"Использован локальный эвристический перевод ({provider_note})"
     if normalized.startswith("ai_disambiguation:"):
-        return f"AI disambiguation used ({provider_note})"
+        return f"Использована AI-дизамбигуация ({provider_note})"
     if normalized.startswith("ai_translation:"):
-        return f"AI translation used ({provider_note})"
+        return f"Использован AI-перевод ({provider_note})"
     if normalized.startswith("glossary"):
-        return f"Glossary translation used ({provider_note})"
-    return f"Translation completed ({provider_note})"
+        return f"Использован перевод из глоссария ({provider_note})"
+    return f"Перевод выполнен ({provider_note})"
 
 
 def _is_single_token(text: str) -> bool:
@@ -126,7 +126,7 @@ class VocabularyService:
         return self._srs_service
 
     # ------------------------------------------------------------------
-    # Vocabulary items
+    # Словарные элементы
     # ------------------------------------------------------------------
 
     def list_items(
@@ -281,7 +281,7 @@ class VocabularyService:
         return {"deleted": True}
 
     # ------------------------------------------------------------------
-    # Capture pipeline
+    # Capture-пайплайн
     # ------------------------------------------------------------------
 
     async def _generate_capture_ai_data(
@@ -292,9 +292,9 @@ class VocabularyService:
         english_lemma: str,
         cefr_level: str,
     ) -> tuple[str, str, str | None]:
-        # Fast local lookup only when there is no context sentence — context means
-        # the user is capturing a specific sense (e.g. "book" as "бронировать"),
-        # so the generic dictionary meaning would be wrong.
+        # Быстрый локальный поиск делаем только без контекстного предложения:
+        # если контекст есть, пользователь может сохранять конкретный смысл
+        # слова, и общий словарный перевод окажется неверным.
         if _is_single_word_capture(selected_text) and not source_sentence:
             shared_translation = self._repo.find_shared_translation(english_lemma=english_lemma)
             fast_translation = (
@@ -382,8 +382,8 @@ class VocabularyService:
                 user_id=user_id,
                 english_lemma=english_lemma,
             )
-            # Reuse the existing entry only when the translation matches — same sense.
-            # A different translation means a new context/polysemy sense: create a new entry.
+            # Переиспользуем запись только при совпадении перевода, то есть смысла.
+            # Если перевод другой, считаем это новым контекстом/значением и создаем новую запись.
             same_sense = (
                 existing_row is not None
                 and not force_new_vocabulary_item
@@ -419,7 +419,7 @@ class VocabularyService:
         return _to_dto(uv, entry), not same_sense
 
     # ------------------------------------------------------------------
-    # Translation
+    # Перевод
     # ------------------------------------------------------------------
 
     async def translate_for_user(
