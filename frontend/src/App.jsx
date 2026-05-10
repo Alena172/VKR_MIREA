@@ -23,7 +23,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("student@example.com");
   const [name, setName] = useState("Student");
+  const [password, setPassword] = useState("password123");
   const [cefr, setCefr] = useState("A2");
+  const [authMode, setAuthMode] = useState("register");
   const [authToken, setAuthTokenState] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [authStatus, setAuthStatus] = useState("");
   const [userId, setUserId] = useState(() => {
@@ -31,17 +33,24 @@ export default function App() {
     return stored ? Number(stored) : 0;
   });
 
-  async function loginOrRegister(event) {
+  async function submitAuth(event) {
     event?.preventDefault();
     setError("");
     setAuthStatus("");
     try {
-      const authData = await api.authLoginOrRegister({ email, full_name: name, cefr_level: cefr });
+      const authData =
+        authMode === "register"
+          ? await api.authRegister({ email, password, full_name: name, cefr_level: cefr })
+          : await api.authLogin({ email, password });
       setAuthToken(authData.access_token);
       setAuthTokenState(authData.access_token);
       setUserId(authData.user_id);
       localStorage.setItem(USER_ID_KEY, String(authData.user_id));
-      setAuthStatus(authData.is_new_user ? `Создан новый пользователь #${authData.user_id}` : `Вход выполнен (#${authData.user_id})`);
+      setAuthStatus(
+        authMode === "register"
+          ? `Создан новый пользователь #${authData.user_id}`
+          : `Вход выполнен (#${authData.user_id})`,
+      );
     } catch (e) {
       setError(getErrorMessage(e));
     }
@@ -76,18 +85,49 @@ export default function App() {
             <p className="text-sm text-gray-600 mt-1">Вход в платформу изучения английского</p>
           </div>
           <div className="card-body">
-            <form className="grid gap-3 md:grid-cols-4" onSubmit={loginOrRegister}>
+            <div className="mb-4 inline-flex rounded-lg bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => setAuthMode("register")}
+                className={`rounded-md px-3 py-2 text-sm font-medium ${authMode === "register" ? "bg-white text-primary-700 shadow-sm" : "text-gray-600"}`}
+              >
+                Регистрация
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMode("login")}
+                className={`rounded-md px-3 py-2 text-sm font-medium ${authMode === "login" ? "bg-white text-primary-700 shadow-sm" : "text-gray-600"}`}
+              >
+                Вход
+              </button>
+            </div>
+            <form className="grid gap-3 md:grid-cols-5" onSubmit={submitAuth}>
               <input className="form-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-              <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя" />
-              <select className="form-input" value={cefr} onChange={(e) => setCefr(e.target.value)}>
-                {["A1", "A2", "B1", "B2", "C1", "C2"].map((level) => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
-                ))}
-              </select>
+              {authMode === "register" ? (
+                <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя" />
+              ) : (
+                <div />
+              )}
+              <input
+                className="form-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Пароль"
+                type="password"
+              />
+              {authMode === "register" ? (
+                <select className="form-input" value={cefr} onChange={(e) => setCefr(e.target.value)}>
+                  {["A1", "A2", "B1", "B2", "C1", "C2"].map((level) => (
+                    <option key={level} value={level}>
+                      {level}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div />
+              )}
               <button className="btn-primary" type="submit">
-                Продолжить
+                {authMode === "register" ? "Создать аккаунт" : "Войти"}
               </button>
             </form>
             {authStatus ? <p className="mt-3 text-xs text-success-700">{authStatus}</p> : null}

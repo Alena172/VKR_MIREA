@@ -24,6 +24,11 @@ def _column_exists(conn, table_name: str, column_name: str) -> bool:
     ).scalar())
 
 
+def _ensure_identity_columns(conn) -> None:
+    if _table_exists(conn, "users") and not _column_exists(conn, "users", "password_hash"):
+        conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(512)"))
+
+
 def _rename_legacy_mistake_events(conn) -> None:
     if _table_exists(conn, "sense_error_events") or not _table_exists(conn, "mistake_events"):
         return
@@ -127,6 +132,7 @@ def ensure_database_schema_ready(*, engine: Engine, database_url: str) -> None:
         command.upgrade(alembic_cfg, "head")
 
     with engine.begin() as conn:
+        _ensure_identity_columns(conn)
         _rename_legacy_mistake_events(conn)
         if not (_table_exists(conn, "dictionary_entries") and _table_exists(conn, "user_vocabulary")):
             _bootstrap_shared_dictionary(conn)

@@ -7,9 +7,10 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class TokenRequest(BaseModel):
-    """Запрос токена для уже существующего пользователя."""
+    """Запрос входа по email и паролю."""
 
     email: EmailStr
+    password: str = Field(min_length=8, max_length=256)
 
 
 class TokenResponse(BaseModel):
@@ -34,9 +35,12 @@ class TokenVerifyResponse(BaseModel):
 
 
 class TokenIdentityResponse(BaseModel):
-    """Минимальная информация о пользователе из валидного токена."""
+    """Информация о пользователе из валидного токена."""
 
     user_id: int
+    email: EmailStr
+    full_name: str | None = None
+    cefr_level: str
 
 
 class UserCreate(BaseModel):
@@ -44,6 +48,7 @@ class UserCreate(BaseModel):
 
     email: EmailStr
     full_name: str | None = Field(default=None, max_length=200)
+    password: str | None = Field(default=None, min_length=8, max_length=256)
     cefr_level: str = Field(default="A1", pattern="^(A1|A2|B1|B2|C1|C2)$")
 
 
@@ -98,6 +103,7 @@ class LoginOrRegisterRequest(BaseModel):
 
     email: EmailStr
     full_name: str | None = Field(default=None, max_length=200)
+    password: str = Field(min_length=8, max_length=256)
     cefr_level: str = Field(default="A1", pattern="^(A1|A2|B1|B2|C1|C2)$")
 
 
@@ -105,3 +111,26 @@ class LoginOrRegisterResponse(TokenResponse):
     """Ответ входа или регистрации с признаком нового пользователя."""
 
     is_new_user: bool
+    user: UserRead
+
+
+class RegisterRequest(BaseModel):
+    """Публичная регистрация через email и пароль."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=256)
+    full_name: str | None = Field(default=None, max_length=200)
+    cefr_level: str = Field(default="A1", pattern="^(A1|A2|B1|B2|C1|C2)$")
+
+
+class LoginRequest(BaseModel):
+    """Публичный вход через email и пароль."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=256)
+
+
+class AuthResponse(TokenResponse):
+    """Стандартный ответ успешной аутентификации."""
+
+    user: UserRead

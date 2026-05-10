@@ -224,6 +224,8 @@ export const api = {
   // Тонкий клиент backend API. Компоненты работают с методами, а не с URL строками.
   getUsers: (options = {}) => request("/users", options),
   createUser: (payload, options = {}) => request("/users", { method: "POST", body: JSON.stringify(payload), ...options }),
+  authRegister: (payload, options = {}) => request("/auth/register", { method: "POST", body: JSON.stringify(payload), ...options }),
+  authLogin: (payload, options = {}) => request("/auth/login", { method: "POST", body: JSON.stringify(payload), ...options }),
   authToken: (payload, options = {}) => request("/auth/token", { method: "POST", body: JSON.stringify(payload), ...options }),
   authLoginOrRegister: (payload, options = {}) =>
     request("/auth/login-or-register", { method: "POST", body: JSON.stringify(payload), ...options }),

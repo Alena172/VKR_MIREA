@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -26,6 +26,10 @@ class UserModel(Base):
         String(200),
         nullable=True,
     )
+    password_hash: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
     cefr_level: Mapped[str] = mapped_column(
         String(2),
         nullable=False,
@@ -34,5 +38,5 @@ class UserModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )

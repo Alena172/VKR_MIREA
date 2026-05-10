@@ -1,3 +1,6 @@
+TEST_PASSWORD = "password123"
+
+
 def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
@@ -6,15 +9,15 @@ def test_health(client):
 
 def create_user(client, email, full_name, cefr_level):
     user_resp = client.post(
-        "/api/v1/users",
-        json={"email": email, "full_name": full_name, "cefr_level": cefr_level},
+        "/api/v1/auth/register",
+        json={"email": email, "password": TEST_PASSWORD, "full_name": full_name, "cefr_level": cefr_level},
     )
     assert user_resp.status_code == 200
-    return user_resp.json()["id"]
+    return user_resp.json()["user"]["id"]
 
 
 def auth_headers(client, email):
-    token_resp = client.post("/api/v1/auth/token", json={"email": email})
+    token_resp = client.post("/api/v1/auth/token", json={"email": email, "password": TEST_PASSWORD})
     assert token_resp.status_code == 200
     token = token_resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -321,7 +324,7 @@ def test_ai_status_endpoint(client):
 def test_auth_token_issue_and_verify(client):
     create_user(client, "auth@example.com", "Auth User", "A2")
 
-    token_resp = client.post("/api/v1/auth/token", json={"email": "auth@example.com"})
+    token_resp = client.post("/api/v1/auth/token", json={"email": "auth@example.com", "password": TEST_PASSWORD})
     assert token_resp.status_code == 200
     token_data = token_resp.json()
     assert token_data["access_token"]
@@ -335,7 +338,7 @@ def test_auth_token_issue_and_verify(client):
 def test_auth_login_or_register_creates_then_reuses_user(client):
     first = client.post(
         "/api/v1/auth/login-or-register",
-        json={"email": "one-step@example.com", "full_name": "One Step", "cefr_level": "A2"},
+        json={"email": "one-step@example.com", "password": TEST_PASSWORD, "full_name": "One Step", "cefr_level": "A2"},
     )
     assert first.status_code == 200
     first_data = first.json()
@@ -345,7 +348,7 @@ def test_auth_login_or_register_creates_then_reuses_user(client):
 
     second = client.post(
         "/api/v1/auth/login-or-register",
-        json={"email": "one-step@example.com", "full_name": "Ignored Name", "cefr_level": "B2"},
+        json={"email": "one-step@example.com", "password": TEST_PASSWORD, "full_name": "Ignored Name", "cefr_level": "B2"},
     )
     assert second.status_code == 200
     second_data = second.json()
@@ -1004,8 +1007,8 @@ def test_returns_403_for_user_id_mismatch_on_user_bound_endpoints(client):
     )
     assert flow_resp.status_code == 403
 
-    auth_token_resp = client.post("/api/v1/auth/token", json={"email": "missing@example.com"})
-    assert auth_token_resp.status_code == 404
+    auth_token_resp = client.post("/api/v1/auth/token", json={"email": "missing@example.com", "password": TEST_PASSWORD})
+    assert auth_token_resp.status_code == 401
 
 def test_me_endpoints_work_for_review_and_analytics(client):
     create_user(client, "me-endpoints@example.com", "Me User", "B1")
