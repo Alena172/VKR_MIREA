@@ -6,9 +6,7 @@ from fastapi import Depends
 
 from app.celery_app import enqueue_task
 from app.core.application import AsyncTaskResponse
-from app.modules.ai.facade import AIProviderUnavailableError
-from app.modules.ai.facade import ai_facade as ai_service
-from app.modules.ai.schemas import ExerciseSeed, GenerateExercisesRequest
+from app.modules.ai.schemas import ExerciseSeed
 from app.modules.graph.service.graph import GraphService
 from app.modules.identity.service import IdentityService
 from app.modules.training.schemas import (
@@ -16,11 +14,11 @@ from app.modules.training.schemas import (
     ExerciseGenerateRequest,
     ExerciseGenerateResultDTO,
 )
+from app.modules.training.service.exercise_builder import exercise_builder
 from app.modules.training.service.prefetch import prefetch_service
 from app.modules.vocabulary.service.items import VocabularyService
 
 _PREFETCH_EXTRA = 5
-_BATCH_SIZE = 5
 
 
 class TrainingService:
@@ -97,7 +95,7 @@ class TrainingService:
         server_prefetch_extra = _PREFETCH_EXTRA if use_prefetch and not fast_start and not incremental else 0
         generation_target = required_count + server_prefetch_extra
         seeds, anchors_used_count = self._build_seeds(user_id=user_id, vocabulary_items=vocabulary_items)
-        generated_items, provider_note = await _generate_items(
+        generated_items, provider_note = await exercise_builder.build_items(
             seeds=seeds,
             size=generation_target,
             mode=mode,
@@ -126,7 +124,6 @@ class TrainingService:
         vocabulary_ids: list[int],
         mode: str,
     ):
-        from fastapi import HTTPException
         vocabulary_items = self._vocab_service.list_user_items(user_id=user_id)
         if vocabulary_ids:
             allowed = set(vocabulary_ids)
@@ -193,78 +190,3 @@ def _dedupe_vocabulary_by_lemma(vocabulary_items):
             continue
         deduped[key] = item
     return list(deduped.values())
-
-
-async def _generate_items(
-    *,
-    seeds: list[ExerciseSeed],
-    size: int,
-    mode: str,
-    cefr_level: str,
-    fast_start: bool = False,
-) -> tuple[list[ExerciseDTO], str]:
-    if size > _BATCH_SIZE and len(seeds) >= _BATCH_SIZE:
-        batches = []
-        remaining = size
-        batch_idx = 0
-        while remaining > 0:
-            batch_count = min(_BATCH_SIZE, remaining)
-            batch_seeds = []
-            for i in range(min(_BATCH_SIZE, len(seeds))):
-                seed_idx = (batch_idx * _BATCH_SIZE + i) % len(seeds)
-                batch_seeds.append(seeds[seed_idx])
-            batches.append(
-                GenerateExercisesRequest(
-                    size=batch_count,
-                    cefr_level=cefr_level,
-                    fast_start=fast_start,
-                    mode=mode,
-                    seeds=batch_seeds,
-                )
-            )
-            remaining -= batch_count
-            batch_idx += 1
-
-        try:
-            batch_responses = await ai_service.generate_exercises_batch(batches)
-        except AIProviderUnavailableError as exc:
-            raise RuntimeError(str(exc)) from exc
-
-        all_items: list[ExerciseDTO] = []
-        for response in batch_responses:
-            all_items.extend(
-                ExerciseDTO(
-                    prompt=item.prompt,
-                    answer=item.answer,
-                    exercise_type=item.exercise_type,
-                    target_word=item.target_word,
-                    options=list(item.options),
-                )
-                for item in response.exercises
-            )
-        return all_items[:size], f"AI batch generation used (batches={len(batches)})"
-
-    try:
-        response = await ai_service.generate_exercises_async(
-            GenerateExercisesRequest(
-                size=size,
-                cefr_level=cefr_level,
-                fast_start=fast_start,
-                mode=mode,
-                seeds=seeds,
-            )
-        )
-    except AIProviderUnavailableError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    items = [
-        ExerciseDTO(
-            prompt=item.prompt,
-            answer=item.answer,
-            exercise_type=item.exercise_type,
-            target_word=item.target_word,
-            options=list(item.options),
-        )
-        for item in response.exercises
-    ]
-    return items, f"AI generation used ({response.provider_note})"

@@ -9,13 +9,12 @@ from app.modules.ai.schemas import (
     AIStatusResponse,
     ExplainErrorRequest,
     ExplainErrorResponse,
-    GenerateExercisesRequest,
-    GenerateExercisesResponse,
+    ExerciseSeed,
     TranslateWithContextRequest,
     TranslateWithContextResponse,
 )
 from app.modules.ai.service.definitions import DefinitionService
-from app.modules.ai.service.exercises import ExerciseGenerator, _extract_json_payload
+from app.modules.ai.service.exercises import ExerciseMaterialService, _extract_json_payload
 from app.modules.ai.service.translation import TranslationService
 
 
@@ -45,8 +44,7 @@ class AIFacade:
         self._definition_service = DefinitionService(
             chat_complete_async=self._chat_completion_async,
         )
-        self._exercise_generator = ExerciseGenerator(
-            model=self._chat_client.model,
+        self._exercise_materials = ExerciseMaterialService(
             max_retries=self._chat_client.max_retries,
             remote_enabled=self._chat_client.remote_enabled,
             chat_complete_async=self._chat_completion_async,
@@ -255,17 +253,29 @@ class AIFacade:
     def fast_translate_single_word(self, text: str) -> str | None:
         return self._translation_service.fast_translate_single_word(text)
 
-    def generate_exercises(self, payload: GenerateExercisesRequest) -> GenerateExercisesResponse:
-        return self._run_sync(self.generate_exercises_async(payload))
-
-    async def generate_exercises_async(self, payload: GenerateExercisesRequest) -> GenerateExercisesResponse:
-        return await self._exercise_generator.generate_exercises_async(payload)
-
-    async def generate_exercises_batch(
+    async def generate_sentence_pair_async(
         self,
-        batches: list[GenerateExercisesRequest],
-    ) -> list[GenerateExercisesResponse]:
-        return await self._exercise_generator.generate_exercises_batch(batches)
+        *,
+        seed: ExerciseSeed,
+        cefr_level: str,
+    ) -> tuple[str, str] | None:
+        return await self._exercise_materials.generate_sentence_pair(seed=seed, cefr_level=cefr_level)
+
+    async def build_sentence_for_word_async(
+        self,
+        *,
+        seed: ExerciseSeed,
+        cefr_level: str | None = None,
+    ) -> str:
+        return await self._exercise_materials.build_sentence_for_word(seed=seed, cefr_level=cefr_level)
+
+    async def translate_sentence_for_seed_async(
+        self,
+        *,
+        sentence_en: str,
+        seed: ExerciseSeed,
+    ) -> str:
+        return await self._exercise_materials.translate_sentence_for_seed(sentence_en, seed)
 
 
 ai_facade = AIFacade()
