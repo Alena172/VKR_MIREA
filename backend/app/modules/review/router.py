@@ -82,6 +82,7 @@ def submit_review_queue_item_me(
             error_count=progress.error_count,
             correct_streak=progress.correct_streak,
             next_review_at=progress.next_review_at,
+            ease_factor=progress.ease_factor,
         ).status,
     )
 
@@ -105,7 +106,7 @@ def submit_review_queue_bulk_me(
             error_count=r.error_count,
             correct_streak=r.correct_streak,
             next_review_at=r.next_review_at,
-            status=build_review_status(error_count=r.error_count, correct_streak=r.correct_streak, next_review_at=r.next_review_at).status,
+            status=build_review_status(error_count=r.error_count, correct_streak=r.correct_streak, next_review_at=r.next_review_at, ease_factor=r.ease_factor).status,
         )
         for r in rows
     ]
@@ -171,7 +172,7 @@ def get_word_progress_me(
         error_count=progress.error_count,
         correct_streak=progress.correct_streak,
         next_review_at=progress.next_review_at,
-        status=build_review_status(error_count=progress.error_count, correct_streak=progress.correct_streak, next_review_at=progress.next_review_at).status,
+        status=build_review_status(error_count=progress.error_count, correct_streak=progress.correct_streak, next_review_at=progress.next_review_at, ease_factor=progress.ease_factor).status,
     )
 
 
@@ -218,13 +219,12 @@ def progress_me(
 @router.get("/context/me/review-summary", response_model=ReviewSummary)
 def review_summary_me(
     min_streak: int = Query(default=3, ge=1, le=50),
-    min_errors: int = Query(default=3, ge=1, le=50),
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ReviewSummary:
     result = service.get_review_summary(
         user_id=current_user_id, current_user_id=current_user_id,
-        min_streak=min_streak, min_errors=min_errors,
+        min_streak=min_streak,
     )
     return ReviewSummary(**result)
 
@@ -233,14 +233,13 @@ def review_summary_me(
 def review_summary(
     user_id: int | None = Query(default=None, ge=1),
     min_streak: int = Query(default=3, ge=1, le=50),
-    min_errors: int = Query(default=3, ge=1, le=50),
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ReviewSummary:
     target_user_id = user_id or current_user_id
     result = service.get_review_summary(
         user_id=target_user_id, current_user_id=current_user_id,
-        min_streak=min_streak, min_errors=min_errors,
+        min_streak=min_streak,
     )
     return ReviewSummary(**result)
 
@@ -323,6 +322,7 @@ def submit_review_queue_item(
             error_count=progress.error_count,
             correct_streak=progress.correct_streak,
             next_review_at=progress.next_review_at,
+            ease_factor=progress.ease_factor,
         ).status,
     )
 
@@ -347,7 +347,7 @@ def submit_review_queue_bulk(
             error_count=r.error_count,
             correct_streak=r.correct_streak,
             next_review_at=r.next_review_at,
-            status=build_review_status(error_count=r.error_count, correct_streak=r.correct_streak, next_review_at=r.next_review_at).status,
+            status=build_review_status(error_count=r.error_count, correct_streak=r.correct_streak, next_review_at=r.next_review_at, ease_factor=r.ease_factor).status,
         )
         for r in rows
     ]
@@ -399,7 +399,7 @@ def get_word_progress(
         error_count=progress.error_count,
         correct_streak=progress.correct_streak,
         next_review_at=progress.next_review_at,
-        status=build_review_status(error_count=progress.error_count, correct_streak=progress.correct_streak, next_review_at=progress.next_review_at).status,
+        status=build_review_status(error_count=progress.error_count, correct_streak=progress.correct_streak, next_review_at=progress.next_review_at, ease_factor=progress.ease_factor).status,
     )
 
 

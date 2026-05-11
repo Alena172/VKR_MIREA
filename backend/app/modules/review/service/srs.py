@@ -169,7 +169,7 @@ class SRSService:
         sort_by: Literal["next_review_at", "error_count", "correct_streak"],
         sort_order: Literal["asc", "desc"],
         min_streak: int,
-        min_errors: int,
+        min_errors: int = 3,
     ) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         rows = self._repo.list_word_progress(
@@ -183,8 +183,8 @@ class SRSService:
                     error_count=row.error_count,
                     correct_streak=row.correct_streak,
                     next_review_at=row.next_review_at,
+                    ease_factor=row.ease_factor,
                     min_streak=min_streak,
-                    min_errors=min_errors,
                 )
             ]
         total = len(rows)
@@ -241,7 +241,6 @@ class SRSService:
         user_id: int,
         current_user_id: int,
         min_streak: int,
-        min_errors: int,
     ) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         rows = self._repo.list_word_progress(user_id=user_id, limit=10000, offset=0, q=None)
@@ -252,8 +251,8 @@ class SRSService:
                 error_count=row.error_count,
                 correct_streak=row.correct_streak,
                 next_review_at=row.next_review_at,
+                ease_factor=row.ease_factor,
                 min_streak=min_streak,
-                min_errors=min_errors,
             ).status
             for row in rows
         ]
@@ -411,8 +410,8 @@ class SRSService:
                 error_count=row.error_count,
                 correct_streak=row.correct_streak,
                 next_review_at=row.next_review_at,
+                ease_factor=row.ease_factor,
                 min_streak=min_streak,
-                min_errors=max_errors + 1,
             ).status == "mastered"
         }
 
@@ -430,6 +429,7 @@ class SRSService:
                     error_count=row.error_count,
                     correct_streak=row.correct_streak,
                     next_review_at=row.next_review_at,
+                    ease_factor=row.ease_factor,
                 ).status,
             }
             for row in rows
@@ -451,6 +451,7 @@ class SRSService:
             p = progress_map.get(word)
             error_count = p.error_count if p else 0
             correct_streak = p.correct_streak if p else 0
+            ease_factor = p.ease_factor if p else 2.5
             next_review_at = p.next_review_at if p else now
             items.append({
                 "word": word,
@@ -463,6 +464,7 @@ class SRSService:
                     error_count=error_count,
                     correct_streak=correct_streak,
                     next_review_at=next_review_at,
+                    ease_factor=ease_factor,
                 ).status,
             })
         return items
@@ -479,6 +481,7 @@ class SRSService:
                 error_count=row.error_count,
                 correct_streak=row.correct_streak,
                 next_review_at=row.next_review_at,
+                ease_factor=row.ease_factor,
             ).status,
         }
 

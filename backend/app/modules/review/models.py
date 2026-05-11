@@ -40,22 +40,26 @@ class ReviewStatusSnapshot:
     is_troubled: bool
 
 
+_TROUBLED_EASE_THRESHOLD = 1.5
+_MASTERED_EASE_THRESHOLD = 2.8
+
+
 def build_review_status(
     *,
     error_count: int,
     correct_streak: int,
     next_review_at: datetime,
+    ease_factor: float = 2.5,
     min_streak: int = 3,
-    min_errors: int = 3,
     now: datetime | None = None,
 ) -> ReviewStatusSnapshot:
     current_time = now or datetime.utcnow()
     is_due = next_review_at <= current_time
-    is_troubled = error_count >= min_errors
-    is_mastered = correct_streak >= min_streak
+    is_troubled = ease_factor <= _TROUBLED_EASE_THRESHOLD
+    is_mastered = correct_streak >= min_streak and ease_factor >= _MASTERED_EASE_THRESHOLD
 
-    if is_troubled:
-        return ReviewStatusSnapshot(status="troubled", priority=5, is_due=is_due, is_mastered=is_mastered, is_troubled=True)
+    if is_troubled and not is_mastered:
+        return ReviewStatusSnapshot(status="troubled", priority=5, is_due=is_due, is_mastered=False, is_troubled=True)
     if is_due:
         return ReviewStatusSnapshot(status="due", priority=4, is_due=True, is_mastered=is_mastered, is_troubled=False)
     if is_mastered:
@@ -69,8 +73,8 @@ def matches_review_status_filter(
     error_count: int,
     correct_streak: int,
     next_review_at: datetime,
+    ease_factor: float = 2.5,
     min_streak: int = 3,
-    min_errors: int = 3,
     now: datetime | None = None,
 ) -> bool:
     if status_filter == "all":
@@ -79,8 +83,8 @@ def matches_review_status_filter(
         error_count=error_count,
         correct_streak=correct_streak,
         next_review_at=next_review_at,
+        ease_factor=ease_factor,
         min_streak=min_streak,
-        min_errors=min_errors,
         now=now,
     )
     return snapshot.status == status_filter
