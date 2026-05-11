@@ -325,65 +325,47 @@ export default function ReviewPage({ onError }) {
             {currentItem ? (
               <div className="relative z-0 mt-2 flex w-full justify-center">
                 <div className="w-full max-w-2xl">
-                  <div className="relative isolate h-[22rem] w-full overflow-hidden rounded-xl perspective-1000">
+                  <div
+                    className="relative isolate h-[22rem] w-full cursor-pointer overflow-hidden rounded-xl perspective-1000"
+                    onClick={() => !submitting && setIsFlipped((f) => !f)}
+                    title={isFlipped ? "Нажмите, чтобы скрыть перевод" : "Нажмите, чтобы показать перевод"}
+                  >
                     <div
                       className="relative h-full w-full preserve-3d transition-transform duration-500"
                       style={{ transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)" }}
                     >
+                      {/* Лицевая сторона: слово + контекст */}
                       <div className="absolute inset-0 backface-hidden rounded-xl">
                         <div className="h-full rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-lg">
-                          <div className="card-body flex h-full flex-col items-center justify-center p-8 text-center">
-                            <span className="mb-4 rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
+                          <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+                            <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
                               Слово для изучения
                             </span>
                             <p className="break-all text-4xl font-bold text-gray-900">{currentItem.word}</p>
-                            {currentItem.context_definition ? (
-                              <p className="mt-4 max-w-xl text-base leading-relaxed text-gray-700">{currentItem.context_definition}</p>
+                            {currentItem.source_sentence ? (
+                              <p className="max-w-xl text-base italic leading-relaxed text-gray-600">
+                                &ldquo;{currentItem.source_sentence}&rdquo;
+                              </p>
                             ) : null}
-                            {currentDifficultyMeta ? (
-                              <p className="mt-4 max-w-xl text-sm leading-relaxed text-gray-600">{currentDifficultyMeta.description}</p>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="btn-primary mt-8"
-                              onClick={() => setIsFlipped(true)}
-                              disabled={submitting}
-                            >
-                              Показать перевод
-                            </button>
+                            <p className="mt-2 text-sm text-slate-400">Нажмите на карточку, чтобы увидеть перевод</p>
                           </div>
                         </div>
                       </div>
 
+                      {/* Обратная сторона: перевод + определение */}
                       <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-xl">
                         <div className="h-full rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 shadow-lg">
-                          <div className="card-body flex h-full flex-col items-center justify-center p-8 text-center">
-                            <span className="mb-4 rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
+                          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+                            <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
                               Перевод
                             </span>
-                            <p className="break-all text-2xl font-bold text-gray-900">{currentItem.word}</p>
-                            <p className="mt-2 break-all text-2xl font-semibold text-green-700">
+                            <p className="break-all text-4xl font-bold text-gray-900">{currentItem.word}</p>
+                            <p className="break-all text-2xl font-semibold text-green-700">
                               {currentItem.russian_translation || "Перевод не найден"}
                             </p>
                             {currentItem.context_definition ? (
-                              <p className="mt-4 max-w-xl text-base leading-relaxed text-gray-700">{currentItem.context_definition}</p>
+                              <p className="max-w-xl text-base leading-relaxed text-gray-700">{currentItem.context_definition}</p>
                             ) : null}
-                            <div className="mt-4 flex flex-wrap justify-center gap-2">
-                              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${currentTimingMeta?.toneClass || "bg-slate-100 text-slate-700"}`}>
-                                {currentTimingMeta?.label || "Без расписания"}
-                              </span>
-                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                                Следующее окно: {formatReviewMoment(currentItem.next_review_at)}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="btn-secondary mt-6"
-                              onClick={() => setIsFlipped(false)}
-                              disabled={submitting}
-                            >
-                              Смотреть снова
-                            </button>
                           </div>
                         </div>
                       </div>

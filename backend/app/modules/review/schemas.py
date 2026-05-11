@@ -77,6 +77,7 @@ class ReviewSessionItem(BaseModel):
     vocabulary_id: int | None = None
     russian_translation: str | None = None
     context_definition: str | None = None
+    source_sentence: str | None = None
     next_review_at: datetime | None = None
     error_count: int = 0
     correct_streak: int = 0

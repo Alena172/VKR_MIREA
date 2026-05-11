@@ -497,14 +497,17 @@ class SRSService:
                 vocab_item = vocab_map[row.vocabulary_id]
                 translation = vocab_item.russian_translation
                 definition = vocab_item.context_definition_ru
+                source_sentence = vocab_item.source_sentence
             else:
                 translation = word_translation_map.get(row.word)
                 definition = None
+                source_sentence = None
             items.append({
                 "word": row.word,
                 "vocabulary_id": row.vocabulary_id,
                 "russian_translation": translation,
                 "context_definition": definition,
+                "source_sentence": source_sentence,
                 "next_review_at": row.next_review_at,
                 "error_count": row.error_count,
                 "correct_streak": row.correct_streak,
@@ -540,6 +543,7 @@ class SRSService:
                 "vocabulary_id": vocab_item.id,
                 "russian_translation": vocab_item.russian_translation,
                 "context_definition": getattr(vocab_item, "context_definition_ru", None),
+                "source_sentence": getattr(vocab_item, "source_sentence", None),
                 "next_review_at": next_review_at,
                 "error_count": error_count,
                 "correct_streak": correct_streak,
