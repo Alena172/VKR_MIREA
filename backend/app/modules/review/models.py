@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -21,6 +21,8 @@ class WordProgressModel(Base):
     word: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     error_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     correct_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ease_factor: Mapped[float] = mapped_column(Float, nullable=False, default=2.5)
+    interval_days: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     last_reviewed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     next_review_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 

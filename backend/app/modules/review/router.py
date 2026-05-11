@@ -20,7 +20,7 @@ from app.modules.review.schemas import (
     WordProgressListResponse,
     WordProgressRead,
 )
-from app.modules.review.service.srs import SRSService
+from app.modules.review.service.srs import SRSService, get_srs_service
 from app.modules.vocabulary.service.items import VocabularyService
 
 router = APIRouter(tags=["review"])
@@ -52,7 +52,7 @@ class RecommendationsResponse(BaseModel):
 def get_review_queue_me(
     limit: int = Query(default=20, ge=1, le=100),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ReviewQueueResponse:
     result = service.get_review_queue(user_id=current_user_id, current_user_id=current_user_id, limit=limit)
     return ReviewQueueResponse(
@@ -66,7 +66,7 @@ def get_review_queue_me(
 def submit_review_queue_item_me(
     payload: ReviewQueueSubmitRequest,
     current_user_id: int = Depends(get_current_user_id),
-    srs_service: SRSService = Depends(),
+    srs_service: SRSService = Depends(get_srs_service),
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
     progress = srs_service.submit_review_queue_item(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
@@ -90,7 +90,7 @@ def submit_review_queue_item_me(
 def submit_review_queue_bulk_me(
     payload: ReviewQueueBulkSubmitRequest,
     current_user_id: int = Depends(get_current_user_id),
-    srs_service: SRSService = Depends(),
+    srs_service: SRSService = Depends(get_srs_service),
     vocab_service: VocabularyService = Depends(),
 ) -> ReviewQueueBulkSubmitResponse:
     result = srs_service.submit_review_queue_bulk(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
@@ -116,7 +116,7 @@ def submit_review_queue_bulk_me(
 def start_review_session_me(
     payload: ReviewSessionStartRequest,
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ReviewSessionStartResponse:
     from app.modules.review.schemas import ReviewSessionItem
     result = service.start_review_session(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
@@ -139,7 +139,7 @@ def list_word_progress_me(
     min_streak: int = Query(default=3, ge=1, le=50),
     min_errors: int = Query(default=3, ge=1, le=50),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> WordProgressListResponse:
     result = service.list_word_progress(
         user_id=current_user_id, current_user_id=current_user_id,
@@ -159,7 +159,7 @@ def list_word_progress_me(
 def get_word_progress_me(
     word: str,
     current_user_id: int = Depends(get_current_user_id),
-    srs_service: SRSService = Depends(),
+    srs_service: SRSService = Depends(get_srs_service),
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
     progress = srs_service.get_word_progress(user_id=current_user_id, current_user_id=current_user_id, word=word)
@@ -179,7 +179,7 @@ def get_word_progress_me(
 def delete_word_progress_me(
     word: str,
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> WordProgressDeleteResponse:
     result = service.delete_word_progress(user_id=current_user_id, current_user_id=current_user_id, word=word)
     return WordProgressDeleteResponse(**result)
@@ -190,7 +190,7 @@ def get_review_plan_me(
     limit: int = Query(default=10, ge=1, le=100),
     horizon_hours: int = Query(default=24, ge=1, le=168),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ReviewPlanResponse:
     result = service.get_review_plan(
         user_id=current_user_id, current_user_id=current_user_id,
@@ -209,7 +209,7 @@ def get_review_plan_me(
 @router.get("/context/me/progress", response_model=ProgressSnapshot)
 def progress_me(
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ProgressSnapshot:
     result = service.get_progress_snapshot(user_id=None, current_user_id=current_user_id)
     return ProgressSnapshot(**result)
@@ -220,7 +220,7 @@ def review_summary_me(
     min_streak: int = Query(default=3, ge=1, le=50),
     min_errors: int = Query(default=3, ge=1, le=50),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ReviewSummary:
     result = service.get_review_summary(
         user_id=current_user_id, current_user_id=current_user_id,
@@ -235,7 +235,7 @@ def review_summary(
     min_streak: int = Query(default=3, ge=1, le=50),
     min_errors: int = Query(default=3, ge=1, le=50),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ReviewSummary:
     target_user_id = user_id or current_user_id
     result = service.get_review_summary(
@@ -249,7 +249,7 @@ def review_summary(
 def progress(
     user_id: int | None = Query(default=None, ge=1),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ProgressSnapshot:
     result = service.get_progress_snapshot(user_id=user_id, current_user_id=current_user_id)
     return ProgressSnapshot(**result)
@@ -259,7 +259,7 @@ def progress(
 def get_user_context(
     user_id: int,
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> UserContextRead:
     result = service.get_user_context(user_id=user_id, current_user_id=current_user_id)
     return UserContextRead(**result)
@@ -270,7 +270,7 @@ def update_user_context(
     user_id: int,
     _payload: UserContextUpdate,
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> UserContextRead:
     result = service.get_user_context(user_id=user_id, current_user_id=current_user_id)
     return UserContextRead(**result)
@@ -281,7 +281,7 @@ def get_recommendations(
     user_id: int,
     limit: int = Query(default=10, ge=1, le=100),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> RecommendationsResponse:
     result = service.get_recommendations(user_id=user_id, current_user_id=current_user_id, limit=limit)
     return RecommendationsResponse(**result)
@@ -292,7 +292,7 @@ def get_review_queue(
     user_id: int,
     limit: int = Query(default=20, ge=1, le=100),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ReviewQueueResponse:
     result = service.get_review_queue(user_id=user_id, current_user_id=current_user_id, limit=limit)
     return ReviewQueueResponse(
@@ -307,7 +307,7 @@ def submit_review_queue_item(
     user_id: int,
     payload: ReviewQueueSubmitRequest,
     current_user_id: int = Depends(get_current_user_id),
-    srs_service: SRSService = Depends(),
+    srs_service: SRSService = Depends(get_srs_service),
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
     progress = srs_service.submit_review_queue_item(user_id=user_id, current_user_id=current_user_id, payload=payload)
@@ -332,7 +332,7 @@ def submit_review_queue_bulk(
     user_id: int,
     payload: ReviewQueueBulkSubmitRequest,
     current_user_id: int = Depends(get_current_user_id),
-    srs_service: SRSService = Depends(),
+    srs_service: SRSService = Depends(get_srs_service),
     vocab_service: VocabularyService = Depends(),
 ) -> ReviewQueueBulkSubmitResponse:
     result = srs_service.submit_review_queue_bulk(user_id=user_id, current_user_id=current_user_id, payload=payload)
@@ -366,7 +366,7 @@ def list_word_progress(
     min_streak: int = Query(default=3, ge=1, le=50),
     min_errors: int = Query(default=3, ge=1, le=50),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> WordProgressListResponse:
     result = service.list_word_progress(
         user_id=user_id, current_user_id=current_user_id,
@@ -387,7 +387,7 @@ def get_word_progress(
     user_id: int,
     word: str,
     current_user_id: int = Depends(get_current_user_id),
-    srs_service: SRSService = Depends(),
+    srs_service: SRSService = Depends(get_srs_service),
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
     progress = srs_service.get_word_progress(user_id=user_id, current_user_id=current_user_id, word=word)
@@ -408,7 +408,7 @@ def delete_word_progress(
     user_id: int,
     word: str,
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> WordProgressDeleteResponse:
     result = service.delete_word_progress(user_id=user_id, current_user_id=current_user_id, word=word)
     return WordProgressDeleteResponse(**result)
@@ -420,7 +420,7 @@ def get_review_plan(
     limit: int = Query(default=10, ge=1, le=100),
     horizon_hours: int = Query(default=24, ge=1, le=168),
     current_user_id: int = Depends(get_current_user_id),
-    service: SRSService = Depends(),
+    service: SRSService = Depends(get_srs_service),
 ) -> ReviewPlanResponse:
     result = service.get_review_plan(
         user_id=user_id, current_user_id=current_user_id,

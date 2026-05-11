@@ -7,7 +7,6 @@ from fastapi import Depends
 
 from app.modules.review.models import matches_review_status_filter
 from app.modules.review.repository import ReviewRepository, _normalize_valid_word
-from app.modules.training.repository import TrainingRepository
 
 
 @dataclass
@@ -22,13 +21,19 @@ class RecommendationScoringService:
     def __init__(
         self,
         review_repo: ReviewRepository = Depends(),
-        training_repo: TrainingRepository = Depends(),
     ) -> None:
         self._review_repo = review_repo
-        self._training_repo = training_repo
+        self._submission_service = None
+
+    def set_submission_service(self, submission_service) -> None:
+        self._submission_service = submission_service
 
     def build_snapshot(self, *, user_id: int, limit: int) -> RecommendationScoreSnapshot:
-        recent_errors = self._training_repo.list_recent_incorrect_words(user_id=user_id, limit=limit * 5, unique=False)
+        recent_errors = (
+            self._submission_service.list_recent_incorrect_words(user_id=user_id, limit=limit * 5, unique=False)
+            if self._submission_service is not None
+            else []
+        )
         candidate_rows = self._review_repo.list_word_progress(
             user_id=user_id, limit=max(limit * 3, 10), offset=0, q=None,
             sort_by="error_count", sort_order="desc",

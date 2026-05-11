@@ -9,15 +9,15 @@ from app.core.application import AsyncTaskResponse
 from app.modules.ai.facade import AIProviderUnavailableError
 from app.modules.ai.facade import ai_facade as ai_service
 from app.modules.ai.schemas import ExerciseSeed, GenerateExercisesRequest
-from app.modules.graph.repository import GraphRepository
-from app.modules.identity.repository import IdentityRepository
+from app.modules.graph.service.graph import GraphService
+from app.modules.identity.service import IdentityService
 from app.modules.training.schemas import (
     ExerciseDTO,
     ExerciseGenerateRequest,
     ExerciseGenerateResultDTO,
 )
 from app.modules.training.service.prefetch import prefetch_service
-from app.modules.vocabulary.repository import VocabularyRepository
+from app.modules.vocabulary.service.items import VocabularyService
 
 _PREFETCH_EXTRA = 5
 _BATCH_SIZE = 5
@@ -26,20 +26,16 @@ _BATCH_SIZE = 5
 class TrainingService:
     def __init__(
         self,
-        identity_repo: IdentityRepository = Depends(),
-        vocab_repo: VocabularyRepository = Depends(),
-        graph_repo: GraphRepository = Depends(),
+        identity_service: IdentityService = Depends(),
+        vocab_service: VocabularyService = Depends(),
+        graph_service: GraphService = Depends(),
     ) -> None:
-        self._identity_repo = identity_repo
-        self._vocab_repo = vocab_repo
-        self._graph_repo = graph_repo
+        self._identity_service = identity_service
+        self._vocab_service = vocab_service
+        self._graph_service = graph_service
 
     def _get_user_or_404(self, user_id: int):
-        from fastapi import HTTPException
-        user = self._identity_repo.get_by_id(user_id)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-        return user
+        return self._identity_service.get_user_or_404(user_id=user_id)
 
     def queue_generation(
         self,
@@ -131,10 +127,7 @@ class TrainingService:
         mode: str,
     ):
         from fastapi import HTTPException
-        vocabulary_items = [
-            _vocab_dto(uv, entry)
-            for uv, entry in self._vocab_repo.list_user_vocabulary(user_id=user_id)
-        ]
+        vocabulary_items = self._vocab_service.list_user_items(user_id=user_id)
         if vocabulary_ids:
             allowed = set(vocabulary_ids)
             vocabulary_items = [item for item in vocabulary_items if item.id in allowed]
@@ -165,7 +158,7 @@ class TrainingService:
         seeds: list[ExerciseSeed] = []
         for item in vocabulary_items:
             source_sentence = item.source_sentence
-            anchors = self._graph_repo.list_anchors(
+            anchors = self._graph_service.list_word_anchors(
                 user_id=user_id,
                 english_lemma=item.english_lemma,
                 limit=3,
@@ -190,11 +183,6 @@ class TrainingService:
             secrets.SystemRandom().shuffle(seeds)
 
         return seeds, anchors_used_count
-
-
-def _vocab_dto(uv, entry):
-    from app.modules.vocabulary.schemas import VocabularyItemDTO
-    return VocabularyItemDTO.from_model(uv, entry)
 
 
 def _dedupe_vocabulary_by_lemma(vocabulary_items):

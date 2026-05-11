@@ -8,9 +8,8 @@ from fastapi import Depends
 from app.core.db import transaction
 from app.modules.ai.facade import ai_facade as ai_service
 from app.modules.ai.schemas import ExplainErrorRequest
-from app.modules.graph.repository import GraphRepository
-from app.modules.review.repository import ReviewRepository
-from app.modules.review.service.srs import WordProgressUpdate
+from app.modules.graph.service.graph import GraphService
+from app.modules.review.service.srs import SRSService, WordProgressUpdate
 from app.modules.training.repository import AnswerPersistPayload, TrainingRepository
 from app.modules.training.schemas import (
     SessionAnswer,
@@ -251,12 +250,12 @@ class SubmissionService:
     def __init__(
         self,
         training_repo: TrainingRepository = Depends(),
-        review_repo: ReviewRepository = Depends(),
-        graph_repo: GraphRepository = Depends(),
+        srs_service: SRSService = Depends(),
+        graph_service: GraphService = Depends(),
     ) -> None:
         self._training_repo = training_repo
-        self._review_repo = review_repo
-        self._graph_repo = graph_repo
+        self._srs_service = srs_service
+        self._graph_service = graph_service
 
     def _update_progress(
         self,
@@ -271,7 +270,7 @@ class SubmissionService:
                     WordProgressUpdate(word=item.progress_word, is_correct=item.is_correct)
                 )
             if item.progress_word and not item.is_correct:
-                self._graph_repo.add_sense_error_event(
+                self._graph_service.register_mistake(
                     user_id=user_id,
                     english_lemma=item.progress_word,
                     prompt=item.prompt,
@@ -279,10 +278,7 @@ class SubmissionService:
                     user_answer=item.user_answer,
                 )
 
-        for update in progress_updates:
-            self._review_repo.update_word_progress(
-                user_id=user_id, word=update.word, is_correct=update.is_correct
-            )
+        self._srs_service.update_learning_progress(user_id=user_id, updates=progress_updates)
 
     def _persist_session(
         self,
@@ -312,6 +308,20 @@ class SubmissionService:
             ],
             auto_commit=False,
         )
+
+    def list_recent_incorrect_words(
+        self,
+        *,
+        user_id: int,
+        limit: int,
+        unique: bool = True,
+    ) -> list[str]:
+        return self._training_repo.list_recent_incorrect_words(
+            user_id=user_id, limit=limit, unique=unique,
+        )
+
+    def get_progress_snapshot(self, *, user_id: int) -> tuple[int, float]:
+        return self._training_repo.get_progress_snapshot(user_id=user_id)
 
     async def submit(
         self,

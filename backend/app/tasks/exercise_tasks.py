@@ -42,16 +42,20 @@ def generate_exercises_for_user(
 ) -> dict:
     from app.core.db import SessionLocal
     from app.modules.graph.repository import GraphRepository
+    from app.modules.graph.service.graph import GraphService
     from app.modules.identity.repository import IdentityRepository
+    from app.modules.identity.service import IdentityService
     from app.modules.training.service.exercises import TrainingService
     from app.modules.vocabulary.repository import VocabularyRepository
+    from app.modules.vocabulary.service.items import VocabularyService
 
     with SessionLocal() as db:
         try:
+            identity_service = IdentityService(IdentityRepository(db))
             service = TrainingService(
-                identity_repo=IdentityRepository(db),
-                vocab_repo=VocabularyRepository(db),
-                graph_repo=GraphRepository(db),
+                identity_service=identity_service,
+                vocab_service=VocabularyService(VocabularyRepository(db)),
+                graph_service=GraphService(GraphRepository(db), identity_service),
             )
             response = asyncio.run(
                 service.generate_for_user(

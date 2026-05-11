@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import Depends, HTTPException
 
+from app.modules.identity.service import IdentityService
 from app.modules.review.models import (
     WordProgressModel,
     build_review_status,
@@ -14,9 +15,9 @@ from app.modules.review.models import (
 )
 from app.modules.review.repository import ReviewRepository, _normalize_valid_word
 from app.modules.review.service.scoring import RecommendationScoringService
-from app.modules.training.repository import TrainingRepository
 
 if TYPE_CHECKING:
+    from app.modules.training.service.submission import SubmissionService
     from app.modules.vocabulary.service.items import VocabularyService
 
 
@@ -43,14 +44,19 @@ class SRSService:
     def __init__(
         self,
         repo: ReviewRepository = Depends(),
-        training_repo: TrainingRepository = Depends(),
         scoring_service: RecommendationScoringService = Depends(),
+        identity_service: IdentityService = Depends(),
         vocabulary_service: Any = None,
     ) -> None:
         self._repo = repo
-        self._training_repo = training_repo
         self._scoring = scoring_service
+        self._identity_service = identity_service
         self._vocabulary_service = vocabulary_service
+        self._submission_service: SubmissionService | None = None
+
+    def set_submission_service(self, submission_service: SubmissionService) -> None:
+        self._submission_service = submission_service
+        self._scoring.set_submission_service(submission_service)
 
     def _vocab(self) -> VocabularyService:
         if self._vocabulary_service is None:
@@ -62,9 +68,7 @@ class SRSService:
     def _ensure_user_access(self, *, user_id: int, current_user_id: int):
         if user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Forbidden")
-        from app.modules.identity.repository import IdentityRepository
-        if IdentityRepository(self._repo._db).get_by_id(user_id) is None:
-            raise HTTPException(status_code=404, detail="User not found")
+        self._identity_service.get_user_or_404(user_id=user_id)
 
     def get_review_queue(self, *, user_id: int, current_user_id: int, limit: int) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
@@ -250,7 +254,11 @@ class SRSService:
         if user_id is not None and user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Forbidden")
         target = user_id or current_user_id
-        total_sessions, avg_accuracy = self._training_repo.get_progress_snapshot(user_id=target)
+        total_sessions, avg_accuracy = (
+            self._submission_service.get_progress_snapshot(user_id=target)
+            if self._submission_service is not None
+            else (0, 0.0)
+        )
         return {"user_id": target, "total_sessions": total_sessions, "avg_accuracy": avg_accuracy}
 
     def ensure_word_progress_entry(self, *, user_id: int, word: str) -> bool:
@@ -284,10 +292,11 @@ class SRSService:
         words = snapshot.ranked_words(limit)
 
         recent_error_words = []
-        from app.modules.review.repository import _normalize_valid_word
-        from app.modules.training.repository import TrainingRepository
-        training_repo = TrainingRepository(self._repo._db)
-        recent_errors_raw = training_repo.list_recent_incorrect_words(user_id=user_id, limit=limit * 5, unique=True)
+        recent_errors_raw = (
+            self._submission_service.list_recent_incorrect_words(user_id=user_id, limit=limit * 5, unique=True)
+            if self._submission_service is not None
+            else []
+        )
         for w in recent_errors_raw:
             if _normalize_valid_word(w) and w not in recent_error_words:
                 recent_error_words.append(w)
@@ -329,10 +338,8 @@ class SRSService:
             )
             if row.error_count > 0
         ]
-        from app.modules.review.repository import _normalize_valid_word
         difficult_words = [row.word for row in troubled_rows if _normalize_valid_word(row.word)]
-        from app.modules.identity.repository import IdentityRepository
-        user = IdentityRepository(self._repo._db).get_by_id(user_id)
+        user = self._identity_service.get_user_by_id(user_id)
         return {
             "user_id": user_id,
             "cefr_level": user.cefr_level if user else None,
@@ -424,3 +431,23 @@ class SRSService:
                 next_review_at=row.next_review_at,
             ).status,
         }
+
+
+def get_srs_service(
+    srs: SRSService = Depends(),
+) -> SRSService:
+    from app.modules.training.service.submission import SubmissionService
+    from app.modules.training.repository import TrainingRepository
+    from app.modules.graph.repository import GraphRepository
+    from app.modules.graph.service.graph import GraphService
+    from app.modules.identity.repository import IdentityRepository
+    submission = SubmissionService(
+        training_repo=TrainingRepository(srs._repo._db),
+        srs_service=srs,
+        graph_service=GraphService(
+            GraphRepository(srs._repo._db),
+            IdentityService(IdentityRepository(srs._repo._db)),
+        ),
+    )
+    srs.set_submission_service(submission)
+    return srs

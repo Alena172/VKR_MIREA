@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from app.modules.review.service.srs import SRSService
 
 _ENGLISH_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
-_RUSSIAN_TOKEN_RE = re.compile(r"[А-Яа-яЁё-]+")
 
 
 def _to_dto(uv, entry) -> VocabularyItemDTO:
@@ -49,28 +48,8 @@ def _english_tokens(text: str | None) -> list[str]:
     return [token.lower() for token in _ENGLISH_TOKEN_RE.findall(text or "")]
 
 
-def _russian_tokens(text: str | None) -> list[str]:
-    return [token.lower() for token in _RUSSIAN_TOKEN_RE.findall(text or "")]
-
-
 def _is_single_word_capture(text: str) -> bool:
     return len(_english_tokens(text)) == 1
-
-
-def _looks_like_context_phrase_expansion(
-    *,
-    base_translation: str,
-    contextual_translation: str,
-) -> bool:
-    base_tokens = _russian_tokens(base_translation)
-    contextual_tokens = _russian_tokens(contextual_translation)
-    if not base_tokens or not contextual_tokens:
-        return False
-    if base_tokens == contextual_tokens:
-        return False
-    if len(base_tokens) == 1 and len(contextual_tokens) >= 2:
-        return True
-    return False
 
 
 def _build_translation_note(provider_note: str) -> str:
@@ -101,26 +80,28 @@ class VocabularyService:
 
     def _graph(self) -> GraphService:
         if self._graph_service is None:
-            from app.modules.graph.service.graph import GraphService
             from app.modules.graph.repository import GraphRepository
-            self._graph_service = GraphService(GraphRepository(self._repo._db))
+            from app.modules.graph.service.graph import GraphService
+            from app.modules.identity.repository import IdentityRepository
+            from app.modules.identity.service import IdentityService
+            self._graph_service = GraphService(
+                GraphRepository(self._repo._db),
+                IdentityService(IdentityRepository(self._repo._db)),
+            )
         return self._graph_service
 
     def _srs(self) -> SRSService:
         if self._srs_service is None:
+            from app.modules.identity.repository import IdentityRepository
+            from app.modules.identity.service import IdentityService
             from app.modules.review.repository import ReviewRepository
             from app.modules.review.service.scoring import RecommendationScoringService
             from app.modules.review.service.srs import SRSService
-            from app.modules.training.repository import TrainingRepository
             review_repo = ReviewRepository(self._repo._db)
-            training_repo = TrainingRepository(self._repo._db)
             self._srs_service = SRSService(
                 repo=review_repo,
-                training_repo=training_repo,
-                scoring_service=RecommendationScoringService(
-                    review_repo=review_repo,
-                    training_repo=training_repo,
-                ),
+                scoring_service=RecommendationScoringService(review_repo=review_repo),
+                identity_service=IdentityService(IdentityRepository(self._repo._db)),
                 vocabulary_service=self,
             )
         return self._srs_service
@@ -316,37 +297,9 @@ class VocabularyService:
                 source_context=source_sentence,
             )
         )
-        contextual_translation = _normalize_translation(contextual_response.translated_text)
+        russian_translation = _normalize_translation(contextual_response.translated_text)
         translation_note = contextual_response.provider_note
         semantic_sentence = source_sentence
-        russian_translation = contextual_translation
-
-        if _is_single_word_capture(selected_text):
-            base_response = await ai_service.translate_with_context_async(
-                TranslateWithContextRequest(
-                    text=english_lemma,
-                    cefr_level=cefr_level,
-                    source_context=None,
-                )
-            )
-            base_translation = _normalize_translation(base_response.translated_text)
-            if _looks_like_context_phrase_expansion(
-                base_translation=base_translation,
-                contextual_translation=contextual_translation,
-            ):
-                russian_translation = base_translation
-                semantic_sentence = None
-                translation_note = (
-                    f"{contextual_response.provider_note}; "
-                    "capture_mode=base_word_translation; "
-                    f"context_variant_ignored={contextual_translation}"
-                )
-            else:
-                russian_translation = contextual_translation or base_translation
-                translation_note = (
-                    f"{contextual_response.provider_note}; "
-                    "capture_mode=contextual_single_word"
-                )
 
         return russian_translation, translation_note, semantic_sentence
 
@@ -429,11 +382,7 @@ class VocabularyService:
         text: str,
         source_context: str | None,
     ) -> TranslationResultDTO:
-        from app.modules.identity.repository import IdentityRepository
-        user_model = IdentityRepository(self._repo._db).get_by_id(user_id)
-        if user_model is None:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=404, detail="User not found")
+        user_model = self._graph()._identity_service.get_user_or_404(user_id=user_id)
 
         if _is_single_token(text) and not source_context:
             shared = self._repo.find_shared_translation(english_lemma=text.strip())

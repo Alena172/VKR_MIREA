@@ -13,6 +13,13 @@ from app.modules.review.models import WordProgressModel
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
+_SM2_EASE_DEFAULT = 2.5
+_SM2_EASE_MIN = 1.3
+_SM2_EASE_CORRECT_DELTA = 0.1
+_SM2_EASE_WRONG_DELTA = 0.2
+_SM2_INITIAL_INTERVAL = 1
+_SM2_SECOND_INTERVAL = 3
+
 
 def _normalize_valid_word(value: str | None) -> str | None:
     if not value:
@@ -21,10 +28,17 @@ def _normalize_valid_word(value: str | None) -> str | None:
     return normalized if normalized and _WORD_RE.fullmatch(normalized) else None
 
 
+def _sm2_next_interval(*, interval_days: int, ease_factor: float, correct_streak: int) -> int:
+    """Вычисляет следующий интервал по упрощённому алгоритму SM-2."""
+    if correct_streak == 1:
+        return _SM2_INITIAL_INTERVAL
+    if correct_streak == 2:
+        return _SM2_SECOND_INTERVAL
+    return max(1, round(interval_days * ease_factor))
+
+
 class ReviewRepository:
     """Низкоуровневые запросы и SRS-обновления для `word_progress`."""
-
-    _SRS_STEPS_DAYS = [1, 3, 7, 14, 30, 60]
 
     def __init__(self, db: Session = Depends(get_db)) -> None:
         self._db = db
@@ -53,6 +67,8 @@ class ReviewRepository:
                 word=normalized,
                 error_count=0,
                 correct_streak=0,
+                ease_factor=_SM2_EASE_DEFAULT,
+                interval_days=_SM2_INITIAL_INTERVAL,
                 last_reviewed_at=now,
                 next_review_at=now,
             )
@@ -62,11 +78,18 @@ class ReviewRepository:
         row.last_reviewed_at = now
         if is_correct:
             row.correct_streak += 1
-            step_idx = min(row.correct_streak - 1, len(self._SRS_STEPS_DAYS) - 1)
-            row.next_review_at = now + timedelta(days=self._SRS_STEPS_DAYS[step_idx])
+            row.ease_factor = row.ease_factor + _SM2_EASE_CORRECT_DELTA
+            row.interval_days = _sm2_next_interval(
+                interval_days=row.interval_days,
+                ease_factor=row.ease_factor,
+                correct_streak=row.correct_streak,
+            )
+            row.next_review_at = now + timedelta(days=row.interval_days)
         else:
             row.error_count += 1
             row.correct_streak = 0
+            row.ease_factor = max(_SM2_EASE_MIN, row.ease_factor - _SM2_EASE_WRONG_DELTA)
+            row.interval_days = _SM2_INITIAL_INTERVAL
             row.next_review_at = now
         return row
 
@@ -90,6 +113,8 @@ class ReviewRepository:
             word=normalized,
             error_count=0,
             correct_streak=0,
+            ease_factor=_SM2_EASE_DEFAULT,
+            interval_days=_SM2_INITIAL_INTERVAL,
             last_reviewed_at=now,
             next_review_at=now,
         )

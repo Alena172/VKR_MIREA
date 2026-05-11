@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException
 
 from app.core.db import transaction
 from app.modules.graph.repository import GraphRepository
+from app.modules.identity.service import IdentityService
 from app.modules.graph.schemas import (
     InterestItem,
     InterestUpsertRequest,
@@ -21,15 +22,16 @@ from app.modules.graph.schemas import (
 class GraphService:
     """Сервис уровня application для семантического профиля, интересов и смыслов слов."""
 
-    def __init__(self, repo: GraphRepository = Depends()) -> None:
+    def __init__(
+        self,
+        repo: GraphRepository = Depends(),
+        identity_service: IdentityService = Depends(),
+    ) -> None:
         self._repo = repo
+        self._identity_service = identity_service
 
     def _get_user_or_404(self, user_id: int):
-        from app.modules.identity.repository import IdentityRepository
-        user = IdentityRepository(self._repo._db).get_by_id(user_id)
-        if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-        return user
+        return self._identity_service.get_user_or_404(user_id=user_id)
 
     def list_interests(self, *, current_user_id: int) -> UserInterestsResponse:
         self._get_user_or_404(current_user_id)
