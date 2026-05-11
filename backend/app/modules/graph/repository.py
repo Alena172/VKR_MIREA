@@ -206,7 +206,7 @@ class GraphRepository:
             if not key:
                 continue
             self._db.add(UserInterestModel(user_id=user_id, interest_key=key, display_name=interest.interest.strip(), weight=interest.weight))
-        self._db.commit()
+        self._db.flush()
         return self.list_interests(user_id)
 
     def semantic_upsert(

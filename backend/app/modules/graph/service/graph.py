@@ -48,7 +48,8 @@ class GraphService:
         current_user_id: int,
     ) -> UserInterestsResponse:
         self._get_user_or_404(current_user_id)
-        updated = self._repo.upsert_interests(current_user_id, payload.interests)
+        with transaction(self._repo._db):
+            updated = self._repo.upsert_interests(current_user_id, payload.interests)
         return UserInterestsResponse(
             user_id=current_user_id,
             interests=[InterestItem(interest=i.interest, weight=i.weight) for i in updated],

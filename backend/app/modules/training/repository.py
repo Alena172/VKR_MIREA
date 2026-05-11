@@ -154,12 +154,12 @@ class TrainingRepository:
         self._db.refresh(session_row)
         return session_row
 
-    def list_recent_incorrect_words(
+    def list_recent_incorrect_answer_data(
         self,
         user_id: int,
         limit: int = 20,
-        unique: bool = True,
-    ) -> list[str]:
+    ) -> list[tuple[str | None, str | None]]:
+        """Возвращает сырые пары (target_word, prompt) для неверных ответов."""
         rows = list(self._db.execute(
             select(
                 AnswerModel.target_word,
@@ -173,23 +173,7 @@ class TrainingRepository:
             .order_by(AnswerModel.id.desc())
             .limit(limit)
         ))
-
-        words: list[str] = []
-        for target_word, prompt in rows:
-            word = (target_word or "").strip().lower()
-            if not word:
-                prompt_text = (prompt or "").strip()
-                if not prompt_text:
-                    continue
-                word = prompt_text.split(":", maxsplit=1)[-1].strip().lower()
-            if not word:
-                continue
-            if unique:
-                if word not in words:
-                    words.append(word)
-            else:
-                words.append(word)
-        return words
+        return [(row[0], row[1]) for row in rows]
 
     def get_progress_snapshot(self, *, user_id: int) -> tuple[int, float]:
         total = int(self._db.scalar(

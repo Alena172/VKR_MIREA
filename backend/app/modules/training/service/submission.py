@@ -316,9 +316,21 @@ class SubmissionService:
         limit: int,
         unique: bool = True,
     ) -> list[str]:
-        return self._training_repo.list_recent_incorrect_words(
-            user_id=user_id, limit=limit, unique=unique,
-        )
+        raw = self._training_repo.list_recent_incorrect_answer_data(user_id=user_id, limit=limit)
+        words: list[str] = []
+        for target_word, prompt in raw:
+            word = (target_word or "").strip().lower()
+            if not word:
+                prompt_text = (prompt or "").strip()
+                word = prompt_text.split(":", maxsplit=1)[-1].strip().lower() if prompt_text else ""
+            if not word:
+                continue
+            if unique:
+                if word not in words:
+                    words.append(word)
+            else:
+                words.append(word)
+        return words
 
     def get_progress_snapshot(self, *, user_id: int) -> tuple[int, float]:
         return self._training_repo.get_progress_snapshot(user_id=user_id)

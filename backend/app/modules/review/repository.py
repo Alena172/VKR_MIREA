@@ -13,13 +13,6 @@ from app.modules.review.models import WordProgressModel
 
 _WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
 
-_SM2_EASE_DEFAULT = 2.5
-_SM2_EASE_MIN = 1.3
-_SM2_EASE_CORRECT_DELTA = 0.1
-_SM2_EASE_WRONG_DELTA = 0.2
-_SM2_INITIAL_INTERVAL = 1
-_SM2_SECOND_INTERVAL = 3
-
 
 def _normalize_valid_word(value: str | None) -> str | None:
     if not value:
@@ -28,20 +21,62 @@ def _normalize_valid_word(value: str | None) -> str | None:
     return normalized if normalized and _WORD_RE.fullmatch(normalized) else None
 
 
-def _sm2_next_interval(*, interval_days: int, ease_factor: float, correct_streak: int) -> int:
-    """Вычисляет следующий интервал по упрощённому алгоритму SM-2."""
-    if correct_streak == 1:
-        return _SM2_INITIAL_INTERVAL
-    if correct_streak == 2:
-        return _SM2_SECOND_INTERVAL
-    return max(1, round(interval_days * ease_factor))
-
-
 class ReviewRepository:
-    """Низкоуровневые запросы и SRS-обновления для `word_progress`."""
+    """Низкоуровневые запросы и CRUD для `word_progress`."""
 
     def __init__(self, db: Session = Depends(get_db)) -> None:
         self._db = db
+
+    def get_or_create_word_progress(
+        self,
+        user_id: int,
+        word: str,
+        *,
+        now: datetime,
+    ) -> WordProgressModel:
+        """Возвращает существующую запись или создаёт новую с дефолтными значениями SM-2."""
+        row = self._db.scalar(
+            select(WordProgressModel).where(
+                WordProgressModel.user_id == user_id,
+                WordProgressModel.word == word,
+            )
+        )
+        if row is not None:
+            return row
+        row = WordProgressModel(
+            user_id=user_id,
+            word=word,
+            error_count=0,
+            correct_streak=0,
+            ease_factor=2.5,
+            interval_days=1,
+            last_reviewed_at=now,
+            next_review_at=now,
+        )
+        self._db.add(row)
+        self._db.flush()
+        return row
+
+    def save_word_progress(
+        self,
+        row: WordProgressModel,
+        *,
+        error_count: int,
+        correct_streak: int,
+        ease_factor: float,
+        interval_days: int,
+        last_reviewed_at: datetime,
+        next_review_at: datetime,
+    ) -> WordProgressModel:
+        """Сохраняет вычисленное состояние SRS в БД."""
+        row.error_count = error_count
+        row.correct_streak = correct_streak
+        row.ease_factor = ease_factor
+        row.interval_days = interval_days
+        row.last_reviewed_at = last_reviewed_at
+        row.next_review_at = next_review_at
+        self._db.flush()
+        return row
 
     def update_word_progress(
         self,
@@ -49,78 +84,16 @@ class ReviewRepository:
         word: str,
         is_correct: bool,
     ) -> WordProgressModel | None:
-        normalized = _normalize_valid_word(word)
-        if not normalized:
-            return None
-
-        row = self._db.scalar(
-            select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
-                WordProgressModel.word == normalized,
-            )
+        """Устаревший метод-делегат: вызывается только из SRSService."""
+        raise NotImplementedError(
+            "update_word_progress moved to SRSService. Call SRSService.apply_review() instead."
         )
-        now = datetime.utcnow()
-
-        if row is None:
-            row = WordProgressModel(
-                user_id=user_id,
-                word=normalized,
-                error_count=0,
-                correct_streak=0,
-                ease_factor=_SM2_EASE_DEFAULT,
-                interval_days=_SM2_INITIAL_INTERVAL,
-                last_reviewed_at=now,
-                next_review_at=now,
-            )
-            self._db.add(row)
-            self._db.flush()
-
-        row.last_reviewed_at = now
-        if is_correct:
-            row.correct_streak += 1
-            row.ease_factor = row.ease_factor + _SM2_EASE_CORRECT_DELTA
-            row.interval_days = _sm2_next_interval(
-                interval_days=row.interval_days,
-                ease_factor=row.ease_factor,
-                correct_streak=row.correct_streak,
-            )
-            row.next_review_at = now + timedelta(days=row.interval_days)
-        else:
-            row.error_count += 1
-            row.correct_streak = 0
-            row.ease_factor = max(_SM2_EASE_MIN, row.ease_factor - _SM2_EASE_WRONG_DELTA)
-            row.interval_days = _SM2_INITIAL_INTERVAL
-            row.next_review_at = now
-        return row
 
     def ensure_word_progress(self, user_id: int, word: str) -> WordProgressModel | None:
         normalized = _normalize_valid_word(word)
         if not normalized:
             return None
-
-        row = self._db.scalar(
-            select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
-                WordProgressModel.word == normalized,
-            )
-        )
-        if row is not None:
-            return row
-
-        now = datetime.utcnow()
-        row = WordProgressModel(
-            user_id=user_id,
-            word=normalized,
-            error_count=0,
-            correct_streak=0,
-            ease_factor=_SM2_EASE_DEFAULT,
-            interval_days=_SM2_INITIAL_INTERVAL,
-            last_reviewed_at=now,
-            next_review_at=now,
-        )
-        self._db.add(row)
-        self._db.flush()
-        return row
+        return self.get_or_create_word_progress(user_id, normalized, now=datetime.utcnow())
 
     def get_word_progress(self, user_id: int, word: str) -> WordProgressModel | None:
         normalized = _normalize_valid_word(word)

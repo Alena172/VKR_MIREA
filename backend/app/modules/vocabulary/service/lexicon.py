@@ -29,10 +29,16 @@ def lookup_translation(*, repo: VocabularyRepository, english_lemma: str) -> str
 def ensure_seeded(*, db) -> int:
     from app.modules.vocabulary.repository import VocabularyRepository
     repo = VocabularyRepository(db)
-    return repo.seed_default_base_lexicon_entries(
+    created = repo.seed_default_base_lexicon_entries(
         entries=_load_default_base_lexicon_entries(),
     )
+    if created:
+        db.commit()
+    return created
 
 
 def import_entries(*, repo: VocabularyRepository, entries: list[tuple[str, str]]) -> int:
-    return repo.upsert_base_lexicon_entries(entries=entries)
+    updated = repo.upsert_base_lexicon_entries(entries=entries)
+    if updated:
+        repo._db.commit()
+    return updated

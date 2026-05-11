@@ -423,7 +423,7 @@ class VocabularyRepository:
             self._db.add(BaseLexiconEntryModel(english_lemma=normalized, russian_translation=translated))
             created += 1
         if created:
-            self._db.commit()
+            self._db.flush()
         return created
 
     def upsert_base_lexicon_entries(self, *, entries: list[tuple[str, str]]) -> int:
@@ -441,5 +441,5 @@ class VocabularyRepository:
                 existing.russian_translation = translated
                 updated += 1
         if updated:
-            self._db.commit()
+            self._db.flush()
         return updated

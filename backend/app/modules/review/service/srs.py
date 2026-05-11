@@ -16,6 +16,21 @@ from app.modules.review.models import (
 from app.modules.review.repository import ReviewRepository, _normalize_valid_word
 from app.modules.review.service.scoring import RecommendationScoringService
 
+_SM2_EASE_DEFAULT = 2.5
+_SM2_EASE_MIN = 1.3
+_SM2_EASE_CORRECT_DELTA = 0.1
+_SM2_EASE_WRONG_DELTA = 0.2
+_SM2_INITIAL_INTERVAL = 1
+_SM2_SECOND_INTERVAL = 3
+
+
+def _sm2_next_interval(*, interval_days: int, ease_factor: float, correct_streak: int) -> int:
+    if correct_streak == 1:
+        return _SM2_INITIAL_INTERVAL
+    if correct_streak == 2:
+        return _SM2_SECOND_INTERVAL
+    return max(1, round(interval_days * ease_factor))
+
 if TYPE_CHECKING:
     from app.modules.training.service.submission import SubmissionService
     from app.modules.vocabulary.service.items import VocabularyService
@@ -88,7 +103,7 @@ class SRSService:
         normalized = _normalize_valid_word(payload.word)
         if normalized is None:
             raise HTTPException(status_code=400, detail="Word must be a single english token")
-        progress = self._repo.update_word_progress(user_id=user_id, word=normalized, is_correct=payload.is_correct)
+        progress = self.apply_review(user_id=user_id, word=normalized, is_correct=payload.is_correct)
         return progress
 
     def submit_review_queue_bulk(
@@ -106,7 +121,7 @@ class SRSService:
             normalized = _normalize_valid_word(item.word)
             if normalized is None:
                 continue
-            progress = self._repo.update_word_progress(user_id=user_id, word=normalized, is_correct=item.is_correct)
+            progress = self.apply_review(user_id=user_id, word=normalized, is_correct=item.is_correct)
             if progress is not None:
                 updated_rows.append(progress)
         return {"user_id": user_id, "updated": updated_rows}
@@ -261,6 +276,41 @@ class SRSService:
         )
         return {"user_id": target, "total_sessions": total_sessions, "avg_accuracy": avg_accuracy}
 
+    def apply_review(self, *, user_id: int, word: str, is_correct: bool) -> WordProgressModel | None:
+        normalized = _normalize_valid_word(word)
+        if not normalized:
+            return None
+        now = datetime.utcnow()
+        row = self._repo.get_or_create_word_progress(user_id, normalized, now=now)
+
+        if is_correct:
+            new_streak = row.correct_streak + 1
+            new_ease = row.ease_factor + _SM2_EASE_CORRECT_DELTA
+            new_interval = _sm2_next_interval(
+                interval_days=row.interval_days,
+                ease_factor=new_ease,
+                correct_streak=new_streak,
+            )
+            return self._repo.save_word_progress(
+                row,
+                error_count=row.error_count,
+                correct_streak=new_streak,
+                ease_factor=new_ease,
+                interval_days=new_interval,
+                last_reviewed_at=now,
+                next_review_at=now + timedelta(days=new_interval),
+            )
+        else:
+            return self._repo.save_word_progress(
+                row,
+                error_count=row.error_count + 1,
+                correct_streak=0,
+                ease_factor=max(_SM2_EASE_MIN, row.ease_factor - _SM2_EASE_WRONG_DELTA),
+                interval_days=_SM2_INITIAL_INTERVAL,
+                last_reviewed_at=now,
+                next_review_at=now,
+            )
+
     def ensure_word_progress_entry(self, *, user_id: int, word: str) -> bool:
         return self._repo.ensure_word_progress(user_id=user_id, word=word) is not None
 
@@ -273,7 +323,7 @@ class SRSService:
         updated_words: list[str] = []
         for update in updates:
             if update.word:
-                progress = self._repo.update_word_progress(
+                progress = self.apply_review(
                     user_id=user_id, word=update.word, is_correct=update.is_correct,
                 )
                 if progress is not None:
