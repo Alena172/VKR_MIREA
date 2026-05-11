@@ -5,6 +5,7 @@ from collections import deque
 
 from app.core.config import get_settings
 from app.modules.ai.chat_client import AIChatClient
+from app.modules.ai.libretranslate_client import LibreTranslateClient
 from app.modules.ai.schemas import (
     AIStatusResponse,
     ExplainErrorRequest,
@@ -34,12 +35,22 @@ class AIFacade:
             max_retries=max(0, int(settings.ai_max_retries)),
         )
         self._recent_sentences: dict[str, deque[str]] = {}
+        libretranslate_client = (
+            LibreTranslateClient(
+                base_url=settings.libretranslate_url,
+                api_key=settings.libretranslate_api_key,
+                timeout_seconds=settings.libretranslate_timeout_seconds,
+            )
+            if settings.libretranslate_enabled
+            else None
+        )
         self._translation_service = TranslationService(
             model=self._chat_client.model,
             translation_strict_remote=settings.translation_strict_remote,
             remote_enabled=self._chat_client.remote_enabled,
             chat_complete_async=self._chat_completion_async,
             provider_unavailable_error=AIProviderUnavailableError,
+            libretranslate_client=libretranslate_client,
         )
         self._definition_service = DefinitionService(
             chat_complete_async=self._chat_completion_async,

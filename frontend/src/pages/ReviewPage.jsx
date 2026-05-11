@@ -208,28 +208,36 @@ export default function ReviewPage({ onError }) {
               </div>
             </div>
 
-            {plan ? (
-              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="chip">Сейчас к повторению: {plan.due_count}</span>
-                  <span className="chip">На ближайшее время: {plan.upcoming_count}</span>
-                  {plan.recommended_words.length ? <span className="chip">Фокус: {plan.recommended_words.slice(0, 3).join(", ")}</span> : null}
-                </div>
+            {plan ? (() => {
+              const dueItems = plan.due_now ?? [];
+              // Из "upcoming" исключаем слова, которые ещё ни разу не повторялись
+              const upcomingItems = (plan.upcoming ?? []).filter(
+                (item) => item.correct_streak > 0 || item.error_count > 0,
+              );
+              if (dueItems.length === 0 && upcomingItems.length === 0) return null;
+              return (
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="chip">Сейчас к повторению: {dueItems.length}</span>
+                    <span className="chip">На ближайшее время: {upcomingItems.length}</span>
+                    {plan.recommended_words.length ? <span className="chip">Фокус: {plan.recommended_words.slice(0, 3).join(", ")}</span> : null}
+                  </div>
 
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <ReviewPlanColumn
-                    title="Повторить сейчас"
-                    emptyText="Сейчас нет срочных слов."
-                    items={plan.due_now}
-                  />
-                  <ReviewPlanColumn
-                    title="Скоро подойдут"
-                    emptyText="В ближайшие часы новых слов не ожидается."
-                    items={plan.upcoming}
-                  />
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <ReviewPlanColumn
+                      title="Повторить сейчас"
+                      emptyText="Сейчас нет срочных слов."
+                      items={dueItems}
+                    />
+                    <ReviewPlanColumn
+                      title="Скоро подойдут"
+                      emptyText="В ближайшие часы повторений не ожидается."
+                      items={upcomingItems}
+                    />
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              );
+            })() : null}
 
             {interestWords.length ? (
               <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/50 p-3">
@@ -281,7 +289,7 @@ export default function ReviewPage({ onError }) {
                 Помню: <strong className="text-green-700">{sessionCorrect}</strong> · Не помню:{" "}
                 <strong className="text-red-700">{sessionIncorrect}</strong>
               </span>
-              <button type="button" className="btn-secondary" onClick={resetSession}>
+              <button type="button" className="btn-secondary" onClick={() => { resetSession(); loadReviewMeta(); }}>
                 Завершить
               </button>
             </div>
@@ -424,7 +432,7 @@ export default function ReviewPage({ onError }) {
                   <button type="button" className="btn-primary" onClick={() => startSession(sessionMode)}>
                     Повторить режим
                   </button>
-                  <button type="button" className="btn-secondary" onClick={resetSession}>
+                  <button type="button" className="btn-secondary" onClick={() => { resetSession(); loadReviewMeta(); }}>
                     Выйти
                   </button>
                 </div>

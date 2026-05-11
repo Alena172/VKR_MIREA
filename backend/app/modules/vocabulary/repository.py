@@ -331,6 +331,27 @@ class VocabularyRepository:
                 result[lemma] = translation
         return result
 
+    def get_all_translations_map(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
+        """Возвращает все переводы слова через ' / ' (для карточек с омонимами)."""
+        normalized = [l.strip().lower() for l in english_lemmas if l and l.strip()]
+        if not normalized:
+            return {}
+        rows = self._db.execute(
+            select(DictionaryEntryModel.english_lemma, DictionaryEntryModel.russian_translation)
+            .join(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
+            .where(
+                UserVocabularyModel.user_id == user_id,
+                DictionaryEntryModel.english_lemma.in_(normalized),
+            )
+            .order_by(UserVocabularyModel.added_at.desc())
+        ).all()
+        seen: dict[str, list[str]] = {}
+        for lemma, translation in rows:
+            seen.setdefault(lemma, [])
+            if translation not in seen[lemma]:
+                seen[lemma].append(translation)
+        return {lemma: " / ".join(translations) for lemma, translations in seen.items()}
+
     def get_definition_map(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
         normalized = [l.strip().lower() for l in english_lemmas if l and l.strip()]
         if not normalized:

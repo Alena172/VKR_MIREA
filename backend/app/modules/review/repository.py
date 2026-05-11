@@ -32,20 +32,34 @@ class ReviewRepository:
         user_id: int,
         word: str,
         *,
+        vocabulary_id: int | None = None,
         now: datetime,
     ) -> WordProgressModel:
-        """Возвращает существующую запись или создаёт новую с дефолтными значениями SM-2."""
-        row = self._db.scalar(
-            select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
-                WordProgressModel.word == word,
+        """Возвращает существующую запись или создаёт новую с дефолтными значениями SM-2.
+
+        Поиск: сначала по vocabulary_id (если задан), иначе по (user_id, word).
+        """
+        if vocabulary_id is not None:
+            row = self._db.scalar(
+                select(WordProgressModel).where(
+                    WordProgressModel.user_id == user_id,
+                    WordProgressModel.vocabulary_id == vocabulary_id,
+                )
             )
-        )
+        else:
+            row = self._db.scalar(
+                select(WordProgressModel).where(
+                    WordProgressModel.user_id == user_id,
+                    WordProgressModel.word == word,
+                    WordProgressModel.vocabulary_id.is_(None),
+                )
+            )
         if row is not None:
             return row
         row = WordProgressModel(
             user_id=user_id,
             word=word,
+            vocabulary_id=vocabulary_id,
             error_count=0,
             correct_streak=0,
             ease_factor=2.5,
@@ -68,7 +82,6 @@ class ReviewRepository:
         last_reviewed_at: datetime,
         next_review_at: datetime,
     ) -> WordProgressModel:
-        """Сохраняет вычисленное состояние SRS в БД."""
         row.error_count = error_count
         row.correct_streak = correct_streak
         row.ease_factor = ease_factor
@@ -78,22 +91,29 @@ class ReviewRepository:
         self._db.flush()
         return row
 
-    def update_word_progress(
+    def ensure_word_progress(
         self,
         user_id: int,
         word: str,
-        is_correct: bool,
+        *,
+        vocabulary_id: int | None = None,
     ) -> WordProgressModel | None:
-        """Устаревший метод-делегат: вызывается только из SRSService."""
-        raise NotImplementedError(
-            "update_word_progress moved to SRSService. Call SRSService.apply_review() instead."
-        )
-
-    def ensure_word_progress(self, user_id: int, word: str) -> WordProgressModel | None:
         normalized = _normalize_valid_word(word)
         if not normalized:
             return None
-        return self.get_or_create_word_progress(user_id, normalized, now=datetime.utcnow())
+        return self.get_or_create_word_progress(
+            user_id, normalized, vocabulary_id=vocabulary_id, now=datetime.utcnow()
+        )
+
+    def get_word_progress_by_vocabulary_id(
+        self, user_id: int, vocabulary_id: int
+    ) -> WordProgressModel | None:
+        return self._db.scalar(
+            select(WordProgressModel).where(
+                WordProgressModel.user_id == user_id,
+                WordProgressModel.vocabulary_id == vocabulary_id,
+            )
+        )
 
     def get_word_progress(self, user_id: int, word: str) -> WordProgressModel | None:
         normalized = _normalize_valid_word(word)
@@ -107,6 +127,7 @@ class ReviewRepository:
         )
 
     def get_word_progress_map(self, user_id: int, words: list[str]) -> dict[str, WordProgressModel]:
+        """Возвращает map word→первая запись прогресса (для обратной совместимости)."""
         normalized = [w for w in (_normalize_valid_word(item) for item in words) if w]
         if not normalized:
             return {}
@@ -116,7 +137,24 @@ class ReviewRepository:
                 WordProgressModel.word.in_(normalized),
             )
         ))
-        return {row.word: row for row in rows}
+        result: dict[str, WordProgressModel] = {}
+        for row in rows:
+            if row.word not in result:
+                result[row.word] = row
+        return result
+
+    def get_progress_map_by_vocabulary_ids(
+        self, user_id: int, vocabulary_ids: list[int]
+    ) -> dict[int, WordProgressModel]:
+        if not vocabulary_ids:
+            return {}
+        rows = list(self._db.scalars(
+            select(WordProgressModel).where(
+                WordProgressModel.user_id == user_id,
+                WordProgressModel.vocabulary_id.in_(vocabulary_ids),
+            )
+        ))
+        return {row.vocabulary_id: row for row in rows if row.vocabulary_id is not None}
 
     def list_due_word_progress(self, user_id: int, limit: int) -> list[WordProgressModel]:
         now = datetime.utcnow()
@@ -189,7 +227,6 @@ class ReviewRepository:
         normalized = _normalize_valid_word(word)
         if not normalized:
             return False
-
         row = self._db.scalar(
             select(WordProgressModel).where(
                 WordProgressModel.user_id == user_id,
@@ -198,7 +235,19 @@ class ReviewRepository:
         )
         if row is None:
             return False
+        self._db.delete(row)
+        self._db.flush()
+        return True
 
+    def delete_word_progress_by_vocabulary_id(self, user_id: int, vocabulary_id: int) -> bool:
+        row = self._db.scalar(
+            select(WordProgressModel).where(
+                WordProgressModel.user_id == user_id,
+                WordProgressModel.vocabulary_id == vocabulary_id,
+            )
+        )
+        if row is None:
+            return False
         self._db.delete(row)
         self._db.flush()
         return True

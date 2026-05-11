@@ -22,7 +22,7 @@ const SORT_OPTIONS = [
 ];
 
 function getVocabularyState(item, progress) {
-  if (!progress) {
+  if (!progress || (progress.correct_streak === 0 && progress.error_count === 0)) {
     return {
       key: "new",
       label: "Новое",
@@ -468,17 +468,8 @@ export default function VocabularyPage({ onError }) {
                     ) : null}
                     {item.source_sentence ? <div className="muted mt-2 text-sm">{item.source_sentence}</div> : null}
                   </div>
-                  <div className="flex w-32 shrink-0 flex-col gap-2 self-start">
-                    <button className="btn-primary !px-3.5 !py-2 !text-sm" type="button" onClick={() => openTrainingForWord(item)}>
-                      В тренировку
-                    </button>
-                    <button className="btn-secondary !px-3.5 !py-2 !text-sm" type="button" onClick={() => openReviewForWord(item, progress)}>
-                      В повторение
-                    </button>
-                    <button className="btn-secondary !px-3.5 !py-2 !text-sm" type="button" onClick={() => toggleAnchors(item)}>
-                      {anchorsLoading ? "Загрузка..." : relatedAnchors ? "Скрыть связи" : "Связанные"}
-                    </button>
-                    <button className="btn-secondary !px-3.5 !py-2 !text-sm" type="button" onClick={() => startEdit(item)}>Редактировать</button>
+                  <div className="flex shrink-0 flex-col gap-2 self-start">
+                    <button className="btn-primary !px-3.5 !py-2 !text-sm" type="button" onClick={() => startEdit(item)}>Редактировать</button>
                     <button className="btn-danger !px-3.5 !py-2 !text-sm" type="button" onClick={() => deleteItem(item.id)}>Удалить</button>
                   </div>
                 </div>

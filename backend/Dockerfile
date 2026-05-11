@@ -10,7 +10,7 @@ COPY app /app/backend/app
 COPY alembic /app/backend/alembic
 COPY alembic.ini /app/backend/alembic.ini
 
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --upgrade pip setuptools && pip install --no-cache-dir -e .
 
 EXPOSE 8000
 

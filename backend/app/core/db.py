@@ -19,10 +19,14 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Зависимость FastAPI: открывает сессию на время запроса и закрывает ее после."""
+    """Зависимость FastAPI: открывает сессию на время запроса, коммитит при успехе."""
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

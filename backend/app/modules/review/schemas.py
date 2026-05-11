@@ -21,11 +21,13 @@ class ReviewQueueResponse(BaseModel):
 
 class ReviewQueueSubmitRequest(BaseModel):
     word: str = Field(min_length=1, max_length=200)
+    vocabulary_id: int | None = None
     is_correct: bool
 
 
 class ReviewQueueBulkSubmitItem(BaseModel):
     word: str = Field(min_length=1, max_length=200)
+    vocabulary_id: int | None = None
     is_correct: bool
 
 
@@ -72,6 +74,7 @@ class ReviewSessionStartRequest(BaseModel):
 
 class ReviewSessionItem(BaseModel):
     word: str
+    vocabulary_id: int | None = None
     russian_translation: str | None = None
     context_definition: str | None = None
     next_review_at: datetime | None = None

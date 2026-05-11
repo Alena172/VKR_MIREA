@@ -128,6 +128,9 @@ class VocabularyService:
     def get_translation_map_for_user(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
         return self._repo.get_translation_map(user_id=user_id, english_lemmas=english_lemmas)
 
+    def get_all_translations_map_for_user(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
+        return self._repo.get_all_translations_map(user_id=user_id, english_lemmas=english_lemmas)
+
     def get_definition_map_for_user(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
         return self._repo.get_definition_map(user_id=user_id, english_lemmas=english_lemmas)
 
@@ -228,6 +231,7 @@ class VocabularyService:
                 source_url=normalized_url,
             )
 
+        self._srs().ensure_word_progress_entry(word=normalized_lemma, user_id=user_id, vocabulary_id=uv.id)
         return _to_dto(uv, entry)
 
     def update_item(
@@ -358,7 +362,7 @@ class VocabularyService:
                     source_url=normalized_url,
                 )
 
-            self._srs().ensure_word_progress_entry(word=english_lemma, user_id=user_id)
+            self._srs().ensure_word_progress_entry(word=english_lemma, user_id=user_id, vocabulary_id=uv.id)
             self._graph().register_vocabulary_semantics(
                 user_id=user_id,
                 english_lemma=english_lemma,

@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 class WordProgressUpdate:
     word: str
     is_correct: bool
+    vocabulary_id: int | None = None
 
 
 def _dedupe_keep_order(values: list[str]) -> list[str]:
@@ -103,7 +104,12 @@ class SRSService:
         normalized = _normalize_valid_word(payload.word)
         if normalized is None:
             raise HTTPException(status_code=400, detail="Word must be a single english token")
-        progress = self.apply_review(user_id=user_id, word=normalized, is_correct=payload.is_correct)
+        progress = self.apply_review(
+            user_id=user_id,
+            word=normalized,
+            is_correct=payload.is_correct,
+            vocabulary_id=payload.vocabulary_id,
+        )
         return progress
 
     def submit_review_queue_bulk(
@@ -121,7 +127,12 @@ class SRSService:
             normalized = _normalize_valid_word(item.word)
             if normalized is None:
                 continue
-            progress = self.apply_review(user_id=user_id, word=normalized, is_correct=item.is_correct)
+            progress = self.apply_review(
+                user_id=user_id,
+                word=normalized,
+                is_correct=item.is_correct,
+                vocabulary_id=getattr(item, "vocabulary_id", None),
+            )
             if progress is not None:
                 updated_rows.append(progress)
         return {"user_id": user_id, "updated": updated_rows}
@@ -140,21 +151,25 @@ class SRSService:
 
     def _build_srs_review_session(self, *, user_id: int, size: int) -> dict:
         due_rows = self._repo.list_due_word_progress(user_id=user_id, limit=size * 5)
-        words = _dedupe_keep_order([row.word for row in due_rows if _normalize_valid_word(row.word)])[:size]
-        row_map = {row.word: row for row in due_rows}
-        items = self._build_review_session_items(user_id=user_id, words=words, progress_map=row_map)
+        # Каждая due_row — отдельная карточка (свой vocabulary_id)
+        due_rows = due_rows[:size]
+        items = self._build_review_session_items_from_progress(user_id=user_id, rows=due_rows)
         return {"user_id": user_id, "mode": "srs", "total_items": len(items), "items": items}
 
     def _build_random_review_session(self, *, user_id: int, size: int) -> dict:
         vocabulary_items = self._vocab().list_user_items(user_id=user_id)
-        unique_words = _dedupe_keep_order(
-            [item.english_lemma for item in vocabulary_items if _normalize_valid_word(item.english_lemma)]
-        )
-        if not unique_words:
+        valid_items = [
+            item for item in vocabulary_items
+            if _normalize_valid_word(item.english_lemma)
+        ]
+        if not valid_items:
             return {"user_id": user_id, "mode": "random", "total_items": 0, "items": []}
-        random_words = secrets.SystemRandom().sample(unique_words, k=min(size, len(unique_words)))
-        progress_map = self._repo.get_word_progress_map(user_id=user_id, words=random_words)
-        items = self._build_review_session_items(user_id=user_id, words=random_words, progress_map=progress_map)
+        sampled = secrets.SystemRandom().sample(valid_items, k=min(size, len(valid_items)))
+        vocab_ids = [item.id for item in sampled]
+        progress_map = self._repo.get_progress_map_by_vocabulary_ids(user_id=user_id, vocabulary_ids=vocab_ids)
+        items = self._build_review_session_items_from_vocab(
+            user_id=user_id, vocab_items=sampled, progress_map=progress_map
+        )
         return {"user_id": user_id, "mode": "random", "total_items": len(items), "items": items}
 
     def list_word_progress(
@@ -275,12 +290,21 @@ class SRSService:
         )
         return {"user_id": target, "total_sessions": total_sessions, "avg_accuracy": avg_accuracy}
 
-    def apply_review(self, *, user_id: int, word: str, is_correct: bool) -> WordProgressModel | None:
+    def apply_review(
+        self,
+        *,
+        user_id: int,
+        word: str,
+        is_correct: bool,
+        vocabulary_id: int | None = None,
+    ) -> WordProgressModel | None:
         normalized = _normalize_valid_word(word)
         if not normalized:
             return None
         now = datetime.utcnow()
-        row = self._repo.get_or_create_word_progress(user_id, normalized, now=now)
+        row = self._repo.get_or_create_word_progress(
+            user_id, normalized, vocabulary_id=vocabulary_id, now=now
+        )
 
         if is_correct:
             new_streak = row.correct_streak + 1
@@ -310,8 +334,12 @@ class SRSService:
                 next_review_at=now,
             )
 
-    def ensure_word_progress_entry(self, *, user_id: int, word: str) -> bool:
-        return self._repo.ensure_word_progress(user_id=user_id, word=word) is not None
+    def ensure_word_progress_entry(
+        self, *, user_id: int, word: str, vocabulary_id: int | None = None
+    ) -> bool:
+        return self._repo.ensure_word_progress(
+            user_id=user_id, word=word, vocabulary_id=vocabulary_id
+        ) is not None
 
     def update_learning_progress(
         self,
@@ -323,7 +351,10 @@ class SRSService:
         for update in updates:
             if update.word:
                 progress = self.apply_review(
-                    user_id=user_id, word=update.word, is_correct=update.is_correct,
+                    user_id=user_id,
+                    word=update.word,
+                    is_correct=update.is_correct,
+                    vocabulary_id=update.vocabulary_id,
                 )
                 if progress is not None:
                     updated_words.append(progress.word)
@@ -436,27 +467,79 @@ class SRSService:
             if _normalize_valid_word(row.word) is not None
         ]
 
-    def _build_review_session_items(
+    def _build_review_session_items_from_progress(
         self,
         *,
         user_id: int,
-        words: list[str],
-        progress_map: dict[str, WordProgressModel],
+        rows: list[WordProgressModel],
     ) -> list[dict]:
-        translation_map = self._vocab().get_translation_map_for_user(user_id=user_id, english_lemmas=words)
-        definition_map = self._vocab().get_definition_map_for_user(user_id=user_id, english_lemmas=words)
+        """SRS mode: build session items from existing word_progress rows.
+
+        Fetches per-card translation via vocabulary_id when available.
+        """
+        vocab_ids = [r.vocabulary_id for r in rows if r.vocabulary_id is not None]
+        vocab_map = (
+            {item.id: item for item in self._vocab().list_user_items(user_id=user_id)}
+            if vocab_ids
+            else {}
+        )
+        word_translation_map: dict[str, str] = {}
+        words_without_vid = [r.word for r in rows if r.vocabulary_id is None]
+        if words_without_vid:
+            word_translation_map = self._vocab().get_translation_map_for_user(
+                user_id=user_id, english_lemmas=words_without_vid
+            )
+        items = []
+        for row in rows:
+            if _normalize_valid_word(row.word) is None:
+                continue
+            if row.vocabulary_id is not None and row.vocabulary_id in vocab_map:
+                vocab_item = vocab_map[row.vocabulary_id]
+                translation = vocab_item.russian_translation
+                definition = vocab_item.context_definition_ru
+            else:
+                translation = word_translation_map.get(row.word)
+                definition = None
+            items.append({
+                "word": row.word,
+                "vocabulary_id": row.vocabulary_id,
+                "russian_translation": translation,
+                "context_definition": definition,
+                "next_review_at": row.next_review_at,
+                "error_count": row.error_count,
+                "correct_streak": row.correct_streak,
+                "status": build_review_status(
+                    error_count=row.error_count,
+                    correct_streak=row.correct_streak,
+                    next_review_at=row.next_review_at,
+                    ease_factor=row.ease_factor,
+                ).status,
+            })
+        return items
+
+    def _build_review_session_items_from_vocab(
+        self,
+        *,
+        user_id: int,
+        vocab_items: list,
+        progress_map: dict[int, WordProgressModel],
+    ) -> list[dict]:
+        """Random mode: build session items from vocabulary entries with their own progress."""
         now = datetime.utcnow()
         items = []
-        for word in words:
-            p = progress_map.get(word)
+        for vocab_item in vocab_items:
+            if _normalize_valid_word(vocab_item.english_lemma) is None:
+                continue
+            p = progress_map.get(vocab_item.id)
             error_count = p.error_count if p else 0
             correct_streak = p.correct_streak if p else 0
-            ease_factor = p.ease_factor if p else 2.5
+            ease_factor = p.ease_factor if p else _SM2_EASE_DEFAULT
             next_review_at = p.next_review_at if p else now
             items.append({
-                "word": word,
-                "russian_translation": translation_map.get(word),
-                "context_definition": definition_map.get(word),
+                "word": vocab_item.english_lemma,
+                "vocabulary_id": vocab_item.id,
+                "russian_translation": vocab_item.russian_translation,
+                "context_definition": getattr(vocab_item, "context_definition_ru", None),
                 "next_review_at": next_review_at,
                 "error_count": error_count,
                 "correct_streak": correct_streak,

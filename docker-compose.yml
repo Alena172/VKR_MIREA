@@ -41,6 +41,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      libretranslate:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 5s
@@ -58,6 +60,8 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       REDIS_URL: redis://redis:6379/0
+      LIBRETRANSLATE_URL: http://libretranslate:5000
+      LIBRETRANSLATE_ENABLED: "true"
     ports:
       - "8000:8000"
 
@@ -100,6 +104,21 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
     ports:
       - "5555:5555"
+
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    restart: unless-stopped
+    environment:
+      LT_LOAD_ONLY: "en,ru"
+      LT_DISABLE_WEB_UI: "true"
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/languages')\" || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
 
   frontend:
     build:

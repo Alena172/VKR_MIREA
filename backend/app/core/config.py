@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/1"
+    # LibreTranslate
+    libretranslate_url: str = "http://localhost:5000"
+    libretranslate_api_key: str = ""
+    libretranslate_timeout_seconds: float = 10.0
+    libretranslate_enabled: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

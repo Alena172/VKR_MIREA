@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 
 from app.modules.ai.facade import ai_facade as ai_service
+from app.modules.ai.free_dictionary_client import lookup_definition
 from app.modules.vocabulary.repository import VocabularyRepository
 
 _GENERIC_TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'-]*")
@@ -85,6 +86,11 @@ async def resolve_context_definition(
     source_sentence: str | None,
     cefr_level: str | None = None,
 ) -> DefinitionResolution:
+    # Фразы (несколько слов) — определение не генерируем
+    if " " in english_lemma.strip():
+        return DefinitionResolution(context_definition=None, source="skipped_phrase", confidence="high")
+
+    # 1. Переиспользуем уже сохранённое определение из БД
     reusable = find_reusable_definition(
         repo=repo,
         english_lemma=english_lemma,
@@ -94,6 +100,20 @@ async def resolve_context_definition(
     if reusable is not None:
         return reusable
 
+    # 2. Free Dictionary API (бесплатно, без токенов)
+    dict_result = await lookup_definition(
+        english_lemma,
+        russian_translation=russian_translation,
+        source_sentence=source_sentence,
+    )
+    if dict_result is not None:
+        return DefinitionResolution(
+            context_definition=dict_result.definition,
+            source="free_dictionary_api",
+            confidence=_classify_confidence(dict_result.score),
+        )
+
+    # 3. AI — для многозначных слов с низким score и редких слов
     definition = await ai_service.generate_context_definition_async(
         english_lemma=english_lemma,
         russian_translation=russian_translation,

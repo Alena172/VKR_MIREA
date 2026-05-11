@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import Counter
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
+
+import pymorphy3 as pymorphy2
+
+_log = logging.getLogger(__name__)
 
 from app.modules.ai.schemas import (
     TranslateGlossaryItem,
     TranslateWithContextRequest,
     TranslateWithContextResponse,
 )
+
+if TYPE_CHECKING:
+    from app.modules.ai.libretranslate_client import LibreTranslateClient
+
+_morph = pymorphy2.MorphAnalyzer()
 
 
 class TranslationService:
@@ -71,12 +82,14 @@ class TranslationService:
         remote_enabled: Callable[[], bool],
         chat_complete_async: Callable[..., Awaitable[str | None]],
         provider_unavailable_error: type[Exception],
+        libretranslate_client: LibreTranslateClient | None = None,
     ) -> None:
         self._model = model
         self._translation_strict_remote = translation_strict_remote
         self._remote_enabled = remote_enabled
         self._chat_complete_async = chat_complete_async
         self._provider_unavailable_error = provider_unavailable_error
+        self._libretranslate = libretranslate_client
 
     def _tokenize(self, text: str) -> list[str]:
         return [part for part in re.split(r"[^a-zA-Z']+", text.lower()) if part]
@@ -270,6 +283,40 @@ class TranslationService:
             provider_note=f"local_heuristic EN->RU.{context_note}{level_note}",
         )
 
+    def _lemmatize_ru(self, word: str) -> str:
+        parsed = _morph.parse(word.strip())
+        if not parsed:
+            return word
+        return parsed[0].normal_form
+
+    def _all_normal_forms(self, word: str) -> set[str]:
+        parsed = _morph.parse(word.strip())
+        return {p.normal_form for p in parsed} if parsed else {word.lower()}
+
+    def _is_single_word(self, text: str) -> bool:
+        return len(text.strip().split()) == 1
+
+    async def _libretranslate_word(
+        self,
+        word: str,
+        source_context: str | None = None,
+    ) -> str | None:
+        if self._libretranslate is None:
+            return None
+        if source_context and source_context.strip():
+            raw = await self._libretranslate.translate_word_in_context(
+                word=word,
+                sentence=source_context,
+                all_normal_forms_fn=self._all_normal_forms,
+            )
+            if raw:
+                return self._lemmatize_ru(raw)
+            return None
+        raw = await self._libretranslate.translate_word(word)
+        if raw:
+            return self._lemmatize_ru(raw)
+        return None
+
     async def translate_with_context_async(
         self,
         payload: TranslateWithContextRequest,
@@ -279,6 +326,27 @@ class TranslationService:
                 "Translation provider is unavailable. "
                 "AI-провайдер недоступен. Проверь AI_BASE_URL и AI_MODEL в .env."
             )
+
+        # Уровень LibreTranslate: пробуем до AI для слов и фраз.
+        # Глоссарий пользователя проверяется выше — если есть совпадение, сюда не доходим.
+        if self._libretranslate is not None:
+            if self._is_single_word(payload.text):
+                lt_result = await self._libretranslate_word(payload.text, payload.source_context)
+                if lt_result:
+                    note = "libretranslate:word_in_context" if payload.source_context else "libretranslate:word"
+                    _log.info("translate | provider=%-30s | word=%-20s | result=%s", note, payload.text, lt_result)
+                    return TranslateWithContextResponse(
+                        translated_text=lt_result,
+                        provider_note=note,
+                    )
+            else:
+                lt_result = await self._libretranslate.translate_word(payload.text)
+                if lt_result:
+                    _log.info("translate | provider=%-30s | word=%-20s | result=%s", "libretranslate:phrase", payload.text, lt_result[:40])
+                    return TranslateWithContextResponse(
+                        translated_text=lt_result,
+                        provider_note="libretranslate:phrase",
+                    )
 
         glossary_json = json.dumps(
             [
@@ -291,32 +359,39 @@ class TranslationService:
             ],
             ensure_ascii=False,
         )
+        is_single = self._is_single_word(payload.text)
         content = await self._chat_complete_async(
             system_prompt=(
-                "Ты переводчик EN->RU для русскоязычного студента английского. "
-                "Всегда учитывай контекст и пользовательский глоссарий. "
-                "Если термин есть в глоссарии и подходит по контексту, используй перевод из глоссария. "
-                "Верни только итоговый перевод на русском без комментариев. "
-                "Если входной текст это одно слово или короткая фраза, верни только перевод этого слова/фразы, "
-                "а не полное предложение."
+                "Ты переводчик EN→RU. "
+                "ФОРМАТ ОТВЕТА — СТРОГО ОДНО СЛОВО (начальная форма: инфинитив или именительный падеж), "
+                "если запрос — одно слово. "
+                "Если запрос — фраза, верни только перевод фразы без лишних слов. "
+                "Запрещено: предложения, пояснения, скобки, транслитерация, исходный текст. "
+                "Используй контекст только для выбора значения, не для расширения ответа. "
+                "Если слово есть в глоссарии и подходит — используй его перевод."
             ),
             user_prompt=(
-                f"Текст: {payload.text}\n"
-                f"Уровень CEFR: {payload.cefr_level or 'unknown'}\n"
-                f"Контекст: {payload.source_context or 'none'}\n"
-                f"Глоссарий пользователя (JSON): {glossary_json}\n"
-                "Формат ответа: только перевод, без пояснений и без исходного текста."
+                f"{'Слово' if is_single else 'Фраза'}: {payload.text}\n"
+                f"Предложение-контекст: {payload.source_context or '—'}\n"
+                f"CEFR: {payload.cefr_level or 'unknown'}\n"
+                f"Глоссарий: {glossary_json}\n"
+                f"Переведи {'слово' if is_single else 'фразу'} на русский язык."
+                + (" Ответ — ОДНО слово:" if is_single else " Ответ — только перевод фразы:")
             ),
             temperature=0.0,
             max_tokens=220,
         )
         if content:
+            note = self._build_remote_provider_note(payload)
+            _log.info("translate | provider=%-30s | word=%-20s | result=%s", note, payload.text, content.strip()[:40])
             return TranslateWithContextResponse(
-                translated_text=content.strip().strip('"'),
-                provider_note=self._build_remote_provider_note(payload),
+                translated_text=content.strip().strip('"').lower(),
+                provider_note=note,
             )
         if self._translation_strict_remote:
             raise self._provider_unavailable_error(
                 "Translation provider request failed. Check AI_BASE_URL, AI_MODEL, AI_API_KEY and provider availability."
             )
-        return self.fallback_translate_with_context(payload)
+        fallback = self.fallback_translate_with_context(payload)
+        _log.info("translate | provider=%-30s | word=%-20s | result=%s", fallback.provider_note, payload.text, fallback.translated_text[:40])
+        return fallback

@@ -117,10 +117,14 @@ export function useReviewSession({ onError }) {
     onError("");
     const controller = registerController();
     try {
-      const submitPromise =
-        sessionMode === "srs"
-          ? api.reviewQueueSubmit({ word: currentItem.word, is_correct: isCorrect }, { signal: controller.signal })
-          : Promise.resolve();
+      const submitPromise = api.reviewQueueSubmit(
+        {
+          word: currentItem.word,
+          vocabulary_id: currentItem.vocabulary_id ?? null,
+          is_correct: isCorrect,
+        },
+        { signal: controller.signal },
+      );
 
       setIsFlipped(false);
       await Promise.all([submitPromise, wait(FLIP_ANIMATION_MS)]);
