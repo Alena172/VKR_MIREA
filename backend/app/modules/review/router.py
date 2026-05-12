@@ -21,9 +21,29 @@ from app.modules.review.schemas import (
     WordProgressRead,
 )
 from app.modules.review.service.srs import SRSService, get_srs_service
+from app.modules.review.models import WordProgressModel
 from app.modules.vocabulary.service.items import VocabularyService
 
 router = APIRouter(tags=["review"])
+
+
+def _progress_to_read(progress: WordProgressModel, vocab_map: dict) -> WordProgressRead:
+    vocab_item = vocab_map.get(progress.vocabulary_id) if progress.vocabulary_id is not None else None
+    return WordProgressRead(
+        user_id=progress.user_id,
+        word=progress.word,
+        vocabulary_id=progress.vocabulary_id,
+        russian_translation=vocab_item.russian_translation if vocab_item is not None else None,
+        error_count=progress.error_count,
+        correct_streak=progress.correct_streak,
+        next_review_at=progress.next_review_at,
+        status=build_review_status(
+            error_count=progress.error_count,
+            correct_streak=progress.correct_streak,
+            next_review_at=progress.next_review_at,
+            ease_factor=progress.ease_factor,
+        ).status,
+    )
 
 
 class UserContextRead(BaseModel):
@@ -70,21 +90,8 @@ def submit_review_queue_item_me(
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
     progress = srs_service.submit_review_queue_item(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
-    translation_map = vocab_service.get_translation_map_for_user(user_id=current_user_id, english_lemmas=[progress.word])
-    return WordProgressRead(
-        user_id=progress.user_id,
-        word=progress.word,
-        russian_translation=translation_map.get(progress.word),
-        error_count=progress.error_count,
-        correct_streak=progress.correct_streak,
-        next_review_at=progress.next_review_at,
-        status=build_review_status(
-            error_count=progress.error_count,
-            correct_streak=progress.correct_streak,
-            next_review_at=progress.next_review_at,
-            ease_factor=progress.ease_factor,
-        ).status,
-    )
+    vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=current_user_id)}
+    return _progress_to_read(progress, vocab_map)
 
 
 @router.post("/context/me/review-queue/submit-bulk", response_model=ReviewQueueBulkSubmitResponse)
@@ -95,21 +102,8 @@ def submit_review_queue_bulk_me(
     vocab_service: VocabularyService = Depends(),
 ) -> ReviewQueueBulkSubmitResponse:
     result = srs_service.submit_review_queue_bulk(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
-    rows = result["updated"]
-    words = [r.word for r in rows]
-    translation_map = vocab_service.get_translation_map_for_user(user_id=current_user_id, english_lemmas=words)
-    updated = [
-        WordProgressRead(
-            user_id=r.user_id,
-            word=r.word,
-            russian_translation=translation_map.get(r.word),
-            error_count=r.error_count,
-            correct_streak=r.correct_streak,
-            next_review_at=r.next_review_at,
-            status=build_review_status(error_count=r.error_count, correct_streak=r.correct_streak, next_review_at=r.next_review_at, ease_factor=r.ease_factor).status,
-        )
-        for r in rows
-    ]
+    vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=current_user_id)}
+    updated = [_progress_to_read(r, vocab_map) for r in result["updated"]]
     return ReviewQueueBulkSubmitResponse(user_id=result["user_id"], updated=updated)
 
 
@@ -164,25 +158,17 @@ def get_word_progress_me(
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
     progress = srs_service.get_word_progress(user_id=current_user_id, current_user_id=current_user_id, word=word)
-    translation_map = vocab_service.get_translation_map_for_user(user_id=current_user_id, english_lemmas=[progress.word])
-    return WordProgressRead(
-        user_id=progress.user_id,
-        word=progress.word,
-        russian_translation=translation_map.get(progress.word),
-        error_count=progress.error_count,
-        correct_streak=progress.correct_streak,
-        next_review_at=progress.next_review_at,
-        status=build_review_status(error_count=progress.error_count, correct_streak=progress.correct_streak, next_review_at=progress.next_review_at, ease_factor=progress.ease_factor).status,
-    )
+    vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=current_user_id)}
+    return _progress_to_read(progress, vocab_map)
 
 
-@router.delete("/context/me/word-progress/{word}", response_model=WordProgressDeleteResponse)
+@router.delete("/context/me/word-progress/{vocabulary_id}", response_model=WordProgressDeleteResponse)
 def delete_word_progress_me(
-    word: str,
+    vocabulary_id: int,
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> WordProgressDeleteResponse:
-    result = service.delete_word_progress(user_id=current_user_id, current_user_id=current_user_id, word=word)
+    result = service.delete_word_progress(user_id=current_user_id, current_user_id=current_user_id, vocabulary_id=vocabulary_id)
     return WordProgressDeleteResponse(**result)
 
 
@@ -310,21 +296,8 @@ def submit_review_queue_item(
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
     progress = srs_service.submit_review_queue_item(user_id=user_id, current_user_id=current_user_id, payload=payload)
-    translation_map = vocab_service.get_translation_map_for_user(user_id=user_id, english_lemmas=[progress.word])
-    return WordProgressRead(
-        user_id=progress.user_id,
-        word=progress.word,
-        russian_translation=translation_map.get(progress.word),
-        error_count=progress.error_count,
-        correct_streak=progress.correct_streak,
-        next_review_at=progress.next_review_at,
-        status=build_review_status(
-            error_count=progress.error_count,
-            correct_streak=progress.correct_streak,
-            next_review_at=progress.next_review_at,
-            ease_factor=progress.ease_factor,
-        ).status,
-    )
+    vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=user_id)}
+    return _progress_to_read(progress, vocab_map)
 
 
 @router.post("/context/{user_id}/review-queue/submit-bulk", response_model=ReviewQueueBulkSubmitResponse)
@@ -336,21 +309,8 @@ def submit_review_queue_bulk(
     vocab_service: VocabularyService = Depends(),
 ) -> ReviewQueueBulkSubmitResponse:
     result = srs_service.submit_review_queue_bulk(user_id=user_id, current_user_id=current_user_id, payload=payload)
-    rows = result["updated"]
-    words = [r.word for r in rows]
-    translation_map = vocab_service.get_translation_map_for_user(user_id=user_id, english_lemmas=words)
-    updated = [
-        WordProgressRead(
-            user_id=r.user_id,
-            word=r.word,
-            russian_translation=translation_map.get(r.word),
-            error_count=r.error_count,
-            correct_streak=r.correct_streak,
-            next_review_at=r.next_review_at,
-            status=build_review_status(error_count=r.error_count, correct_streak=r.correct_streak, next_review_at=r.next_review_at, ease_factor=r.ease_factor).status,
-        )
-        for r in rows
-    ]
+    vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=user_id)}
+    updated = [_progress_to_read(r, vocab_map) for r in result["updated"]]
     return ReviewQueueBulkSubmitResponse(user_id=result["user_id"], updated=updated)
 
 
@@ -391,26 +351,18 @@ def get_word_progress(
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
     progress = srs_service.get_word_progress(user_id=user_id, current_user_id=current_user_id, word=word)
-    translation_map = vocab_service.get_translation_map_for_user(user_id=user_id, english_lemmas=[progress.word])
-    return WordProgressRead(
-        user_id=progress.user_id,
-        word=progress.word,
-        russian_translation=translation_map.get(progress.word),
-        error_count=progress.error_count,
-        correct_streak=progress.correct_streak,
-        next_review_at=progress.next_review_at,
-        status=build_review_status(error_count=progress.error_count, correct_streak=progress.correct_streak, next_review_at=progress.next_review_at, ease_factor=progress.ease_factor).status,
-    )
+    vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=user_id)}
+    return _progress_to_read(progress, vocab_map)
 
 
-@router.delete("/context/{user_id}/word-progress/{word}", response_model=WordProgressDeleteResponse)
+@router.delete("/context/{user_id}/word-progress/{vocabulary_id}", response_model=WordProgressDeleteResponse)
 def delete_word_progress(
     user_id: int,
-    word: str,
+    vocabulary_id: int,
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> WordProgressDeleteResponse:
-    result = service.delete_word_progress(user_id=user_id, current_user_id=current_user_id, word=word)
+    result = service.delete_word_progress(user_id=user_id, current_user_id=current_user_id, vocabulary_id=vocabulary_id)
     return WordProgressDeleteResponse(**result)
 
 

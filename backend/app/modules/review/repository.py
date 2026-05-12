@@ -223,22 +223,6 @@ class ReviewRepository:
         query = query.order_by(primary_order, WordProgressModel.next_review_at.asc()).offset(offset).limit(limit)
         return list(self._db.scalars(query))
 
-    def delete_word_progress(self, user_id: int, word: str) -> bool:
-        normalized = _normalize_valid_word(word)
-        if not normalized:
-            return False
-        row = self._db.scalar(
-            select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
-                WordProgressModel.word == normalized,
-            )
-        )
-        if row is None:
-            return False
-        self._db.delete(row)
-        self._db.flush()
-        return True
-
     def delete_word_progress_by_vocabulary_id(self, user_id: int, vocabulary_id: int) -> bool:
         row = self._db.scalar(
             select(WordProgressModel).where(

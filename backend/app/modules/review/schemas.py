@@ -38,6 +38,7 @@ class ReviewQueueBulkSubmitRequest(BaseModel):
 class WordProgressRead(BaseModel):
     user_id: int
     word: str
+    vocabulary_id: int | None = None
     russian_translation: str | None = None
     error_count: int
     correct_streak: int
@@ -93,9 +94,8 @@ class ReviewSessionStartResponse(BaseModel):
 
 class WordProgressDeleteResponse(BaseModel):
     user_id: int
-    word: str
+    vocabulary_id: int
     progress_deleted: bool
-    removed_from_difficult_words: bool = False
 
 
 class ProgressSnapshot(BaseModel):

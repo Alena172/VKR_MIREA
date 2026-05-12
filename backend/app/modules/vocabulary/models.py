@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
@@ -73,27 +72,3 @@ class BaseLexiconEntryModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
-class VocabularyItemLegacyModel(Base):
-    """Совместимость со старой схемой: единая таблица vocabulary_items."""
-
-    __tablename__ = "vocabulary_items"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    english_lemma: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
-    russian_translation: Mapped[str] = mapped_column(String(200), nullable=False)
-    context_definition_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source_sentence: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
-    added_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-
-
-@dataclass(frozen=True)
-class CaptureModel:
-    """Нормализованные входные данные capture-сценария."""
-
-    user_id: int
-    selected_text: str
-    source_url: str | None
-    source_sentence: str | None
-    force_new_vocabulary_item: bool

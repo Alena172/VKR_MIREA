@@ -82,9 +82,9 @@ function matchesFilter(item, progress, filterValue) {
   return state.key === filterValue;
 }
 
-function sortVocabularyItems(items, progressByWord, sortValue) {
+function sortVocabularyItems(items, progressById, sortValue) {
   const collator = new Intl.Collator("ru", { sensitivity: "base" });
-  const getProgress = (item) => progressByWord[item.english_lemma.toLowerCase()] || null;
+  const getProgress = (item) => progressById[item.id] || null;
 
   return [...items].sort((a, b) => {
     if (sortValue === "recent") {
@@ -130,7 +130,7 @@ export default function VocabularyPage({ onError }) {
   const [translateContext, setTranslateContext] = useState("I read a book before sleep.");
   const [translationResult, setTranslationResult] = useState("");
   const [items, setItems] = useState([]);
-  const [progressByWord, setProgressByWord] = useState({});
+  const [progressById, setProgressById] = useState({});
   const [anchorsByWord, setAnchorsByWord] = useState({});
   const [loadingAnchorsByWord, setLoadingAnchorsByWord] = useState({});
   const [search, setSearch] = useState("");
@@ -156,10 +156,12 @@ export default function VocabularyPage({ onError }) {
         api.listWordProgressMe({ limit: 200, offset: 0, status: "all" }, { signal: controller.signal }),
       ]);
       setItems(data);
-      const nextProgressByWord = Object.fromEntries(
-        (progressData?.items || []).map((item) => [item.word.toLowerCase(), item]),
+      const nextProgressById = Object.fromEntries(
+        (progressData?.items || [])
+          .filter((p) => p.vocabulary_id != null)
+          .map((p) => [p.vocabulary_id, p]),
       );
-      setProgressByWord(nextProgressByWord);
+      setProgressById(nextProgressById);
     } catch (error) {
       if (!isAbortError(error)) {
         onError(getErrorMessage(error));
@@ -313,7 +315,7 @@ export default function VocabularyPage({ onError }) {
 
   const filteredItems = items.filter((item) => {
     const q = search.trim().toLowerCase();
-    const progress = progressByWord[item.english_lemma.toLowerCase()] || null;
+    const progress = progressById[item.id] || null;
     if (!matchesFilter(item, progress, activeFilter)) {
       return false;
     }
@@ -326,7 +328,7 @@ export default function VocabularyPage({ onError }) {
       (item.context_definition_ru || "").toLowerCase().includes(q)
     );
   });
-  const sortedItems = sortVocabularyItems(filteredItems, progressByWord, sortBy);
+  const sortedItems = sortVocabularyItems(filteredItems, progressById, sortBy);
 
   return (
     <section className="space-y-4">
@@ -415,7 +417,7 @@ export default function VocabularyPage({ onError }) {
 
         <ul className="space-y-3">
           {sortedItems.map((item) => {
-            const progress = progressByWord[item.english_lemma.toLowerCase()] || null;
+            const progress = progressById[item.id] || null;
             const state = getVocabularyState(item, progress);
             const wordKey = item.english_lemma.toLowerCase();
             const relatedAnchors = anchorsByWord[wordKey] || null;
