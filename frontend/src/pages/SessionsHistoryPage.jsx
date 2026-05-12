@@ -3,6 +3,7 @@ import { api, getErrorMessage, isAbortError } from "../lib/api";
 import { useAbortControllers } from "../hooks/useAbortControllers";
 
 const ANALYTICS_SESSION_LIMIT = 12;
+const SPARKLINE_LIMIT = 10;
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
 const EXERCISE_LABELS = {
@@ -12,28 +13,25 @@ const EXERCISE_LABELS = {
   unknown: "Другой формат",
 };
 
+const EXERCISE_COLORS = {
+  sentence_translation_full: "bg-violet-100 text-violet-700",
+  word_definition_match: "bg-sky-100 text-sky-700",
+  word_scramble: "bg-orange-100 text-orange-700",
+  unknown: "bg-slate-100 text-slate-600",
+};
+
 function formatDate(value) {
-  if (!value) {
-    return "-";
-  }
+  if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("ru-RU");
 }
 
 function getExerciseTypeFromPrompt(prompt) {
   const normalized = (prompt || "").toLowerCase();
-  if (normalized.startsWith("translate sentence into russian:")) {
-    return "sentence_translation_full";
-  }
-  if (normalized.startsWith("match each word with its definition:")) {
-    return "word_definition_match";
-  }
-  if (normalized.startsWith("assemble the word from letters.")) {
-    return "word_scramble";
-  }
+  if (normalized.startsWith("translate sentence into russian:")) return "sentence_translation_full";
+  if (normalized.startsWith("match each word with its definition:")) return "word_definition_match";
+  if (normalized.startsWith("assemble the word from letters.")) return "word_scramble";
   return "unknown";
 }
 
@@ -47,43 +45,36 @@ function normalizeWord(value) {
 
 function findVocabularyWordInPrompt(prompt, vocabularyWords) {
   const normalizedPrompt = normalizeWord(prompt);
-  if (!normalizedPrompt) {
-    return null;
-  }
-
+  if (!normalizedPrompt) return null;
   for (const word of vocabularyWords) {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (new RegExp(`\\b${escaped}\\b`, "i").test(normalizedPrompt)) {
-      return word;
-    }
+    if (new RegExp(`\\b${escaped}\\b`, "i").test(normalizedPrompt)) return word;
   }
   return null;
 }
 
 function findTrackedWord(answer, vocabularyWords) {
   const explicitWord = normalizeWord(answer.target_word);
-  if (explicitWord) {
-    return explicitWord;
-  }
+  if (explicitWord) return explicitWord;
   return findVocabularyWordInPrompt(answer.prompt, vocabularyWords);
 }
 
-function buildAnalytics({ sessions, answersBySessionId, vocabularyWords }) {
-  if (!sessions.length) {
-    return null;
-  }
+// analyticsSessions — dedicated list from loadAnalyticsData, not the paginated view
+function buildAnalytics({ analyticsSessions, answersBySessionId, vocabularyWords }) {
+  if (!analyticsSessions.length) return null;
 
-  const recentSessions = [...sessions].sort(
+  const sorted = [...analyticsSessions].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
-  const recentHalf = recentSessions.slice(0, Math.max(1, Math.ceil(recentSessions.length / 2)));
-  const previousHalf = recentSessions.slice(recentHalf.length);
+
+  // Compare the most recent half against the older half for trend
+  const splitAt = Math.max(1, Math.ceil(sorted.length / 2));
+  const recentHalf = sorted.slice(0, splitAt);
+  const previousHalf = sorted.slice(splitAt);
 
   const averageAccuracy = (items) => {
-    if (!items.length) {
-      return null;
-    }
-    return items.reduce((sum, session) => sum + Number(session.accuracy || 0), 0) / items.length;
+    if (!items.length) return null;
+    return items.reduce((sum, s) => sum + Number(s.accuracy || 0), 0) / items.length;
   };
 
   const recentAccuracy = averageAccuracy(recentHalf);
@@ -97,33 +88,25 @@ function buildAnalytics({ sessions, answersBySessionId, vocabularyWords }) {
   const weakWords = new Map();
   const weekBoundary = Date.now() - WEEK_IN_MS;
 
-  recentSessions.forEach((session) => {
-    const sessionDate = new Date(session.created_at);
-    const sessionTime = Number.isNaN(sessionDate.getTime()) ? 0 : sessionDate.getTime();
-    const answers = answersBySessionId[session.id] || [];
+  sorted.forEach((session) => {
+    const sessionTime = new Date(session.created_at).getTime() || 0;
+    const sessionAnswers = answersBySessionId[session.id] || [];
 
-    answers.forEach((answer) => {
-      if (answer.is_correct) {
-        return;
-      }
+    sessionAnswers.forEach((answer) => {
+      if (answer.is_correct) return;
 
       const exerciseType = getExerciseType(answer);
-      const formatStats = weakFormats.get(exerciseType) || {
+      const fs = weakFormats.get(exerciseType) || {
         exerciseType,
         label: EXERCISE_LABELS[exerciseType] || EXERCISE_LABELS.unknown,
         totalMistakes: 0,
       };
-      formatStats.totalMistakes += 1;
-      weakFormats.set(exerciseType, formatStats);
+      fs.totalMistakes += 1;
+      weakFormats.set(exerciseType, fs);
 
-      if (sessionTime < weekBoundary) {
-        return;
-      }
-
+      if (sessionTime < weekBoundary) return;
       const matchedWord = findTrackedWord(answer, vocabularyWords);
-      if (!matchedWord) {
-        return;
-      }
+      if (!matchedWord) return;
       const current = weakWords.get(matchedWord) || { word: matchedWord, mistakes: 0 };
       current.mistakes += 1;
       weakWords.set(matchedWord, current);
@@ -137,13 +120,24 @@ function buildAnalytics({ sessions, answersBySessionId, vocabularyWords }) {
     .sort((a, b) => b.mistakes - a.mistakes || a.word.localeCompare(b.word))
     .slice(0, 5);
 
+  // Sparkline data: last SPARKLINE_LIMIT sessions ordered oldest→newest
+  const sparklineData = sorted
+    .slice(0, SPARKLINE_LIMIT)
+    .reverse()
+    .map((s) => ({
+      id: s.id,
+      accuracy: Number(s.accuracy || 0),
+      label: `#${s.id} — ${Math.round(Number(s.accuracy || 0) * 100)}%`,
+    }));
+
   return {
     trendDelta,
     recentAccuracy,
     previousAccuracy,
-    recentSessionCount: recentSessions.length,
+    recentSessionCount: sorted.length,
     rankedFormats,
     rankedWords,
+    sparklineData,
   };
 }
 
@@ -157,20 +151,86 @@ function AnalyticsCard({ title, children }) {
 }
 
 function TrendBadge({ trendDelta }) {
-  if (trendDelta === null) {
+  if (trendDelta === null)
     return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Нужно больше данных</span>;
-  }
-  if (trendDelta > 0) {
-    return <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Точность растёт: +{trendDelta}%</span>;
-  }
-  if (trendDelta < 0) {
-    return <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Точность просела: {trendDelta}%</span>;
-  }
-  return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Точность без изменений</span>;
+  if (trendDelta > 0)
+    return <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">↑ Точность растёт: +{trendDelta}%</span>;
+  if (trendDelta < 0)
+    return <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">↓ Точность просела: {trendDelta}%</span>;
+  return <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">→ Точность без изменений</span>;
+}
+
+// Pure-CSS sparkline — no external chart library
+function AccuracySparkline({ data }) {
+  if (!data || data.length === 0) return null;
+  const maxVal = 1; // accuracy is 0–1
+  return (
+    <div className="mt-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Точность по последним сессиям
+      </p>
+      <div className="flex items-end gap-1" style={{ height: 48 }}>
+        {data.map((point) => {
+          const heightPct = Math.max(4, Math.round((point.accuracy / maxVal) * 100));
+          const isGood = point.accuracy >= 0.7;
+          const isMid = point.accuracy >= 0.4;
+          const barColor = isGood ? "bg-emerald-400" : isMid ? "bg-amber-400" : "bg-red-400";
+          return (
+            <div
+              key={point.id}
+              className="group relative flex-1"
+              style={{ height: "100%" }}
+              title={point.label}
+            >
+              <div
+                className={`absolute bottom-0 w-full rounded-sm ${barColor} transition-all`}
+                style={{ height: `${heightPct}%` }}
+              />
+              {/* tooltip on hover */}
+              <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-[10px] text-white group-hover:block">
+                {point.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+        <span>старее</span>
+        <span>новее</span>
+      </div>
+    </div>
+  );
+}
+
+// Inline accuracy bar for a session row
+function AccuracyBar({ accuracy }) {
+  const pct = Math.round(Number(accuracy || 0) * 100);
+  const color = pct >= 70 ? "bg-emerald-400" : pct >= 40 ? "bg-amber-400" : "bg-red-400";
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-8 text-right text-xs font-semibold text-slate-700">{pct}%</span>
+    </div>
+  );
+}
+
+// Exercise type chip for an answer card
+function ExerciseChip({ exerciseType }) {
+  const label = EXERCISE_LABELS[exerciseType] || EXERCISE_LABELS.unknown;
+  const color = EXERCISE_COLORS[exerciseType] || EXERCISE_COLORS.unknown;
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${color}`}>
+      {label}
+    </span>
+  );
 }
 
 export default function SessionsHistoryPage({ onError }) {
   const [sessions, setSessions] = useState([]);
+  // Separate state for analytics — always holds the last ANALYTICS_SESSION_LIMIT sessions
+  const [analyticsSessions, setAnalyticsSessions] = useState([]);
   const [total, setTotal] = useState(0);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [answers, setAnswers] = useState([]);
@@ -190,9 +250,10 @@ export default function SessionsHistoryPage({ onError }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
 
+  // Analytics always uses the dedicated analyticsSessions, never the paginated view
   const analytics = useMemo(
-    () => buildAnalytics({ sessions, answersBySessionId, vocabularyWords }),
-    [answersBySessionId, sessions, vocabularyWords],
+    () => buildAnalytics({ analyticsSessions, answersBySessionId, vocabularyWords }),
+    [analyticsSessions, answersBySessionId, vocabularyWords],
   );
 
   async function loadSessions(targetPage = safePage) {
@@ -201,30 +262,19 @@ export default function SessionsHistoryPage({ onError }) {
     try {
       const offset = (targetPage - 1) * pageSize;
       const data = await api.listSessionsMe(
-        {
-          limit: pageSize,
-          offset,
-          min_accuracy: minAccuracy,
-          max_accuracy: maxAccuracy,
-          date_from: dateFrom,
-          date_to: dateTo,
-        },
+        { limit: pageSize, offset, min_accuracy: minAccuracy, max_accuracy: maxAccuracy, date_from: dateFrom, date_to: dateTo },
         { signal: controller.signal },
       );
       setSessions(data.items);
       setTotal(data.total);
       const nextTotalPages = Math.max(1, Math.ceil(data.total / pageSize));
-      if (targetPage > nextTotalPages) {
-        setPage(nextTotalPages);
-      }
+      if (targetPage > nextTotalPages) setPage(nextTotalPages);
       if (data.items.length === 0) {
         setSelectedSessionId(null);
         setAnswers([]);
       }
     } catch (error) {
-      if (!isAbortError(error)) {
-        onError(getErrorMessage(error));
-      }
+      if (!isAbortError(error)) onError(getErrorMessage(error));
     } finally {
       releaseController(controller);
       setLoadingSessions(false);
@@ -240,9 +290,7 @@ export default function SessionsHistoryPage({ onError }) {
       setAnswers(data);
       setAnswersBySessionId((prev) => ({ ...prev, [sessionId]: data }));
     } catch (error) {
-      if (!isAbortError(error)) {
-        onError(getErrorMessage(error));
-      }
+      if (!isAbortError(error)) onError(getErrorMessage(error));
     } finally {
       releaseController(controller);
       setLoadingAnswers(false);
@@ -259,16 +307,8 @@ export default function SessionsHistoryPage({ onError }) {
       ]);
 
       const recentItems = recentSessions.items || [];
-      setSessions((prev) => {
-        const currentIds = new Set(prev.map((item) => item.id));
-        const merged = [...prev];
-        recentItems.forEach((item) => {
-          if (!currentIds.has(item.id)) {
-            merged.push(item);
-          }
-        });
-        return merged;
-      });
+      // Store analytics sessions separately — not mixed with the paginated list
+      setAnalyticsSessions(recentItems);
       setVocabularyWords(
         vocabulary
           .map((item) => normalizeWord(item.english_lemma))
@@ -278,24 +318,20 @@ export default function SessionsHistoryPage({ onError }) {
 
       const missingSessionIds = recentItems
         .map((item) => item.id)
-        .filter((sessionId) => !answersBySessionId[sessionId]);
+        .filter((id) => !answersBySessionId[id]);
 
       if (missingSessionIds.length) {
         const results = await Promise.all(
-          missingSessionIds.map((sessionId) => api.listSessionAnswersMe(sessionId, { signal: controller.signal })),
+          missingSessionIds.map((id) => api.listSessionAnswersMe(id, { signal: controller.signal })),
         );
         setAnswersBySessionId((prev) => {
           const next = { ...prev };
-          missingSessionIds.forEach((sessionId, index) => {
-            next[sessionId] = results[index];
-          });
+          missingSessionIds.forEach((id, idx) => { next[id] = results[idx]; });
           return next;
         });
       }
     } catch (error) {
-      if (!isAbortError(error)) {
-        onError(getErrorMessage(error));
-      }
+      if (!isAbortError(error)) onError(getErrorMessage(error));
     } finally {
       releaseController(controller);
       setLoadingAnalytics(false);
@@ -329,10 +365,7 @@ export default function SessionsHistoryPage({ onError }) {
           </div>
           <button
             className="btn-secondary"
-            onClick={() => {
-              loadSessions(safePage);
-              loadAnalyticsData();
-            }}
+            onClick={() => { loadSessions(safePage); loadAnalyticsData(); }}
             type="button"
           >
             Обновить
@@ -359,6 +392,7 @@ export default function SessionsHistoryPage({ onError }) {
                   <p className="mt-1 text-2xl font-extrabold text-slate-900">{analytics.recentSessionCount}</p>
                 </div>
               </div>
+              <AccuracySparkline data={analytics.sparklineData} />
             </div>
           ) : (
             <p className="muted text-sm">Пока недостаточно данных для тренда.</p>
@@ -413,27 +447,17 @@ export default function SessionsHistoryPage({ onError }) {
           <label className="text-sm">
             Мин. точность
             <input
-              type="number"
-              min={0}
-              max={1}
-              step="0.01"
-              value={minAccuracy}
+              type="number" min={0} max={1} step="0.01" value={minAccuracy}
               onChange={(e) => setMinAccuracy(e.target.value)}
-              className="field mt-1"
-              placeholder="0.0"
+              className="field mt-1" placeholder="0.0"
             />
           </label>
           <label className="text-sm">
             Макс. точность
             <input
-              type="number"
-              min={0}
-              max={1}
-              step="0.01"
-              value={maxAccuracy}
+              type="number" min={0} max={1} step="0.01" value={maxAccuracy}
               onChange={(e) => setMaxAccuracy(e.target.value)}
-              className="field mt-1"
-              placeholder="1.0"
+              className="field mt-1" placeholder="1.0"
             />
           </label>
           <label className="text-sm">
@@ -446,26 +470,13 @@ export default function SessionsHistoryPage({ onError }) {
           </label>
           <label className="text-sm">
             На страницу
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              className="field mt-1"
-            >
-              {[5, 10, 20, 50].map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
+            <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="field mt-1">
+              {[5, 10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}
             </select>
           </label>
         </div>
         <div className="mt-3">
-          <button type="button" className="btn-secondary" onClick={resetFilters}>
-            Сбросить
-          </button>
+          <button type="button" className="btn-secondary" onClick={resetFilters}>Сбросить</button>
         </div>
       </section>
 
@@ -474,45 +485,57 @@ export default function SessionsHistoryPage({ onError }) {
           <h3 className="text-base font-extrabold text-gray-900">Сессии ({total})</h3>
           {loadingSessions ? <p className="muted mb-2 mt-2 text-sm">Загрузка...</p> : null}
           <ul className="mt-2 space-y-2">
-            {sessions.map((session) => (
-              <li
-                key={session.id}
-                className={`rounded-xl border p-3 ${
-                  selectedSessionId === session.id ? "border-blue-600 bg-blue-50" : "border-[var(--line)] bg-white"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm">
-                    <div className="font-extrabold text-gray-900">Сессия #{session.id}</div>
-                    <div className="muted">{formatDate(session.created_at)}</div>
-                    <div className="text-[var(--text)]">
-                      {session.correct}/{session.total} (точность {Math.round(Number(session.accuracy || 0) * 100)}%)
+            {sessions.map((session) => {
+              const pct = Math.round(Number(session.accuracy || 0) * 100);
+              const trendIcon = (() => {
+                const idx = analyticsSessions.findIndex((s) => s.id === session.id);
+                if (idx < 0 || idx >= analyticsSessions.length - 1) return null;
+                const prev = analyticsSessions[idx + 1];
+                const delta = Number(session.accuracy || 0) - Number(prev.accuracy || 0);
+                if (delta > 0.02) return <span className="text-emerald-600 font-bold">↑</span>;
+                if (delta < -0.02) return <span className="text-red-500 font-bold">↓</span>;
+                return <span className="text-slate-400">→</span>;
+              })();
+              return (
+                <li
+                  key={session.id}
+                  className={`rounded-xl border p-3 ${
+                    selectedSessionId === session.id ? "border-blue-600 bg-blue-50" : "border-[var(--line)] bg-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 text-sm">
+                      <div className="flex items-center gap-2 font-extrabold text-gray-900">
+                        Сессия #{session.id}
+                        {trendIcon}
+                      </div>
+                      <div className="muted">{formatDate(session.created_at)}</div>
+                      <div className="text-[var(--text)]">
+                        {session.correct}/{session.total} правильно
+                      </div>
+                      <AccuracyBar accuracy={session.accuracy} />
                     </div>
+                    <button type="button" className="btn-secondary shrink-0" onClick={() => loadAnswers(session.id)}>
+                      Ответы
+                    </button>
                   </div>
-                  <button type="button" className="btn-secondary" onClick={() => loadAnswers(session.id)}>
-                    Ответы
-                  </button>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
             {!loadingSessions && sessions.length === 0 ? <li className="muted text-sm">Сессий по фильтрам нет.</li> : null}
           </ul>
           <div className="mt-3 flex items-center justify-between text-sm">
             <span className="muted">Страница {safePage}/{totalPages}</span>
             <div className="flex gap-2">
               <button
-                type="button"
-                className="btn-secondary disabled:opacity-50"
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                disabled={safePage <= 1}
+                type="button" className="btn-secondary disabled:opacity-50"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={safePage <= 1}
               >
                 Назад
               </button>
               <button
-                type="button"
-                className="btn-secondary disabled:opacity-50"
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={safePage >= totalPages}
+                type="button" className="btn-secondary disabled:opacity-50"
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} disabled={safePage >= totalPages}
               >
                 Вперед
               </button>
@@ -528,21 +551,32 @@ export default function SessionsHistoryPage({ onError }) {
           ) : null}
           {!loadingAnswers && selectedSessionId !== null ? (
             <ul className="mt-2 space-y-2">
-              {answers.map((answer) => (
-                <li key={answer.id} className="rounded-xl border border-[var(--line)] bg-white p-3 text-sm">
-                  <div className="font-semibold">{answer.prompt || "Без prompt"}</div>
-                  <div className="mt-1 muted">
-                    Ожидалось: <span className="font-medium text-[var(--text)]">{answer.expected_answer || "-"}</span>
-                  </div>
-                  <div className="muted">
-                    Ответ: <span className="font-medium text-[var(--text)]">{answer.user_answer}</span>
-                  </div>
-                  <div className={answer.is_correct ? "text-green-700" : "text-red-700"}>
-                    {answer.is_correct ? "Верно" : "Ошибка"}
-                  </div>
-                  {answer.explanation_ru ? <div className="mt-1 text-[var(--text)]">{answer.explanation_ru}</div> : null}
-                </li>
-              ))}
+              {answers.map((answer) => {
+                const exerciseType = getExerciseType(answer);
+                const cardBg = answer.is_correct
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-red-200 bg-red-50";
+                return (
+                  <li key={answer.id} className={`rounded-xl border p-3 text-sm ${cardBg}`}>
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <ExerciseChip exerciseType={exerciseType} />
+                      <span className={`text-xs font-bold ${answer.is_correct ? "text-emerald-700" : "text-red-700"}`}>
+                        {answer.is_correct ? "✓ Верно" : "✗ Ошибка"}
+                      </span>
+                    </div>
+                    <div className="font-semibold text-gray-900">{answer.prompt || "Без prompt"}</div>
+                    <div className="mt-1 text-slate-500">
+                      Ожидалось: <span className="font-medium text-gray-800">{answer.expected_answer || "-"}</span>
+                    </div>
+                    <div className="text-slate-500">
+                      Ответ: <span className="font-medium text-gray-800">{answer.user_answer}</span>
+                    </div>
+                    {answer.explanation_ru ? (
+                      <div className="mt-1 text-slate-600 italic">{answer.explanation_ru}</div>
+                    ) : null}
+                  </li>
+                );
+              })}
               {answers.length === 0 ? <li className="muted text-sm">В этой сессии нет ответов.</li> : null}
             </ul>
           ) : null}
