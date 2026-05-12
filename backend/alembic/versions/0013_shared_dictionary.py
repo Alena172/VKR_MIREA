@@ -1,7 +1,7 @@
 """Общий словарь: `dictionary_entries` + `user_vocabulary`
 
 Revision ID: 0013_shared_dictionary
-Revises: 0012_rename_mistake_events_to_sense_error_events
+Revises: 0012_sense_error_events
 Create Date: 2026-05-09 00:00:00
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0013_shared_dictionary"
-down_revision = "0012_rename_mistake_events_to_sense_error_events"
+down_revision = "0012_sense_error_events"
 branch_labels = None
 depends_on = None
 

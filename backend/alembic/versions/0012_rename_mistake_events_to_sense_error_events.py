@@ -1,6 +1,6 @@
 """Переименовать mistake events в sense error events
 
-Revision ID: 0012_rename_mistake_events_to_sense_error_events
+Revision ID: 0012_sense_error_events
 Revises: 0011_align_schema_constraints
 Create Date: 2026-05-03 00:00:00.000000
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0012_rename_mistake_events_to_sense_error_events"
+revision = "0012_sense_error_events"
 down_revision = "0011_align_schema_constraints"
 branch_labels = None
 depends_on = None
