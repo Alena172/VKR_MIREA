@@ -109,18 +109,12 @@ async def submit_session(
         requested_user_id=payload.user_id,
         current_user_id=current_user_id,
     )
-    result = await service.submit(
+    result = service.submit(
         user_id=target_user_id,
         answers=payload.answers,
     )
     return SessionSubmitResponse(
         session=result.session,
-        incorrect_feedback=[
-            {"exercise_id": item.exercise_id, "explanation_ru": item.explanation_ru}
-            for item in result.incorrect_feedback
-        ],
-        advice_feedback=[
-            {"exercise_id": item.exercise_id, "explanation_ru": item.explanation_ru}
-            for item in result.advice_feedback
-        ],
+        incorrect_feedback=[],
+        advice_feedback=[],
     )

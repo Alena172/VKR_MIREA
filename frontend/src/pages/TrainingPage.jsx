@@ -127,32 +127,14 @@ function buildTrainingInsights(sessionResult, submittedAnswers) {
     return null;
   }
 
-  const incorrectById = new Map(
-    (sessionResult.incorrect_feedback || []).map((item) => [item.exercise_id, item.explanation_ru]),
-  );
-  const adviceById = new Map(
-    (sessionResult.advice_feedback || []).map((item) => [item.exercise_id, item.explanation_ru]),
-  );
-
-  const reviewedAnswers = submittedAnswers.map((answer) => {
-    const incorrectFeedback = incorrectById.get(answer.exercise_id) || null;
-    const adviceFeedback = adviceById.get(answer.exercise_id) || null;
-    return {
-      ...answer,
-      incorrectFeedback,
-      adviceFeedback,
-      wasIncorrect: Boolean(incorrectFeedback),
-      hasAdvice: Boolean(adviceFeedback),
-    };
-  });
+  const incorrectAnswers = submittedAnswers.filter((a) => a.is_correct === false);
 
   const weakAreas = new Map();
-  reviewedAnswers.forEach((answer) => {
+  submittedAnswers.forEach((answer) => {
     const key = answer.exercise_type || "unknown";
-    const current = weakAreas.get(key) || { incorrect: 0, advice: 0, total: 0 };
+    const current = weakAreas.get(key) || { incorrect: 0, total: 0 };
     weakAreas.set(key, {
-      incorrect: current.incorrect + (answer.wasIncorrect ? 1 : 0),
-      advice: current.advice + (answer.hasAdvice ? 1 : 0),
+      incorrect: current.incorrect + (answer.is_correct === false ? 1 : 0),
       total: current.total + 1,
     });
   });
@@ -161,12 +143,11 @@ function buildTrainingInsights(sessionResult, submittedAnswers) {
     .map(([exerciseType, stats]) => ({
       exerciseType,
       label: EXERCISE_TYPE_META[exerciseType] || exerciseType,
-      score: stats.incorrect * 3 + stats.advice,
       ...stats,
     }))
-    .sort((a, b) => b.score - a.score || b.incorrect - a.incorrect || a.label.localeCompare(b.label));
+    .sort((a, b) => b.incorrect - a.incorrect || a.label.localeCompare(b.label));
 
-  const weakestArea = rankedWeakAreas.find((item) => item.score > 0) || null;
+  const weakestArea = rankedWeakAreas.find((item) => item.incorrect > 0) || null;
   const accuracyPercent = Math.round(Number(sessionResult.session.accuracy || 0) * 100);
 
   let nextStep = "Повтори тренировку в том же режиме, чтобы закрепить текущий результат.";
@@ -185,8 +166,7 @@ function buildTrainingInsights(sessionResult, submittedAnswers) {
   return {
     accuracyPercent,
     weakestArea,
-    incorrectAnswers: reviewedAnswers.filter((item) => item.wasIncorrect),
-    adviceAnswers: reviewedAnswers.filter((item) => item.hasAdvice),
+    incorrectAnswers,
     nextStep,
   };
 }
@@ -207,18 +187,12 @@ function ResultStatCard({ title, value, tone = "default" }) {
   );
 }
 
-function TrainingFeedbackCard({ item, kind }) {
-  const title = kind === "incorrect" ? "Нужно доработать" : "Можно улучшить";
-  const toneClass =
-    kind === "incorrect"
-      ? "border-red-200 bg-red-50"
-      : "border-amber-200 bg-amber-50";
-  const feedback = kind === "incorrect" ? item.incorrectFeedback : item.adviceFeedback;
+function TrainingFeedbackCard({ item }) {
   const isDefinitionMatch = item.exercise_type === "word_definition_match";
   const isWordScramble = item.exercise_type === "word_scramble";
 
   return (
-    <article className={`rounded-xl border p-4 ${toneClass}`}>
+    <article className="rounded-xl border border-red-200 bg-red-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-slate-900">{EXERCISE_TYPE_META[item.exercise_type] || "Упражнение"}</p>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
@@ -234,10 +208,6 @@ function TrainingFeedbackCard({ item, kind }) {
           <p><strong>Ожидаемый ответ:</strong> {item.expected_answer}</p>
         </div>
       ) : null}
-      <div className="mt-3 rounded-lg bg-white/80 p-3 text-sm text-slate-700">
-        <p className="font-semibold text-slate-900">{title}</p>
-        <p className="mt-1">{feedback}</p>
-      </div>
     </article>
   );
 }
@@ -427,10 +397,9 @@ export default function TrainingPage({ onError }) {
 
           {trainingInsights ? (
             <>
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <ResultStatCard title="Точность" value={`${trainingInsights.accuracyPercent}%`} tone={trainingInsights.accuracyPercent >= 80 ? "good" : trainingInsights.accuracyPercent >= 50 ? "warn" : "default"} />
                 <ResultStatCard title="Ошибки" value={trainingInsights.incorrectAnswers.length} tone={trainingInsights.incorrectAnswers.length === 0 ? "good" : "warn"} />
-                <ResultStatCard title="Подсказки по стилю" value={trainingInsights.adviceAnswers.length} />
                 <ResultStatCard title="Слабый формат" value={trainingInsights.weakestArea?.label || "Не выделен"} tone={trainingInsights.weakestArea ? "warn" : "good"} />
               </div>
 
@@ -439,7 +408,7 @@ export default function TrainingPage({ onError }) {
                 <p className="mt-2 text-sm text-slate-700">{trainingInsights.nextStep}</p>
                 {trainingInsights.weakestArea ? (
                   <p className="mt-2 text-sm text-slate-700">
-                    Больше всего внимания сейчас требует режим <strong>{trainingInsights.weakestArea.label}</strong>: ошибок — {trainingInsights.weakestArea.incorrect}, замечаний — {trainingInsights.weakestArea.advice}.
+                    Больше всего внимания сейчас требует режим <strong>{trainingInsights.weakestArea.label}</strong>: ошибок — {trainingInsights.weakestArea.incorrect}.
                   </p>
                 ) : null}
               </div>
@@ -449,24 +418,13 @@ export default function TrainingPage({ onError }) {
                   <p className="text-sm font-semibold text-gray-900">Где были ошибки</p>
                   <div className="mt-3 space-y-3">
                     {trainingInsights.incorrectAnswers.map((item) => (
-                      <TrainingFeedbackCard key={`incorrect-${item.exercise_id}`} item={item} kind="incorrect" />
+                      <TrainingFeedbackCard key={`incorrect-${item.exercise_id}`} item={item} />
                     ))}
                   </div>
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-green-700">Ошибок нет. Это хороший момент перейти к следующему режиму или к повторению SRS.</p>
               )}
-
-              {trainingInsights.adviceAnswers.length > 0 ? (
-                <div className="mt-5">
-                  <p className="text-sm font-semibold text-gray-900">Что можно улучшить</p>
-                  <div className="mt-3 space-y-3">
-                    {trainingInsights.adviceAnswers.map((item) => (
-                      <TrainingFeedbackCard key={`advice-${item.exercise_id}`} item={item} kind="advice" />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </>
           ) : null}
         </section>
