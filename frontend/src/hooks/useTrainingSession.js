@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { api, getErrorMessage, isAbortError } from "../lib/api";
 import { useAbortControllers } from "./useAbortControllers";
 
-const NEXT_EXERCISE_BUFFER = 2;
-
-/** Управляет тренировкой: генерацией, prefetch-буфером и отправкой ответов. */
+/** Управляет тренировкой: генерацией батча, буфером и отправкой ответов. */
 export function useTrainingSession({ onError }) {
   const [size, setSize] = useState(6);
   const [mode, setMode] = useState("sentence_translation_full");
@@ -14,28 +12,24 @@ export function useTrainingSession({ onError }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [bufferExercises, setBufferExercises] = useState([]);
-  const [fetchedCount, setFetchedCount] = useState(0);
   const [submittedAnswers, setSubmittedAnswers] = useState([]);
   const [loadingCurrent, setLoadingCurrent] = useState(false);
-  const [loadingPrefetch, setLoadingPrefetch] = useState(false);
   const [submittingCurrent, setSubmittingCurrent] = useState(false);
   const [sessionResult, setSessionResult] = useState(null);
   const [isTrainingActive, setIsTrainingActive] = useState(false);
   const [generationNote, setGenerationNote] = useState("");
   const { abortAllRequests, registerController, releaseController } = useAbortControllers();
-  const prefetchInFlight = useRef(0);
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
-  /** Генерирует упражнения напрямую через backend и возвращает результат. */
-  async function generateBatch(targetMode, batchSize, vocabularyIds, signal, { fastStart = false, incremental = false } = {}) {
+  async function generateBatch(targetMode, batchSize, vocabularyIds, signal) {
     const result = await api.generateExercisesMe(
       {
         size: batchSize,
         mode: targetMode,
         vocabulary_ids: vocabularyIds || [],
-        fast_start: fastStart,
-        incremental,
+        fast_start: false,
+        incremental: false,
       },
       { signal },
     );
@@ -46,19 +40,16 @@ export function useTrainingSession({ onError }) {
   }
 
   function resetSessionState() {
-    prefetchInFlight.current = 0;
     abortAllRequests();
     setCurrentExercise(null);
     setCurrentIndex(0);
     setCurrentAnswer("");
     setBufferExercises([]);
-    setFetchedCount(0);
     setSubmittedAnswers([]);
     setSessionResult(null);
     setIsTrainingActive(false);
     setGenerationNote("");
     setLoadingCurrent(false);
-    setLoadingPrefetch(false);
     setSubmittingCurrent(false);
   }
 
@@ -67,7 +58,7 @@ export function useTrainingSession({ onError }) {
     setSessionResult(result);
   }
 
-  /** Быстро получает первое упражнение, а остальные догружает постепенно. */
+  /** Загружает все упражнения одним запросом — между заданиями ожидания нет. */
   async function startTraining(options = {}) {
     const nextMode = options.overrideMode || mode;
     const nextSize = options.overrideSize || size;
@@ -78,26 +69,23 @@ export function useTrainingSession({ onError }) {
     setLoadingCurrent(true);
     onError("");
     try {
-      const initialBatchSize = 1;
       const controller = registerController();
       try {
-        const { exercises: initialExercises, note } = await generateBatch(
+        const { exercises: allExercises, note } = await generateBatch(
           nextMode,
-          initialBatchSize,
+          nextSize,
           nextVocabularyIds,
           controller.signal,
-          { fastStart: false, incremental: true },
         );
         setMode(nextMode);
         setSize(nextSize);
         setSelectedVocabularyIds(nextVocabularyIds);
         setFocusLabel(nextFocusLabel);
-        setCurrentExercise(initialExercises[0]);
+        setCurrentExercise(allExercises[0]);
         setCurrentIndex(0);
         setCurrentAnswer("");
         setSubmittedAnswers([]);
-        setBufferExercises(initialExercises.slice(1));
-        setFetchedCount(initialExercises.length);
+        setBufferExercises(allExercises.slice(1));
         setGenerationNote(note);
         setSessionResult(null);
         setIsTrainingActive(true);
@@ -156,88 +144,14 @@ export function useTrainingSession({ onError }) {
       return;
     }
 
-    if (bufferExercises.length > 0) {
-      const [nextExercise, ...rest] = bufferExercises;
-      setCurrentExercise(nextExercise);
-      setBufferExercises(rest);
-      setCurrentIndex(nextIndex);
-      setCurrentAnswer("");
-      setSubmittingCurrent(false);
-      return;
-    }
-
-    setLoadingCurrent(true);
-    try {
-      const remaining = size - fetchedCount;
-      const batchSize = 1;
-      const controller = registerController();
-      try {
-        const { exercises: generatedBatch, note } = await generateBatch(
-          mode,
-          batchSize,
-          selectedVocabularyIds,
-          controller.signal,
-          { incremental: true },
-        );
-        const [nextExercise, ...rest] = generatedBatch;
-        setCurrentExercise(nextExercise);
-        setBufferExercises(rest);
-        setFetchedCount((prev) => prev + generatedBatch.length);
-        setCurrentIndex(nextIndex);
-        setCurrentAnswer("");
-        setGenerationNote(note);
-      } finally {
-        releaseController(controller);
-      }
-    } catch (error) {
-      if (!isAbortError(error)) {
-        onError(getErrorMessage(error));
-      }
-    } finally {
-      setLoadingCurrent(false);
-      setSubmittingCurrent(false);
-    }
+    const [nextExercise, ...rest] = bufferExercises;
+    setCurrentExercise(nextExercise);
+    setBufferExercises(rest);
+    setCurrentIndex(nextIndex);
+    setCurrentAnswer("");
+    setSubmittingCurrent(false);
   }
 
-  useEffect(() => {
-    // Поддерживаем буфер следующих упражнений, запуская параллельные запросы.
-    if (!isTrainingActive || loadingCurrent) {
-      return undefined;
-    }
-
-    const remaining = size - fetchedCount;
-    const needed = Math.min(remaining, NEXT_EXERCISE_BUFFER - bufferExercises.length - prefetchInFlight.current);
-    if (needed <= 0) {
-      return undefined;
-    }
-
-    prefetchInFlight.current += needed;
-    const controllers = Array.from({ length: needed }, () => registerController());
-    setLoadingPrefetch(true);
-
-    const fetches = controllers.map((controller) =>
-      generateBatch(mode, 1, selectedVocabularyIds, controller.signal, { incremental: true })
-        .then(({ exercises: batch, note }) => {
-          setBufferExercises((prev) => [...prev, ...batch]);
-          setFetchedCount((prev) => prev + batch.length);
-          if (note) setGenerationNote(note);
-        })
-        .catch((error) => {
-          if (!isAbortError(error)) onError(getErrorMessage(error));
-        })
-        .finally(() => {
-          prefetchInFlight.current -= 1;
-          releaseController(controller);
-        }),
-    );
-
-    Promise.allSettled(fetches).finally(() => setLoadingPrefetch(false));
-
-    return () => {
-      prefetchInFlight.current -= controllers.length;
-      controllers.forEach((c) => { c.abort(); releaseController(c); });
-    };
-  }, [bufferExercises.length, currentIndex, fetchedCount, isTrainingActive, loadingCurrent, mode, onError, selectedVocabularyIds, size]);
   const answerReady = useMemo(() => {
     if (!currentExercise) {
       return false;
@@ -247,7 +161,6 @@ export function useTrainingSession({ onError }) {
 
   return {
     answerReady,
-    bufferExercises,
     currentAnswer,
     currentExercise,
     currentIndex,
@@ -255,7 +168,7 @@ export function useTrainingSession({ onError }) {
     focusLabel,
     isTrainingActive,
     loadingCurrent,
-    loadingPrefetch,
+    loadingPrefetch: false,
     mode,
     progressPercent,
     resetSessionState,
