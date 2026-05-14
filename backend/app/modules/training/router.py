@@ -6,7 +6,6 @@ from app.core.application import application_access
 from app.modules.identity.deps import get_current_user_id
 from app.modules.training.repository import TrainingRepository
 from app.modules.training.schemas import (
-    ExerciseGenerateRequest,
     ExerciseGenerateRequestMe,
     ExerciseGenerateResponse,
     ExerciseItem,
@@ -14,7 +13,6 @@ from app.modules.training.schemas import (
     SessionHistoryResponse,
     SessionSubmitRequest,
     SessionSubmitResponse,
-    SessionSummary,
 )
 from app.modules.training.service.exercises import TrainingService
 from app.modules.training.service.submission import SubmissionService
@@ -49,50 +47,6 @@ async def generate_me(
         ],
         note=result.note,
     )
-
-
-@router.post("/exercises/generate", response_model=ExerciseGenerateResponse)
-async def generate(
-    payload: ExerciseGenerateRequest,
-    current_user_id: int = Depends(get_current_user_id),
-    service: TrainingService = Depends(),
-) -> ExerciseGenerateResponse:
-    target_user_id = application_access.resolve_target_user_id(
-        requested_user_id=payload.user_id,
-        current_user_id=current_user_id,
-    )
-    result = await service.generate_for_user(
-        user_id=target_user_id,
-        vocabulary_ids=payload.vocabulary_ids,
-        size=payload.size,
-        mode=payload.mode,
-        fast_start=payload.fast_start,
-        incremental=payload.incremental,
-    )
-    return ExerciseGenerateResponse(
-        exercises=[
-            ExerciseItem(
-                prompt=e.prompt,
-                answer=e.answer,
-                exercise_type=e.exercise_type,
-                target_word=e.target_word,
-                options=e.options,
-            )
-            for e in result.exercises
-        ],
-        note=result.note,
-    )
-
-
-@router.get("/sessions", response_model=list[SessionSummary])
-def list_sessions(
-    user_id: int | None = Query(default=None, ge=1),
-    current_user_id: int = Depends(get_current_user_id),
-    repo: TrainingRepository = Depends(),
-) -> list[SessionSummary]:
-    if user_id is not None and user_id != current_user_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return repo.list_sessions(user_id=user_id or current_user_id)
 
 
 @router.get("/sessions/me", response_model=SessionHistoryResponse)
@@ -131,22 +85,6 @@ def list_my_sessions(
         created_to=created_to,
     )
     return SessionHistoryResponse(total=total, limit=limit, offset=offset, items=items)
-
-
-@router.get("/sessions/{session_id}/answers", response_model=list[SessionAnswerRead])
-def list_session_answers(
-    session_id: int,
-    user_id: int | None = Query(default=None, ge=1),
-    current_user_id: int = Depends(get_current_user_id),
-    repo: TrainingRepository = Depends(),
-) -> list[SessionAnswerRead]:
-    if user_id is not None and user_id != current_user_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    target_user_id = user_id or current_user_id
-    answers = repo.list_answers_by_session(session_id=session_id, user_id=target_user_id)
-    if answers is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return answers
 
 
 @router.get("/sessions/me/{session_id}/answers", response_model=list[SessionAnswerRead])

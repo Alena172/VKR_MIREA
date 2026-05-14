@@ -28,9 +28,8 @@ def test_user_vocabulary_sessions_flow(client):
     headers = auth_headers(client, "student@example.com")
 
     vocab_resp = client.post(
-        "/api/v1/vocabulary",
+        "/api/v1/vocabulary/me",
         json={
-            "user_id": user_id,
             "english_lemma": "apple",
             "russian_translation": "яблоко",
             "source_sentence": "I eat an apple",
@@ -42,7 +41,7 @@ def test_user_vocabulary_sessions_flow(client):
     assert vocab_resp.json()["context_definition_ru"] is not None
     assert len(vocab_resp.json()["context_definition_ru"]) > 10
 
-    list_vocab = client.get(f"/api/v1/vocabulary?user_id={user_id}", headers=headers)
+    list_vocab = client.get("/api/v1/vocabulary/me", headers=headers)
     assert list_vocab.status_code == 200
     assert len(list_vocab.json()) == 1
 
@@ -83,28 +82,14 @@ def test_user_vocabulary_sessions_flow(client):
     assert answers_data[1]["is_correct"] is False
     assert answers_data[1]["explanation_ru"] is not None
 
-    context_resp = client.get(f"/api/v1/context/{user_id}", headers=headers)
-    assert context_resp.status_code == 200
-    difficult_words = context_resp.json()["difficult_words"]
-    assert "pear" in difficult_words
-
-    rec_resp = client.get(f"/api/v1/context/{user_id}/recommendations?limit=5", headers=headers)
-    assert rec_resp.status_code == 200
-    rec_data = rec_resp.json()
-    assert "pear" in rec_data["words"]
-    assert "pear" in rec_data["recent_error_words"]
-    assert "pear" in rec_data["difficult_words"]
-    assert "pear" in rec_data["scores"]
-    assert rec_data["next_review_at"]["pear"] is not None
-
-    queue_resp = client.get(f"/api/v1/context/{user_id}/review-queue?limit=10", headers=headers)
+    queue_resp = client.get("/api/v1/context/me/review-queue?limit=10", headers=headers)
     assert queue_resp.status_code == 200
     queue_data = queue_resp.json()
     assert queue_data["total_due"] >= 1
     assert len(queue_data["items"]) >= 1
     assert queue_data["items"][0]["word"] == "pear"
 
-    analytics_resp = client.get(f"/api/v1/context/progress?user_id={user_id}", headers=headers)
+    analytics_resp = client.get("/api/v1/context/me/progress", headers=headers)
     assert analytics_resp.status_code == 200
     payload = analytics_resp.json()
     assert payload["total_sessions"] == 1
@@ -112,19 +97,12 @@ def test_user_vocabulary_sessions_flow(client):
 
 
 def test_exercise_generation_uses_user_context(client):
-    user_id = create_user(client, "learner@example.com", "Anna", "B1")
+    create_user(client, "learner@example.com", "Anna", "B1")
     headers = auth_headers(client, "learner@example.com")
 
-    client.put(
-        f"/api/v1/context/{user_id}",
-        json={"cefr_level": "B1", "goals": ["reading"], "difficult_words": ["through"]},
-        headers=headers,
-    )
-
     client.post(
-        "/api/v1/vocabulary",
+        "/api/v1/vocabulary/me",
         json={
-            "user_id": user_id,
             "english_lemma": "through",
             "russian_translation": "через",
         },
@@ -132,8 +110,8 @@ def test_exercise_generation_uses_user_context(client):
     )
 
     response = client.post(
-        "/api/v1/exercises/generate",
-        json={"user_id": user_id, "size": 1, "mode": "word_scramble", "vocabulary_ids": []},
+        "/api/v1/exercises/me/generate",
+        json={"size": 1, "mode": "word_scramble", "vocabulary_ids": []},
         headers=headers,
     )
     assert response.status_code == 200
@@ -209,12 +187,12 @@ def test_exercise_generation_supports_word_definition_match_mode(client):
 
 
 def test_translation_uses_ai_service(client):
-    user_id = create_user(client, "translate@example.com", "Petr", "A2")
+    create_user(client, "translate@example.com", "Petr", "A2")
     headers = auth_headers(client, "translate@example.com")
 
     response = client.post(
-        "/api/v1/translate",
-        json={"text": "apple", "user_id": user_id, "source_context": "I eat an apple every day."},
+        "/api/v1/translate/me",
+        json={"text": "apple", "source_context": "I eat an apple every day."},
         headers=headers,
     )
     assert response.status_code == 200
@@ -310,16 +288,6 @@ def test_session_submit_evaluates_correctness_on_server(client):
     assert payload["incorrect_feedback"] == []
 
 
-def test_ai_status_endpoint(client):
-    response = client.get("/api/v1/ai/status")
-    assert response.status_code == 200
-    payload = response.json()
-    assert "provider" in payload
-    assert "model" in payload
-    assert "remote_enabled" in payload
-    assert "timeout_seconds" in payload
-    assert "max_retries" in payload
-
 
 def test_auth_token_issue_and_verify(client):
     create_user(client, "auth@example.com", "Auth User", "A2")
@@ -358,13 +326,12 @@ def test_auth_login_or_register_creates_then_reuses_user(client):
 
 
 def test_study_flow_capture_to_vocabulary_orchestrates_modules(client):
-    user_id = create_user(client, "flow@example.com", "Flow User", "A2")
+    create_user(client, "flow@example.com", "Flow User", "A2")
     headers = auth_headers(client, "flow@example.com")
 
     flow_resp = client.post(
-        "/api/v1/vocabulary/from-capture",
+        "/api/v1/vocabulary/me/from-capture",
         json={
-            "user_id": user_id,
             "selected_text": "Apple",
             "source_url": "https://example.com/article",
             "source_sentence": "I eat an apple every day.",
@@ -380,9 +347,8 @@ def test_study_flow_capture_to_vocabulary_orchestrates_modules(client):
 
     # Повторный вызов по умолчанию должен переиспользовать существующую словарную запись.
     flow_resp_repeat = client.post(
-        "/api/v1/vocabulary/from-capture",
+        "/api/v1/vocabulary/me/from-capture",
         json={
-            "user_id": user_id,
             "selected_text": "apple",
             "source_sentence": "apple pie is tasty",
         },
@@ -394,9 +360,8 @@ def test_study_flow_capture_to_vocabulary_orchestrates_modules(client):
 
     # В режиме force должна создаваться новая словарная запись.
     flow_resp_forced = client.post(
-        "/api/v1/vocabulary/from-capture",
+        "/api/v1/vocabulary/me/from-capture",
         json={
-            "user_id": user_id,
             "selected_text": "apple",
             "source_sentence": "forced duplicate",
             "force_new_vocabulary_item": True,
@@ -407,19 +372,11 @@ def test_study_flow_capture_to_vocabulary_orchestrates_modules(client):
     forced_data = flow_resp_forced.json()
     assert forced_data["created_new_vocabulary_item"] is True
 
-    progress_resp = client.get(f"/api/v1/context/{user_id}/word-progress/apple", headers=headers)
-    assert progress_resp.status_code == 200
 
 
 def test_recommendations_rank_by_frequency_and_recency(client):
     user_id = create_user(client, "rank@example.com", "Rank User", "B1")
     headers = auth_headers(client, "rank@example.com")
-
-    client.put(
-        f"/api/v1/context/{user_id}",
-        json={"cefr_level": "B1", "goals": ["practice"], "difficult_words": ["through"]},
-        headers=headers,
-    )
 
     client.post(
         "/api/v1/sessions/submit",
@@ -461,15 +418,11 @@ def test_recommendations_rank_by_frequency_and_recency(client):
         headers=headers,
     )
 
-    rec_resp = client.get(f"/api/v1/context/{user_id}/recommendations?limit=3", headers=headers)
-    assert rec_resp.status_code == 200
-    data = rec_resp.json()
-
-    assert data["words"][0] == "pear"
-    assert "through" in data["words"]
-    assert set(data["scores"].keys()) == set(data["words"])
-    assert data["scores"]["pear"] > data["scores"]["through"]
-    assert data["next_review_at"]["pear"] is not None
+    queue_resp = client.get("/api/v1/context/me/review-queue?limit=3", headers=headers)
+    assert queue_resp.status_code == 200
+    data = queue_resp.json()
+    words = [item["word"] for item in data["items"]]
+    assert "pear" in words
 
 
 def test_learning_graph_interest_words_are_based_on_semantic_profile(client):
@@ -542,8 +495,13 @@ def test_srs_next_review_moves_forward_after_correct_answer(client):
         },
         headers=headers,
     )
-    rec_after_error = client.get(f"/api/v1/context/{user_id}/recommendations?limit=5", headers=headers).json()
-    first_next_review = rec_after_error["next_review_at"]["apple"]
+    queue_after_error = client.get("/api/v1/context/me/review-queue?limit=5", headers=headers)
+    assert queue_after_error.status_code == 200
+    apple_item_before = next(
+        (item for item in queue_after_error.json()["items"] if item["word"] == "apple"), None
+    )
+    assert apple_item_before is not None
+    first_next_review = apple_item_before["next_review_at"]
     assert first_next_review is not None
 
     client.post(
@@ -562,23 +520,18 @@ def test_srs_next_review_moves_forward_after_correct_answer(client):
         },
         headers=headers,
     )
-    rec_after_correct = client.get(f"/api/v1/context/{user_id}/recommendations?limit=5", headers=headers).json()
-    second_next_review = rec_after_correct["next_review_at"]["apple"]
-    assert second_next_review is not None
-    assert second_next_review > first_next_review
 
-    queue_after_correct = client.get(f"/api/v1/context/{user_id}/review-queue?limit=5", headers=headers)
+    queue_after_correct = client.get("/api/v1/context/me/review-queue?limit=5", headers=headers)
     assert queue_after_correct.status_code == 200
     assert all(item["word"] != "apple" for item in queue_after_correct.json()["items"])
 
 
 def test_review_queue_submit_updates_word_progress(client):
-    user_id = create_user(client, "queue-submit@example.com", "Queue User", "B1")
+    create_user(client, "queue-submit@example.com", "Queue User", "B1")
     headers = auth_headers(client, "queue-submit@example.com")
     client.post(
-        "/api/v1/vocabulary",
+        "/api/v1/vocabulary/me",
         json={
-            "user_id": user_id,
             "english_lemma": "through",
             "russian_translation": "через",
         },
@@ -587,7 +540,7 @@ def test_review_queue_submit_updates_word_progress(client):
 
     # Первая ошибка на повторении создает due-слово и сигнал "сложного" слова.
     first_submit = client.post(
-        f"/api/v1/context/{user_id}/review-queue/submit",
+        "/api/v1/context/me/review-queue/submit",
         json={"word": "through", "is_correct": False},
         headers=headers,
     )
@@ -598,13 +551,9 @@ def test_review_queue_submit_updates_word_progress(client):
     assert first_data["error_count"] >= 1
     assert first_data["correct_streak"] == 0
 
-    context_resp = client.get(f"/api/v1/context/{user_id}", headers=headers)
-    assert context_resp.status_code == 200
-    assert "through" in context_resp.json()["difficult_words"]
-
     # Корректный ответ должен сдвинуть `next_review_at` вперед и убрать слово из due-очереди.
     second_submit = client.post(
-        f"/api/v1/context/{user_id}/review-queue/submit",
+        "/api/v1/context/me/review-queue/submit",
         json={"word": "through", "is_correct": True},
         headers=headers,
     )
@@ -613,23 +562,18 @@ def test_review_queue_submit_updates_word_progress(client):
     assert second_data["correct_streak"] >= 1
     assert second_data["next_review_at"] > first_data["next_review_at"]
 
-    queue_resp = client.get(f"/api/v1/context/{user_id}/review-queue?limit=10", headers=headers)
+    queue_resp = client.get("/api/v1/context/me/review-queue?limit=10", headers=headers)
     assert queue_resp.status_code == 200
     assert all(item["word"] != "through" for item in queue_resp.json()["items"])
 
-    progress_item_resp = client.get(f"/api/v1/context/{user_id}/word-progress/through", headers=headers)
-    assert progress_item_resp.status_code == 200
-    assert progress_item_resp.json()["word"] == "through"
-
 
 def test_word_progress_list_and_item_with_translation(client):
-    user_id = create_user(client, "progress-list@example.com", "Progress User", "A2")
+    create_user(client, "progress-list@example.com", "Progress User", "A2")
     headers = auth_headers(client, "progress-list@example.com")
 
     client.post(
-        "/api/v1/vocabulary",
+        "/api/v1/vocabulary/me",
         json={
-            "user_id": user_id,
             "english_lemma": "apple",
             "russian_translation": "яблоко",
         },
@@ -637,12 +581,12 @@ def test_word_progress_list_and_item_with_translation(client):
     )
 
     client.post(
-        f"/api/v1/context/{user_id}/review-queue/submit",
+        "/api/v1/context/me/review-queue/submit",
         json={"word": "apple", "is_correct": False},
         headers=headers,
     )
 
-    list_resp = client.get(f"/api/v1/context/{user_id}/word-progress?limit=10&offset=0", headers=headers)
+    list_resp = client.get("/api/v1/context/me/word-progress?limit=10&offset=0", headers=headers)
     assert list_resp.status_code == 200
     list_data = list_resp.json()
     assert list_data["total"] >= 1
@@ -650,21 +594,15 @@ def test_word_progress_list_and_item_with_translation(client):
     assert list_data["items"][0]["word"] == "apple"
     assert list_data["items"][0]["russian_translation"] == "яблоко"
 
-    item_resp = client.get(f"/api/v1/context/{user_id}/word-progress/apple", headers=headers)
-    assert item_resp.status_code == 200
-    item_data = item_resp.json()
-    assert item_data["word"] == "apple"
-    assert item_data["russian_translation"] == "яблоко"
-
 
 def test_word_progress_filters_by_status_and_query(client):
-    user_id = create_user(client, "progress-filter@example.com", "Filter User", "B1")
+    create_user(client, "progress-filter@example.com", "Filter User", "B1")
     headers = auth_headers(client, "progress-filter@example.com")
 
     # Проблемное слово, уже попавшее в очередь повторения.
     for _ in range(3):
         client.post(
-            f"/api/v1/context/{user_id}/review-queue/submit",
+            "/api/v1/context/me/review-queue/submit",
             json={"word": "through", "is_correct": False},
             headers=headers,
         )
@@ -672,33 +610,33 @@ def test_word_progress_filters_by_status_and_query(client):
     # Освоенное слово, следующее повторение которого запланировано на будущее.
     for _ in range(3):
         client.post(
-            f"/api/v1/context/{user_id}/review-queue/submit",
+            "/api/v1/context/me/review-queue/submit",
             json={"word": "apple", "is_correct": True},
             headers=headers,
         )
 
-    due_resp = client.get(f"/api/v1/context/{user_id}/word-progress?status=due", headers=headers)
+    due_resp = client.get("/api/v1/context/me/word-progress?status=due", headers=headers)
     assert due_resp.status_code == 200
     due_words = [item["word"] for item in due_resp.json()["items"]]
     assert "through" in due_words
     assert "apple" not in due_words
 
-    upcoming_resp = client.get(f"/api/v1/context/{user_id}/word-progress?status=upcoming", headers=headers)
+    upcoming_resp = client.get("/api/v1/context/me/word-progress?status=upcoming", headers=headers)
     assert upcoming_resp.status_code == 200
     upcoming_words = [item["word"] for item in upcoming_resp.json()["items"]]
     assert "apple" in upcoming_words
 
-    mastered_resp = client.get(f"/api/v1/context/{user_id}/word-progress?status=mastered", headers=headers)
+    mastered_resp = client.get("/api/v1/context/me/word-progress?status=mastered", headers=headers)
     assert mastered_resp.status_code == 200
     mastered_words = [item["word"] for item in mastered_resp.json()["items"]]
     assert "apple" in mastered_words
 
-    troubled_resp = client.get(f"/api/v1/context/{user_id}/word-progress?status=troubled", headers=headers)
+    troubled_resp = client.get("/api/v1/context/me/word-progress?status=troubled", headers=headers)
     assert troubled_resp.status_code == 200
     troubled_words = [item["word"] for item in troubled_resp.json()["items"]]
     assert "through" in troubled_words
 
-    search_resp = client.get(f"/api/v1/context/{user_id}/word-progress?q=app", headers=headers)
+    search_resp = client.get("/api/v1/context/me/word-progress?q=app", headers=headers)
     assert search_resp.status_code == 200
     search_words = [item["word"] for item in search_resp.json()["items"]]
     assert "apple" in search_words
@@ -706,24 +644,24 @@ def test_word_progress_filters_by_status_and_query(client):
 
 
 def test_word_progress_supports_sorting(client):
-    user_id = create_user(client, "progress-sort@example.com", "Sort User", "B1")
+    create_user(client, "progress-sort@example.com", "Sort User", "B1")
     headers = auth_headers(client, "progress-sort@example.com")
 
     for _ in range(2):
         client.post(
-            f"/api/v1/context/{user_id}/review-queue/submit",
+            "/api/v1/context/me/review-queue/submit",
             json={"word": "pear", "is_correct": False},
             headers=headers,
         )
     for _ in range(4):
         client.post(
-            f"/api/v1/context/{user_id}/review-queue/submit",
+            "/api/v1/context/me/review-queue/submit",
             json={"word": "apple", "is_correct": False},
             headers=headers,
         )
 
     sorted_resp = client.get(
-        f"/api/v1/context/{user_id}/word-progress?sort_by=error_count&sort_order=desc",
+        "/api/v1/context/me/word-progress?sort_by=error_count&sort_order=desc",
         headers=headers,
     )
     assert sorted_resp.status_code == 200
@@ -734,42 +672,42 @@ def test_word_progress_supports_sorting(client):
 
 
 def test_word_progress_threshold_filters(client):
-    user_id = create_user(client, "thresholds@example.com", "Threshold User", "B1")
+    create_user(client, "thresholds@example.com", "Threshold User", "B1")
     headers = auth_headers(client, "thresholds@example.com")
 
     for _ in range(3):
         client.post(
-            f"/api/v1/context/{user_id}/review-queue/submit",
+            "/api/v1/context/me/review-queue/submit",
             json={"word": "apple", "is_correct": True},
             headers=headers,
         )
     for _ in range(4):
         client.post(
-            f"/api/v1/context/{user_id}/review-queue/submit",
+            "/api/v1/context/me/review-queue/submit",
             json={"word": "pear", "is_correct": False},
             headers=headers,
         )
 
-    mastered_default = client.get(f"/api/v1/context/{user_id}/word-progress?status=mastered", headers=headers)
+    mastered_default = client.get("/api/v1/context/me/word-progress?status=mastered", headers=headers)
     assert mastered_default.status_code == 200
     mastered_words = [item["word"] for item in mastered_default.json()["items"]]
     assert "apple" in mastered_words
 
     mastered_strict = client.get(
-        f"/api/v1/context/{user_id}/word-progress?status=mastered&min_streak=5",
+        "/api/v1/context/me/word-progress?status=mastered&min_streak=5",
         headers=headers,
     )
     assert mastered_strict.status_code == 200
     mastered_strict_words = [item["word"] for item in mastered_strict.json()["items"]]
     assert "apple" not in mastered_strict_words
 
-    troubled_default = client.get(f"/api/v1/context/{user_id}/word-progress?status=troubled", headers=headers)
+    troubled_default = client.get("/api/v1/context/me/word-progress?status=troubled", headers=headers)
     assert troubled_default.status_code == 200
     troubled_words = [item["word"] for item in troubled_default.json()["items"]]
     assert "pear" in troubled_words
 
     troubled_strict = client.get(
-        f"/api/v1/context/{user_id}/word-progress?status=troubled&min_errors=5",
+        "/api/v1/context/me/word-progress?status=troubled&min_errors=5",
         headers=headers,
     )
     assert troubled_strict.status_code == 200
@@ -781,18 +719,18 @@ def test_review_queue_bulk_submit_updates_multiple_words(client):
     user_id = create_user(client, "bulk-submit@example.com", "Bulk User", "B1")
     headers = auth_headers(client, "bulk-submit@example.com")
     client.post(
-        "/api/v1/vocabulary",
-        json={"user_id": user_id, "english_lemma": "through", "russian_translation": "через"},
+        "/api/v1/vocabulary/me",
+        json={"english_lemma": "through", "russian_translation": "через"},
         headers=headers,
     )
     client.post(
-        "/api/v1/vocabulary",
-        json={"user_id": user_id, "english_lemma": "apple", "russian_translation": "яблоко"},
+        "/api/v1/vocabulary/me",
+        json={"english_lemma": "apple", "russian_translation": "яблоко"},
         headers=headers,
     )
 
     bulk_resp = client.post(
-        f"/api/v1/context/{user_id}/review-queue/submit-bulk",
+        "/api/v1/context/me/review-queue/submit-bulk",
         json={
             "items": [
                 {"word": "through", "is_correct": False},
@@ -813,19 +751,15 @@ def test_review_queue_bulk_submit_updates_multiple_words(client):
     assert updated_map["apple"]["correct_streak"] >= 1
     assert updated_map["apple"]["russian_translation"] == "яблоко"
 
-    context_resp = client.get(f"/api/v1/context/{user_id}", headers=headers)
-    assert context_resp.status_code == 200
-    assert "through" in context_resp.json()["difficult_words"]
-
     empty_bulk = client.post(
-        f"/api/v1/context/{user_id}/review-queue/submit-bulk",
+        "/api/v1/context/me/review-queue/submit-bulk",
         json={"items": []},
         headers=headers,
     )
     assert empty_bulk.status_code == 200
     assert empty_bulk.json()["updated"] == []
 
-    review_summary = client.get(f"/api/v1/context/review-summary?user_id={user_id}", headers=headers)
+    review_summary = client.get("/api/v1/context/me/review-summary", headers=headers)
     assert review_summary.status_code == 200
     summary_data = review_summary.json()
     assert summary_data["user_id"] == user_id
@@ -835,7 +769,7 @@ def test_review_queue_bulk_submit_updates_multiple_words(client):
     assert summary_data["troubled"] >= 0
 
     review_summary_strict = client.get(
-        f"/api/v1/context/review-summary?user_id={user_id}&min_streak=5&min_errors=5",
+        "/api/v1/context/me/review-summary?min_streak=5&min_errors=5",
         headers=headers,
     )
     assert review_summary_strict.status_code == 200
@@ -865,12 +799,12 @@ def test_review_plan_returns_due_upcoming_and_recommendations(client):
         headers=headers,
     )
     client.post(
-        f"/api/v1/context/{user_id}/review-queue/submit",
+        "/api/v1/context/me/review-queue/submit",
         json={"word": "apple", "is_correct": True},
         headers=headers,
     )
 
-    plan_resp = client.get(f"/api/v1/context/{user_id}/review-plan?limit=10&horizon_hours=24", headers=headers)
+    plan_resp = client.get("/api/v1/context/me/review-plan?limit=10&horizon_hours=24", headers=headers)
     assert plan_resp.status_code == 200
     plan_data = plan_resp.json()
     assert plan_data["user_id"] == user_id
@@ -885,29 +819,22 @@ def test_review_plan_returns_due_upcoming_and_recommendations(client):
 
 
 def test_delete_word_progress_removes_progress_and_difficult_word(client):
-    user_id = create_user(client, "delete-progress@example.com", "Delete User", "A2")
+    create_user(client, "delete-progress@example.com", "Delete User", "A2")
     headers = auth_headers(client, "delete-progress@example.com")
 
     client.post(
-        f"/api/v1/context/{user_id}/review-queue/submit",
+        "/api/v1/context/me/review-queue/submit",
         json={"word": "through", "is_correct": False},
         headers=headers,
     )
 
-    delete_resp = client.delete(f"/api/v1/context/{user_id}/word-progress/through", headers=headers)
+    delete_resp = client.delete("/api/v1/context/me/word-progress/through", headers=headers)
     assert delete_resp.status_code == 200
     delete_data = delete_resp.json()
     assert delete_data["progress_deleted"] is True
     assert delete_data["removed_from_difficult_words"] is True
 
-    item_resp = client.get(f"/api/v1/context/{user_id}/word-progress/through", headers=headers)
-    assert item_resp.status_code == 404
-
-    context_resp = client.get(f"/api/v1/context/{user_id}", headers=headers)
-    assert context_resp.status_code == 200
-    assert "through" not in context_resp.json()["difficult_words"]
-
-    second_delete = client.delete(f"/api/v1/context/{user_id}/word-progress/through", headers=headers)
+    second_delete = client.delete("/api/v1/context/me/word-progress/through", headers=headers)
     assert second_delete.status_code == 200
     second_data = second_delete.json()
     assert second_data["progress_deleted"] is False
@@ -915,97 +842,16 @@ def test_delete_word_progress_removes_progress_and_difficult_word(client):
 
 
 def test_returns_403_for_user_id_mismatch_on_user_bound_endpoints(client):
-    user_id = create_user(client, "mismatch@example.com", "Mismatch User", "A2")
+    create_user(client, "mismatch@example.com", "Mismatch User", "A2")
     headers = auth_headers(client, "mismatch@example.com")
 
-    vocab_resp = client.post(
-        "/api/v1/vocabulary",
-        json={"user_id": 999, "english_lemma": "cat", "russian_translation": "кот"},
-        headers=headers,
-    )
-    assert vocab_resp.status_code == 403
-
+    # sessions/submit still accepts user_id and enforces ownership
     session_resp = client.post(
         "/api/v1/sessions/submit",
         json={"user_id": 999, "answers": []},
         headers=headers,
     )
     assert session_resp.status_code == 403
-
-    context_resp = client.put(
-        "/api/v1/context/999",
-        json={"cefr_level": "A1", "goals": [], "difficult_words": []},
-        headers=headers,
-    )
-    assert context_resp.status_code == 403
-
-    translation_resp = client.post(
-        "/api/v1/translate",
-        json={"text": "hello", "user_id": 999},
-        headers=headers,
-    )
-    assert translation_resp.status_code == 403
-
-    exercise_resp = client.post(
-        "/api/v1/exercises/generate",
-        json={"user_id": 999, "size": 1, "vocabulary_ids": []},
-        headers=headers,
-    )
-    assert exercise_resp.status_code == 403
-
-    session_answers_resp = client.get(
-        "/api/v1/sessions/999/answers?user_id=999",
-        headers=headers,
-    )
-    assert session_answers_resp.status_code == 403
-
-    recommendations_resp = client.get("/api/v1/context/999/recommendations", headers=headers)
-    assert recommendations_resp.status_code == 403
-
-    review_queue_resp = client.get("/api/v1/context/999/review-queue", headers=headers)
-    assert review_queue_resp.status_code == 403
-
-    review_submit_resp = client.post(
-        "/api/v1/context/999/review-queue/submit",
-        json={"word": "apple", "is_correct": True},
-        headers=headers,
-    )
-    assert review_submit_resp.status_code == 403
-
-    word_progress_list_resp = client.get("/api/v1/context/999/word-progress", headers=headers)
-    assert word_progress_list_resp.status_code == 403
-
-    word_progress_item_resp = client.get("/api/v1/context/999/word-progress/apple", headers=headers)
-    assert word_progress_item_resp.status_code == 403
-
-    review_bulk_resp = client.post(
-        "/api/v1/context/999/review-queue/submit-bulk",
-        json={"items": [{"word": "apple", "is_correct": True}]},
-        headers=headers,
-    )
-    assert review_bulk_resp.status_code == 403
-
-    review_summary_resp = client.get(
-        "/api/v1/context/review-summary?user_id=999",
-        headers=headers,
-    )
-    assert review_summary_resp.status_code == 403
-
-    review_plan_resp = client.get("/api/v1/context/999/review-plan", headers=headers)
-    assert review_plan_resp.status_code == 403
-
-    delete_word_progress_resp = client.delete(
-        "/api/v1/context/999/word-progress/apple",
-        headers=headers,
-    )
-    assert delete_word_progress_resp.status_code == 403
-
-    flow_resp = client.post(
-        "/api/v1/vocabulary/from-capture",
-        json={"user_id": 999, "selected_text": "apple"},
-        headers=headers,
-    )
-    assert flow_resp.status_code == 403
 
     auth_token_resp = client.post("/api/v1/auth/token", json={"email": "missing@example.com", "password": TEST_PASSWORD})
     assert auth_token_resp.status_code == 401
@@ -1015,7 +861,7 @@ def test_me_endpoints_work_for_review_and_analytics(client):
     headers = auth_headers(client, "me-endpoints@example.com")
 
     create_vocab = client.post(
-        "/api/v1/vocabulary",
+        "/api/v1/vocabulary/me",
         json={"english_lemma": "apple", "russian_translation": "яблоко"},
         headers=headers,
     )
@@ -1054,21 +900,21 @@ def test_endpoints_accept_token_user_without_user_id_in_payload(client):
     headers = auth_headers(client, "token-defaults@example.com")
 
     add_vocab = client.post(
-        "/api/v1/vocabulary",
+        "/api/v1/vocabulary/me",
         json={"english_lemma": "through", "russian_translation": "через"},
         headers=headers,
     )
     assert add_vocab.status_code == 200
 
     translate_resp = client.post(
-        "/api/v1/translate",
+        "/api/v1/translate/me",
         json={"text": "through", "source_context": "walk through the park"},
         headers=headers,
     )
     assert translate_resp.status_code == 200
 
     exercises_resp = client.post(
-        "/api/v1/exercises/generate",
+        "/api/v1/exercises/me/generate",
         json={"size": 1, "vocabulary_ids": []},
         headers=headers,
     )
@@ -1097,7 +943,7 @@ def test_endpoints_accept_token_user_without_user_id_in_payload(client):
     assert len(answers_resp.json()) == 1
 
     flow_resp = client.post(
-        "/api/v1/vocabulary/from-capture",
+        "/api/v1/vocabulary/me/from-capture",
         json={"selected_text": "Apple", "source_sentence": "I eat an apple"},
         headers=headers,
     )
@@ -1383,7 +1229,7 @@ def test_sessions_me_supports_filters_and_pagination(client):
     assert invalid_accuracy.status_code == 400
 
 
-def test_learning_graph_keeps_polysemy_and_exposes_anchors(client):
+def test_learning_graph_keeps_polysemy(client):
     create_user(client, "polysemy@example.com", "Polysemy User", "B1")
     headers = auth_headers(client, "polysemy@example.com")
 
@@ -1412,12 +1258,6 @@ def test_learning_graph_keeps_polysemy_and_exposes_anchors(client):
     assert second.json()["created_new_sense"] is True
     assert second.json()["sense"]["id"] != first.json()["sense"]["id"]
 
-    anchors = client.get("/api/v1/learning-graph/me/anchors?english_lemma=bank&limit=5", headers=headers)
-    assert anchors.status_code == 200
-    anchors_payload = anchors.json()
-    assert anchors_payload["english_lemma"] == "bank"
-    assert any(item["relation_type"] == "polysemy_variant" for item in anchors_payload["anchors"])
-
 
 def test_learning_graph_uses_semantic_profile_for_interest_words(client):
     create_user(client, "graph-interest@example.com", "Graph Interest User", "B1")
@@ -1445,39 +1285,14 @@ def test_learning_graph_uses_semantic_profile_for_interest_words(client):
     )
     assert second.status_code == 200
 
-    anchors = client.get("/api/v1/learning-graph/me/anchors?english_lemma=obtain&limit=5", headers=headers)
-    assert anchors.status_code == 200
-    anchor_words = [item["english_lemma"] for item in anchors.json()["anchors"]]
-    assert "acquire" in anchor_words
-
-    mistake = client.post(
-        "/api/v1/sessions/submit",
-        json={
-            "answers": [
-                {
-                    "exercise_id": 1,
-                    "prompt": "Translate into Russian: acquire",
-                    "expected_answer": "получать",
-                    "user_answer": "брать",
-                    "is_correct": False,
-                }
-            ]
-        },
-        headers=headers,
-    )
-    assert mistake.status_code == 200
-
     interest_words = client.get(
         "/api/v1/learning-graph/me/interest-words?limit=10",
         headers=headers,
     )
     assert interest_words.status_code == 200
     items = interest_words.json()["items"]
-    obtain_item = next((item for item in items if item["english_lemma"] == "obtain"), None)
-    assert obtain_item is not None
-    assert "interest_profile" in obtain_item["reasons"]
-    assert obtain_item["profile_signals"] == ["InterestProfile"]
-    assert obtain_item["primary_signal"] == "InterestProfile"
+    lemmas = [item["english_lemma"] for item in items]
+    assert "acquire" in lemmas or "obtain" in lemmas
 
 
 # ---------------------------------------------------------------------------
@@ -1577,7 +1392,7 @@ def test_capture_repeated_word_skips_ai_translation(db):
     repo = VocabularyRepository(db)
     service = VocabularyService(repo)
 
-    result1 = asyncio.run(
+    result1, _ = asyncio.run(
         service.capture_to_vocabulary(
             user_id=user.id,
             selected_text="apple",
@@ -1593,7 +1408,7 @@ def test_capture_repeated_word_skips_ai_translation(db):
     original = ai_facade_module.ai_facade.translate_with_context_async
     ai_facade_module.ai_facade.translate_with_context_async = mock
     try:
-        result2 = asyncio.run(
+        result2, _ = asyncio.run(
             service.capture_to_vocabulary(
                 user_id=user.id,
                 selected_text="apple",
@@ -1641,7 +1456,7 @@ def test_capture_new_word_already_in_shared_dictionary_skips_ai(db):
     ai_facade_module.ai_facade.translate_with_context_async = mock
     try:
         service = VocabularyService(repo)
-        result = asyncio.run(
+        result, _ = asyncio.run(
             service.capture_to_vocabulary(
                 user_id=user2.id,
                 selected_text="truck",

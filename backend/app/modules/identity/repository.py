@@ -12,10 +12,6 @@ class IdentityRepository:
     def __init__(self, db: Session = Depends(get_db)) -> None:
         self._db = db
 
-    def list_users(self) -> list[UserModel]:
-        query = select(UserModel).order_by(UserModel.id.desc())
-        return list(self._db.scalars(query))
-
     def get_by_id(self, user_id: int) -> UserModel | None:
         return self._db.get(UserModel, user_id)
 

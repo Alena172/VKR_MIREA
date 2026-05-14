@@ -12,8 +12,6 @@ from app.modules.identity.schemas import (
     TokenResponse,
     TokenVerifyRequest,
     TokenVerifyResponse,
-    UserCreate,
-    UserRead,
 )
 from app.modules.identity.service import IdentityService
 
@@ -71,29 +69,3 @@ def me(
     service: IdentityService = Depends(),
 ) -> TokenIdentityResponse:
     return service.get_identity_by_user_id(user_id=user_id)
-
-
-@router.get("/auth/ping")
-def ping() -> dict[str, str]:
-    return {"module": "auth", "status": "ok"}
-
-
-@router.get("/users", response_model=list[UserRead])
-def list_users(service: IdentityService = Depends()) -> list[UserRead]:
-    return [UserRead.model_validate(user) for user in service.list_user_dtos()]
-
-
-@router.get("/users/{user_id}", response_model=UserRead)
-def get_user(
-    user_id: int,
-    service: IdentityService = Depends(),
-) -> UserRead:
-    return UserRead.model_validate(service.get_user_or_404(user_id=user_id))
-
-
-@router.post("/users", response_model=UserRead)
-def create_user_endpoint(
-    payload: UserCreate,
-    service: IdentityService = Depends(),
-) -> UserRead:
-    return UserRead.model_validate(service.create_user(payload))

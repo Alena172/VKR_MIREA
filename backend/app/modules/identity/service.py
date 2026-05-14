@@ -69,9 +69,6 @@ class IdentityService:
     def __init__(self, repo: IdentityRepository = Depends()) -> None:
         self._repo = repo
 
-    def list_user_dtos(self) -> list[UserDTO]:
-        return [UserDTO.from_model(u) for u in self._repo.list_users()]
-
     def get_user_by_id(self, user_id: int) -> UserDTO | None:
         user = self._repo.get_by_id(user_id)
         return UserDTO.from_model(user) if user is not None else None

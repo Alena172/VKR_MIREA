@@ -125,22 +125,6 @@ class VocabularyService:
     def list_user_items(self, *, user_id: int) -> list[VocabularyItemDTO]:
         return [_to_dto(uv, entry) for uv, entry in self._repo.list_user_vocabulary(user_id=user_id)]
 
-    def get_translation_map_for_user(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
-        return self._repo.get_translation_map(user_id=user_id, english_lemmas=english_lemmas)
-
-    def get_all_translations_map_for_user(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
-        return self._repo.get_all_translations_map(user_id=user_id, english_lemmas=english_lemmas)
-
-    def get_definition_map_for_user(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
-        return self._repo.get_definition_map(user_id=user_id, english_lemmas=english_lemmas)
-
-    def list_english_lemmas_for_user(self, *, user_id: int) -> list[str]:
-        return self._repo.list_english_lemmas(user_id=user_id)
-
-    def get_latest_item_by_lemma(self, *, user_id: int, english_lemma: str) -> VocabularyItemDTO | None:
-        row = self._repo.get_latest_vocabulary_item_by_lemma(user_id=user_id, english_lemma=english_lemma)
-        return _to_dto(row[0], row[1]) if row is not None else None
-
     def queue_add_item(
         self,
         *,

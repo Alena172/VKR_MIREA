@@ -49,12 +49,6 @@ class TrainingRepository:
     def __init__(self, db: Session = Depends(get_db)) -> None:
         self._db = db
 
-    def list_sessions(self, user_id: int | None) -> list[LearningSessionModel]:
-        query = select(LearningSessionModel)
-        query = _apply_session_filters(query, user_id=user_id)
-        query = query.order_by(LearningSessionModel.id.desc())
-        return list(self._db.scalars(query))
-
     def list_sessions_paginated(
         self,
         *,
