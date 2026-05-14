@@ -13,7 +13,7 @@ from app.modules.review.models import (
     build_review_status,
     matches_review_status_filter,
 )
-from app.modules.review.repository import ReviewRepository, _normalize_valid_word
+from app.modules.review.repository import ReviewRepository
 from app.modules.review.service.scoring import RecommendationScoringService
 
 _SM2_EASE_DEFAULT = 2.5
@@ -31,6 +31,7 @@ def _sm2_next_interval(*, interval_days: int, ease_factor: float, correct_streak
         return _SM2_SECOND_INTERVAL
     return max(1, round(interval_days * ease_factor))
 
+
 if TYPE_CHECKING:
     from app.modules.training.service.submission import SubmissionService
     from app.modules.vocabulary.service.items import VocabularyService
@@ -38,9 +39,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class WordProgressUpdate:
-    word: str
+    vocabulary_id: int
     is_correct: bool
-    vocabulary_id: int | None = None
 
 
 def _dedupe_keep_order(values: list[str]) -> list[str]:
@@ -93,57 +93,27 @@ class SRSService:
         items = self._build_review_queue_items(user_id=user_id, rows=due_progress)[:limit]
         return {"user_id": user_id, "total_due": total_due, "items": items}
 
-    def submit_review_queue_item(
-        self,
-        *,
-        user_id: int,
-        current_user_id: int,
-        payload,
-    ) -> WordProgressModel:
+    def submit_review_queue_item(self, *, user_id: int, current_user_id: int, payload) -> WordProgressModel:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
-        normalized = _normalize_valid_word(payload.word)
-        if normalized is None:
-            raise HTTPException(status_code=400, detail="Word must be a single english token")
-        progress = self.apply_review(
-            user_id=user_id,
-            word=normalized,
-            is_correct=payload.is_correct,
-            vocabulary_id=payload.vocabulary_id,
-        )
-        return progress
+        if payload.vocabulary_id is None:
+            raise HTTPException(status_code=400, detail="vocabulary_id is required")
+        return self.apply_review(user_id=user_id, vocabulary_id=payload.vocabulary_id, is_correct=payload.is_correct)
 
-    def submit_review_queue_bulk(
-        self,
-        *,
-        user_id: int,
-        current_user_id: int,
-        payload,
-    ) -> dict:
+    def submit_review_queue_bulk(self, *, user_id: int, current_user_id: int, payload) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         if not payload.items:
             return {"user_id": user_id, "updated": []}
         updated_rows: list[WordProgressModel] = []
         for item in payload.items:
-            normalized = _normalize_valid_word(item.word)
-            if normalized is None:
+            vid = getattr(item, "vocabulary_id", None)
+            if vid is None:
                 continue
-            progress = self.apply_review(
-                user_id=user_id,
-                word=normalized,
-                is_correct=item.is_correct,
-                vocabulary_id=getattr(item, "vocabulary_id", None),
-            )
+            progress = self.apply_review(user_id=user_id, vocabulary_id=vid, is_correct=item.is_correct)
             if progress is not None:
                 updated_rows.append(progress)
         return {"user_id": user_id, "updated": updated_rows}
 
-    def start_review_session(
-        self,
-        *,
-        user_id: int,
-        current_user_id: int,
-        payload,
-    ) -> dict:
+    def start_review_session(self, *, user_id: int, current_user_id: int, payload) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         if payload.mode == "srs":
             return self._build_srs_review_session(user_id=user_id, size=payload.size)
@@ -151,25 +121,19 @@ class SRSService:
 
     def _build_srs_review_session(self, *, user_id: int, size: int) -> dict:
         due_rows = self._repo.list_due_word_progress(user_id=user_id, limit=size * 5)
-        # Каждая due_row — отдельная карточка (свой vocabulary_id)
         due_rows = due_rows[:size]
         items = self._build_review_session_items_from_progress(user_id=user_id, rows=due_rows)
         return {"user_id": user_id, "mode": "srs", "total_items": len(items), "items": items}
 
     def _build_random_review_session(self, *, user_id: int, size: int) -> dict:
         vocabulary_items = self._vocab().list_user_items(user_id=user_id)
-        valid_items = [
-            item for item in vocabulary_items
-            if _normalize_valid_word(item.english_lemma)
-        ]
+        valid_items = [item for item in vocabulary_items if item.english_lemma]
         if not valid_items:
             return {"user_id": user_id, "mode": "random", "total_items": 0, "items": []}
         sampled = secrets.SystemRandom().sample(valid_items, k=min(size, len(valid_items)))
         vocab_ids = [item.id for item in sampled]
         progress_map = self._repo.get_progress_map_by_vocabulary_ids(user_id=user_id, vocabulary_ids=vocab_ids)
-        items = self._build_review_session_items_from_vocab(
-            user_id=user_id, vocab_items=sampled, progress_map=progress_map
-        )
+        items = self._build_review_session_items_from_vocab(user_id=user_id, vocab_items=sampled, progress_map=progress_map)
         return {"user_id": user_id, "mode": "random", "total_items": len(items), "items": items}
 
     def list_word_progress(
@@ -187,9 +151,7 @@ class SRSService:
         min_errors: int = 3,
     ) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
-        rows = self._repo.list_word_progress(
-            user_id=user_id, limit=10000, offset=0, q=q, sort_by=sort_by, sort_order=sort_order,
-        )
+        rows = self._repo.list_word_progress(user_id=user_id, limit=10000, offset=0, q=q, sort_by=sort_by, sort_order=sort_order)
         if status != "all":
             rows = [
                 row for row in rows
@@ -208,35 +170,15 @@ class SRSService:
         items = [self._row_to_progress_dict(row, vocab_map, user_id) for row in page_rows]
         return {"user_id": user_id, "total": total, "limit": limit, "offset": offset, "items": items}
 
-    def get_word_progress(self, *, user_id: int, current_user_id: int, word: str) -> WordProgressModel:
-        self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
-        progress = self._repo.get_word_progress(user_id=user_id, word=word)
-        if progress is None:
-            raise HTTPException(status_code=404, detail="Word progress not found")
-        return progress
-
     def delete_word_progress(self, *, user_id: int, current_user_id: int, vocabulary_id: int) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         deleted = self._repo.delete_word_progress_by_vocabulary_id(user_id=user_id, vocabulary_id=vocabulary_id)
-        return {
-            "user_id": user_id,
-            "vocabulary_id": vocabulary_id,
-            "progress_deleted": deleted,
-        }
+        return {"user_id": user_id, "vocabulary_id": vocabulary_id, "progress_deleted": deleted}
 
-    def get_review_plan(
-        self,
-        *,
-        user_id: int,
-        current_user_id: int,
-        limit: int,
-        horizon_hours: int,
-    ) -> dict:
+    def get_review_plan(self, *, user_id: int, current_user_id: int, limit: int, horizon_hours: int) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         due_progress = self._repo.list_due_word_progress(user_id=user_id, limit=limit)
-        upcoming_progress = self._repo.list_upcoming_word_progress(
-            user_id=user_id, horizon=timedelta(hours=horizon_hours), limit=limit,
-        )
+        upcoming_progress = self._repo.list_upcoming_word_progress(user_id=user_id, horizon=timedelta(hours=horizon_hours), limit=limit)
         due_now = self._build_review_queue_items(user_id=user_id, rows=due_progress)
         upcoming = self._build_review_queue_items(user_id=user_id, rows=upcoming_progress)
         snapshot = self._scoring.build_snapshot(user_id=user_id, limit=limit)
@@ -249,13 +191,7 @@ class SRSService:
             "recommended_words": snapshot.ranked_words(limit),
         }
 
-    def get_review_summary(
-        self,
-        *,
-        user_id: int,
-        current_user_id: int,
-        min_streak: int,
-    ) -> dict:
+    def get_review_summary(self, *, user_id: int, current_user_id: int, min_streak: int) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         rows = self._repo.list_word_progress(user_id=user_id, limit=10000, offset=0, q=None)
         if not rows:
@@ -293,26 +229,16 @@ class SRSService:
         self,
         *,
         user_id: int,
-        word: str,
+        vocabulary_id: int,
         is_correct: bool,
-        vocabulary_id: int | None = None,
     ) -> WordProgressModel | None:
-        normalized = _normalize_valid_word(word)
-        if not normalized:
-            return None
         now = datetime.utcnow()
-        row = self._repo.get_or_create_word_progress(
-            user_id, normalized, vocabulary_id=vocabulary_id, now=now
-        )
+        row = self._repo.get_or_create_word_progress(user_id, vocabulary_id, now=now)
 
         if is_correct:
             new_streak = row.correct_streak + 1
             new_ease = row.ease_factor + _SM2_EASE_CORRECT_DELTA
-            new_interval = _sm2_next_interval(
-                interval_days=row.interval_days,
-                ease_factor=new_ease,
-                correct_streak=new_streak,
-            )
+            new_interval = _sm2_next_interval(interval_days=row.interval_days, ease_factor=new_ease, correct_streak=new_streak)
             return self._repo.save_word_progress(
                 row,
                 error_count=row.error_count,
@@ -333,54 +259,29 @@ class SRSService:
                 next_review_at=now,
             )
 
-    def ensure_word_progress_entry(
-        self, *, user_id: int, word: str, vocabulary_id: int | None = None
-    ) -> bool:
-        return self._repo.ensure_word_progress(
-            user_id=user_id, word=word, vocabulary_id=vocabulary_id
-        ) is not None
+    def ensure_word_progress_entry(self, *, user_id: int, vocabulary_id: int) -> bool:
+        return self._repo.ensure_word_progress(user_id=user_id, vocabulary_id=vocabulary_id) is not None
 
-    def update_learning_progress(
-        self,
-        *,
-        user_id: int,
-        updates: list[WordProgressUpdate],
-    ) -> list[str]:
-        updated_words: list[str] = []
+    def update_learning_progress(self, *, user_id: int, updates: list[WordProgressUpdate]) -> list[int]:
+        updated_ids: list[int] = []
         for update in updates:
-            if update.word:
-                progress = self.apply_review(
-                    user_id=user_id,
-                    word=update.word,
-                    is_correct=update.is_correct,
-                    vocabulary_id=update.vocabulary_id,
-                )
-                if progress is not None:
-                    updated_words.append(progress.word)
-        return _dedupe_keep_order(updated_words)
+            progress = self.apply_review(user_id=user_id, vocabulary_id=update.vocabulary_id, is_correct=update.is_correct)
+            if progress is not None:
+                updated_ids.append(progress.vocabulary_id)
+        return updated_ids
 
-    def get_recommendations(
-        self,
-        *,
-        user_id: int,
-        current_user_id: int,
-        limit: int,
-    ) -> dict:
+    def get_recommendations(self, *, user_id: int, current_user_id: int, limit: int) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         snapshot = self._scoring.build_snapshot(user_id=user_id, limit=limit)
         words = snapshot.ranked_words(limit)
 
         recent_error_words = []
-        recent_errors_raw = (
-            self._submission_service.list_recent_incorrect_words(user_id=user_id, limit=limit * 5, unique=True)
-            if self._submission_service is not None
-            else []
-        )
-        for w in recent_errors_raw:
-            if _normalize_valid_word(w) and w not in recent_error_words:
-                recent_error_words.append(w)
-                if len(recent_error_words) >= limit:
-                    break
+        if self._submission_service is not None:
+            for w in self._submission_service.list_recent_incorrect_words(user_id=user_id, limit=limit * 5, unique=True):
+                if w and w not in recent_error_words:
+                    recent_error_words.append(w)
+                    if len(recent_error_words) >= limit:
+                        break
 
         troubled_rows = [
             row for row in self._repo.list_word_progress(
@@ -389,14 +290,15 @@ class SRSService:
             )
             if row.error_count > 0
         ]
-        difficult_words = [row.word for row in troubled_rows if _normalize_valid_word(row.word)][:limit]
+        # Берём english_lemma из user_vocabulary через vocab_map
+        vocab_map = {item.id: item for item in self._vocab().list_user_items(user_id=user_id)}
+        difficult_words = [
+            vocab_map[row.vocabulary_id].english_lemma
+            for row in troubled_rows
+            if row.vocabulary_id in vocab_map
+        ][:limit]
 
         all_words = list(dict.fromkeys(words + recent_error_words + difficult_words))[:limit * 2]
-        progress_map = self._repo.get_word_progress_map(user_id=user_id, words=all_words)
-        next_review_at = {
-            w: progress_map[w].next_review_at.isoformat() if w in progress_map else None
-            for w in all_words
-        }
         scores = {w: snapshot.scores.get(w, 0.0) for w in all_words}
 
         return {
@@ -405,7 +307,7 @@ class SRSService:
             "recent_error_words": recent_error_words,
             "difficult_words": difficult_words,
             "scores": scores,
-            "next_review_at": next_review_at,
+            "next_review_at": {},
         }
 
     def get_user_context(self, *, user_id: int, current_user_id: int) -> dict:
@@ -417,7 +319,12 @@ class SRSService:
             )
             if row.error_count > 0
         ]
-        difficult_words = [row.word for row in troubled_rows if _normalize_valid_word(row.word)]
+        vocab_map = {item.id: item for item in self._vocab().list_user_items(user_id=user_id)}
+        difficult_words = [
+            vocab_map[row.vocabulary_id].english_lemma
+            for row in troubled_rows
+            if row.vocabulary_id in vocab_map
+        ]
         user = self._identity_service.get_user_by_id(user_id)
         return {
             "user_id": user_id,
@@ -431,10 +338,11 @@ class SRSService:
             user_id=user_id, limit=10000, offset=0, q=None,
             sort_by="correct_streak", sort_order="desc",
         )
+        vocab_map = {item.id: item for item in self._vocab().list_user_items(user_id=user_id)}
         return {
-            row.word.strip().lower()
+            vocab_map[row.vocabulary_id].english_lemma.strip().lower()
             for row in rows
-            if row.word
+            if row.vocabulary_id in vocab_map
             and row.error_count <= max_errors
             and build_review_status(
                 error_count=row.error_count,
@@ -449,13 +357,12 @@ class SRSService:
         vocab_map = {item.id: item for item in self._vocab().list_user_items(user_id=user_id)}
         result = []
         for row in rows:
-            if _normalize_valid_word(row.word) is None:
+            vocab_item = vocab_map.get(row.vocabulary_id)
+            if vocab_item is None:
                 continue
-            vocab_item = vocab_map.get(row.vocabulary_id) if row.vocabulary_id is not None else None
-            translation = vocab_item.russian_translation if vocab_item is not None else None
             result.append({
-                "word": row.word,
-                "russian_translation": translation,
+                "word": vocab_item.english_lemma,
+                "russian_translation": vocab_item.russian_translation,
                 "next_review_at": row.next_review_at,
                 "error_count": row.error_count,
                 "correct_streak": row.correct_streak,
@@ -468,47 +375,19 @@ class SRSService:
             })
         return result
 
-    def _build_review_session_items_from_progress(
-        self,
-        *,
-        user_id: int,
-        rows: list[WordProgressModel],
-    ) -> list[dict]:
-        """SRS mode: build session items from existing word_progress rows.
-
-        Fetches per-card translation via vocabulary_id when available.
-        """
-        vocab_ids = [r.vocabulary_id for r in rows if r.vocabulary_id is not None]
-        vocab_map = (
-            {item.id: item for item in self._vocab().list_user_items(user_id=user_id)}
-            if vocab_ids
-            else {}
-        )
-        word_translation_map: dict[str, str] = {}
-        words_without_vid = [r.word for r in rows if r.vocabulary_id is None]
-        if words_without_vid:
-            word_translation_map = self._vocab().get_translation_map_for_user(
-                user_id=user_id, english_lemmas=words_without_vid
-            )
+    def _build_review_session_items_from_progress(self, *, user_id: int, rows: list[WordProgressModel]) -> list[dict]:
+        vocab_map = {item.id: item for item in self._vocab().list_user_items(user_id=user_id)} if rows else {}
         items = []
         for row in rows:
-            if _normalize_valid_word(row.word) is None:
+            vocab_item = vocab_map.get(row.vocabulary_id)
+            if vocab_item is None:
                 continue
-            if row.vocabulary_id is not None and row.vocabulary_id in vocab_map:
-                vocab_item = vocab_map[row.vocabulary_id]
-                translation = vocab_item.russian_translation
-                definition = vocab_item.context_definition_ru
-                source_sentence = vocab_item.source_sentence
-            else:
-                translation = word_translation_map.get(row.word)
-                definition = None
-                source_sentence = None
             items.append({
-                "word": row.word,
+                "word": vocab_item.english_lemma,
                 "vocabulary_id": row.vocabulary_id,
-                "russian_translation": translation,
-                "context_definition": definition,
-                "source_sentence": source_sentence,
+                "russian_translation": vocab_item.russian_translation,
+                "context_definition": getattr(vocab_item, "context_definition_ru", None),
+                "source_sentence": getattr(vocab_item, "source_sentence", None),
                 "next_review_at": row.next_review_at,
                 "error_count": row.error_count,
                 "correct_streak": row.correct_streak,
@@ -521,18 +400,11 @@ class SRSService:
             })
         return items
 
-    def _build_review_session_items_from_vocab(
-        self,
-        *,
-        user_id: int,
-        vocab_items: list,
-        progress_map: dict[int, WordProgressModel],
-    ) -> list[dict]:
-        """Random mode: build session items from vocabulary entries with their own progress."""
+    def _build_review_session_items_from_vocab(self, *, user_id: int, vocab_items: list, progress_map: dict[int, WordProgressModel]) -> list[dict]:
         now = datetime.utcnow()
         items = []
         for vocab_item in vocab_items:
-            if _normalize_valid_word(vocab_item.english_lemma) is None:
+            if not vocab_item.english_lemma:
                 continue
             p = progress_map.get(vocab_item.id)
             error_count = p.error_count if p else 0
@@ -558,10 +430,10 @@ class SRSService:
         return items
 
     def _row_to_progress_dict(self, row: WordProgressModel, vocab_map: dict, user_id: int) -> dict:
-        vocab_item = vocab_map.get(row.vocabulary_id) if row.vocabulary_id is not None else None
+        vocab_item = vocab_map.get(row.vocabulary_id)
         return {
             "user_id": user_id,
-            "word": row.word,
+            "word": vocab_item.english_lemma if vocab_item is not None else None,
             "vocabulary_id": row.vocabulary_id,
             "russian_translation": vocab_item.russian_translation if vocab_item is not None else None,
             "error_count": row.error_count,
@@ -576,9 +448,7 @@ class SRSService:
         }
 
 
-def get_srs_service(
-    srs: SRSService = Depends(),
-) -> SRSService:
+def get_srs_service(srs: SRSService = Depends()) -> SRSService:
     from app.modules.training.service.submission import SubmissionService
     from app.modules.training.repository import TrainingRepository
     from app.modules.graph.repository import GraphRepository

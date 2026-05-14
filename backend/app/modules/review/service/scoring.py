@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi import Depends
 
 from app.modules.review.models import matches_review_status_filter
-from app.modules.review.repository import ReviewRepository, _normalize_valid_word
+from app.modules.review.repository import ReviewRepository
 
 
 @dataclass
@@ -52,18 +52,15 @@ class RecommendationScoringService:
 
         scores: dict[str, float] = {}
         for idx, word in enumerate(recent_errors):
-            if _normalize_valid_word(word) is not None:
+            if word:
                 scores[word] = scores.get(word, 0.0) + (1.0 / (idx + 1))
 
-        for row in troubled_rows:
-            word = row.word.strip().lower()
-            if _normalize_valid_word(word) is not None:
-                scores[word] = scores.get(word, 0.0) + 0.75
-
         now = datetime.utcnow()
-        progress_map = self._review_repo.get_word_progress_map(user_id=user_id, words=list(scores.keys()))
-        for word, progress in progress_map.items():
-            if progress.next_review_at <= now:
-                scores[word] = scores.get(word, 0.0) + 1.25
+        for row in troubled_rows:
+            # Ключ по vocabulary_id — строковое слово больше не хранится
+            key = str(row.vocabulary_id)
+            scores[key] = scores.get(key, 0.0) + 0.75
+            if row.next_review_at <= now:
+                scores[key] = scores.get(key, 0.0) + 1.25
 
         return RecommendationScoreSnapshot(scores=scores)

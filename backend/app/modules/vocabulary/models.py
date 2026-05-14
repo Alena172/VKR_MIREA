@@ -58,17 +58,4 @@ class UserVocabularyModel(Base):
         return self.entry_id is None
 
 
-class BaseLexiconEntryModel(Base):
-    """Базовый офлайн-словарь для быстрого перевода без сетевых запросов."""
-
-    __tablename__ = "base_lexicon_entries"
-    __table_args__ = (
-        UniqueConstraint("english_lemma", name="uq_base_lexicon_english_lemma"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    english_lemma: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
-    russian_translation: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-
 

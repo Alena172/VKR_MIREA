@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime, timedelta
 from typing import Literal
 
@@ -10,15 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.modules.review.models import WordProgressModel
-
-_WORD_RE = re.compile(r"^[a-z][a-z'-]{0,48}$")
-
-
-def _normalize_valid_word(value: str | None) -> str | None:
-    if not value:
-        return None
-    normalized = value.strip().lower()
-    return normalized if normalized and _WORD_RE.fullmatch(normalized) else None
 
 
 class ReviewRepository:
@@ -30,35 +20,21 @@ class ReviewRepository:
     def get_or_create_word_progress(
         self,
         user_id: int,
-        word: str,
+        vocabulary_id: int,
         *,
-        vocabulary_id: int | None = None,
         now: datetime,
     ) -> WordProgressModel:
-        """Возвращает существующую запись или создаёт новую с дефолтными значениями SM-2.
-
-        Поиск: сначала по vocabulary_id (если задан), иначе по (user_id, word).
-        """
-        if vocabulary_id is not None:
-            row = self._db.scalar(
-                select(WordProgressModel).where(
-                    WordProgressModel.user_id == user_id,
-                    WordProgressModel.vocabulary_id == vocabulary_id,
-                )
+        """Возвращает существующую SRS-карточку или создаёт новую с дефолтными значениями SM-2."""
+        row = self._db.scalar(
+            select(WordProgressModel).where(
+                WordProgressModel.user_id == user_id,
+                WordProgressModel.vocabulary_id == vocabulary_id,
             )
-        else:
-            row = self._db.scalar(
-                select(WordProgressModel).where(
-                    WordProgressModel.user_id == user_id,
-                    WordProgressModel.word == word,
-                    WordProgressModel.vocabulary_id.is_(None),
-                )
-            )
+        )
         if row is not None:
             return row
         row = WordProgressModel(
             user_id=user_id,
-            word=word,
             vocabulary_id=vocabulary_id,
             error_count=0,
             correct_streak=0,
@@ -94,15 +70,10 @@ class ReviewRepository:
     def ensure_word_progress(
         self,
         user_id: int,
-        word: str,
-        *,
-        vocabulary_id: int | None = None,
+        vocabulary_id: int,
     ) -> WordProgressModel | None:
-        normalized = _normalize_valid_word(word)
-        if not normalized:
-            return None
         return self.get_or_create_word_progress(
-            user_id, normalized, vocabulary_id=vocabulary_id, now=datetime.utcnow()
+            user_id, vocabulary_id, now=datetime.utcnow()
         )
 
     def get_word_progress_by_vocabulary_id(
@@ -115,34 +86,6 @@ class ReviewRepository:
             )
         )
 
-    def get_word_progress(self, user_id: int, word: str) -> WordProgressModel | None:
-        normalized = _normalize_valid_word(word)
-        if not normalized:
-            return None
-        return self._db.scalar(
-            select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
-                WordProgressModel.word == normalized,
-            )
-        )
-
-    def get_word_progress_map(self, user_id: int, words: list[str]) -> dict[str, WordProgressModel]:
-        """Возвращает map word→первая запись прогресса (для обратной совместимости)."""
-        normalized = [w for w in (_normalize_valid_word(item) for item in words) if w]
-        if not normalized:
-            return {}
-        rows = list(self._db.scalars(
-            select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
-                WordProgressModel.word.in_(normalized),
-            )
-        ))
-        result: dict[str, WordProgressModel] = {}
-        for row in rows:
-            if row.word not in result:
-                result[row.word] = row
-        return result
-
     def get_progress_map_by_vocabulary_ids(
         self, user_id: int, vocabulary_ids: list[int]
     ) -> dict[int, WordProgressModel]:
@@ -154,7 +97,7 @@ class ReviewRepository:
                 WordProgressModel.vocabulary_id.in_(vocabulary_ids),
             )
         ))
-        return {row.vocabulary_id: row for row in rows if row.vocabulary_id is not None}
+        return {row.vocabulary_id: row for row in rows}
 
     def list_due_word_progress(self, user_id: int, limit: int) -> list[WordProgressModel]:
         now = datetime.utcnow()
@@ -206,11 +149,6 @@ class ReviewRepository:
         sort_order: Literal["asc", "desc"] = "asc",
     ) -> list[WordProgressModel]:
         query = select(WordProgressModel).where(WordProgressModel.user_id == user_id)
-
-        if q:
-            search = q.strip().lower()
-            if search:
-                query = query.where(WordProgressModel.word.contains(search))
 
         if sort_by == "error_count":
             primary_col = WordProgressModel.error_count

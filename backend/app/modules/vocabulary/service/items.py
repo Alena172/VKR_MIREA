@@ -231,7 +231,7 @@ class VocabularyService:
                 source_url=normalized_url,
             )
 
-        self._srs().ensure_word_progress_entry(word=normalized_lemma, user_id=user_id, vocabulary_id=uv.id)
+        self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
         return _to_dto(uv, entry)
 
     def update_item(
@@ -362,7 +362,7 @@ class VocabularyService:
                     source_url=normalized_url,
                 )
 
-            self._srs().ensure_word_progress_entry(word=english_lemma, user_id=user_id, vocabulary_id=uv.id)
+            self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
             self._graph().register_vocabulary_semantics(
                 user_id=user_id,
                 english_lemma=english_lemma,

@@ -124,11 +124,7 @@ class GraphService:
         current_user_id: int,
     ) -> SenseAnchorsResponse:
         self._get_user_or_404(current_user_id)
-        anchors = self._repo.list_anchors(
-            user_id=current_user_id,
-            english_lemma=english_lemma,
-            limit=limit,
-        )
+        anchors = self._repo.list_anchors(english_lemma=english_lemma, limit=limit)
         return SenseAnchorsResponse(
             user_id=current_user_id,
             english_lemma=english_lemma,
@@ -187,14 +183,7 @@ class GraphService:
         )
 
     def delete_vocabulary_links(self, *, user_id: int, vocabulary_item_id: int) -> int:
-        return self._repo.delete_vocabulary_links(
-            user_id=user_id,
-            vocabulary_item_id=vocabulary_item_id,
-        )
+        return self._repo.delete_vocabulary_links(vocabulary_item_id=vocabulary_item_id)
 
     def list_word_anchors(self, *, user_id: int, english_lemma: str, limit: int) -> list:
-        return self._repo.list_anchors(
-            user_id=user_id,
-            english_lemma=english_lemma,
-            limit=limit,
-        )
+        return self._repo.list_anchors(english_lemma=english_lemma, limit=limit)

@@ -45,9 +45,7 @@ app.include_router(api_router)
 
 
 @app.on_event("startup")
-def ensure_base_lexicon_seeded() -> None:
-    """Заполняет базовый локальный словарь при старте приложения."""
-
+def on_startup() -> None:
     access_logger = logging.getLogger("uvicorn.access")
     if not any(isinstance(current_filter, _HealthcheckAccessLogFilter) for current_filter in access_logger.filters):
         access_logger.addFilter(_HealthcheckAccessLogFilter())
@@ -56,10 +54,6 @@ def ensure_base_lexicon_seeded() -> None:
         return
 
     ensure_database_schema_ready(engine=engine, database_url=settings.database_url)
-
-    from app.modules.vocabulary.service.lexicon import ensure_seeded
-    with SessionLocal() as db:
-        ensure_seeded(db=db)
 
 
 @app.get("/health", tags=["system"])

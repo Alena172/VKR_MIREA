@@ -20,7 +20,6 @@ from app.modules.training.service.evaluation import (
     answer_similarity_metrics,
     detect_simple_exercise_type,
     evaluate_simple_exercise,
-    extract_progress_word,
     is_answer_correct,
     is_semantic_override_candidate,
     normalize_answer,
@@ -32,12 +31,12 @@ class EvaluatedAnswer:
     exercise_id: int
     exercise_type: str | None
     target_word: str | None
+    vocabulary_id: int | None
     prompt: str | None
     expected_answer: str | None
     user_answer: str
     is_correct: bool
     explanation_ru: str | None
-    progress_word: str | None
     incorrect_feedback: SessionAnswerFeedbackDTO | None
     advice_feedback: SessionAnswerFeedbackDTO | None
 
@@ -114,22 +113,16 @@ async def _evaluate_answer(answer: SessionAnswer) -> EvaluatedAnswer:
                 exercise_id=answer.exercise_id,
                 explanation_ru=explanation_ru,
             )
-        progress_word = extract_progress_word(
-            target_word=answer.target_word,
-            prompt=answer.prompt,
-            expected_answer=answer.expected_answer,
-            vocabulary_words=set(),
-        )
         return EvaluatedAnswer(
             exercise_id=answer.exercise_id,
             exercise_type=answer.exercise_type or simple_exercise_type,
             target_word=answer.target_word,
+            vocabulary_id=answer.vocabulary_id,
             prompt=answer.prompt,
             expected_answer=answer.expected_answer,
             user_answer=answer.user_answer,
             is_correct=evaluated_is_correct,
             explanation_ru=explanation_ru,
-            progress_word=progress_word,
             incorrect_feedback=incorrect_feedback,
             advice_feedback=None,
         )
@@ -196,23 +189,16 @@ async def _evaluate_answer(answer: SessionAnswer) -> EvaluatedAnswer:
             explanation_ru=explanation_ru,
         )
 
-    progress_word = extract_progress_word(
-        target_word=answer.target_word,
-        prompt=answer.prompt,
-        expected_answer=answer.expected_answer,
-        vocabulary_words=set(),
-    )
-
     return EvaluatedAnswer(
         exercise_id=answer.exercise_id,
         exercise_type=answer.exercise_type,
         target_word=answer.target_word,
+        vocabulary_id=answer.vocabulary_id,
         prompt=answer.prompt,
         expected_answer=answer.expected_answer,
         user_answer=answer.user_answer,
         is_correct=evaluated_is_correct,
         explanation_ru=explanation_ru,
-        progress_word=progress_word,
         incorrect_feedback=incorrect_feedback,
         advice_feedback=advice_feedback,
     )
@@ -265,14 +251,14 @@ class SubmissionService:
     ) -> None:
         progress_updates: list[WordProgressUpdate] = []
         for item in evaluated_answers:
-            if item.progress_word:
+            if item.vocabulary_id is not None:
                 progress_updates.append(
-                    WordProgressUpdate(word=item.progress_word, is_correct=item.is_correct)
+                    WordProgressUpdate(vocabulary_id=item.vocabulary_id, is_correct=item.is_correct)
                 )
-            if item.progress_word and not item.is_correct:
+            if item.target_word and not item.is_correct:
                 self._graph_service.register_mistake(
                     user_id=user_id,
-                    english_lemma=item.progress_word,
+                    english_lemma=item.target_word,
                     prompt=item.prompt,
                     expected_answer=item.expected_answer,
                     user_answer=item.user_answer,

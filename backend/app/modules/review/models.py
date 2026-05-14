@@ -4,27 +4,28 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
 
 
 class WordProgressModel(Base):
-    """Состояние SRS для одной записи словаря пользователя.
+    """Состояние SRS для одной записи личного словаря пользователя.
 
     Ключ: (user_id, vocabulary_id) — одна карточка = один смысл слова.
-    Поле word сохраняется для обратной совместимости и быстрого поиска.
     """
 
     __tablename__ = "word_progress"
+    __table_args__ = (
+        Index("uq_word_progress_user_vocabulary", "user_id", "vocabulary_id", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    vocabulary_id: Mapped[int | None] = mapped_column(
-        ForeignKey("user_vocabulary.id", ondelete="CASCADE"), nullable=True, index=True
+    vocabulary_id: Mapped[int] = mapped_column(
+        ForeignKey("user_vocabulary.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    word: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     error_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     correct_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     ease_factor: Mapped[float] = mapped_column(Float, nullable=False, default=2.5)

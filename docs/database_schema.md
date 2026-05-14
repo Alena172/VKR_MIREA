@@ -1,115 +1,118 @@
 # Схема базы данных
 
-## Текущая упрощенная модель
+## Текущая продуктовая модель
 
-Практическая схема БД приведена к основному продуктовому циклу: пользователь сохраняет слово, система определяет его смысл, формирует упражнения и обновляет прогресс повторения.
+Практическая схема БД выстроена вокруг реального пользовательского цикла:
+
+1. пользователь существует в `users`
+2. слово или фраза попадает в `user_vocabulary`
+3. для слов запись опирается на общий словарь `dictionary_entries`
+4. слой `review` хранит состояние повторения в `word_progress`
+5. учебные попытки фиксируются в `learning_sessions` и `learning_session_answers`
+6. модуль `graph` хранит пользовательские интересы, а также общий семантический граф смыслов и связей
 
 Основные сущности:
 
 - `users`
-- `base_lexicon_entries`
-- `dictionary_entries` (общий словарь)
-- `user_vocabulary` (личный словарь)
+- `dictionary_entries`
+- `user_vocabulary`
 - `word_progress`
 - `learning_sessions`
 - `learning_session_answers`
-- `sense_error_events` как след ошибок на уровне смысла слова
-
-Семантическое обогащение:
-
 - `user_interests`
 - `topic_clusters`
 - `word_senses`
 - `vocabulary_sense_links`
 - `sense_relations`
+- `sense_error_events`
 
-## Основные упрощения
+## Что важно в текущей схеме
 
-### 1. Захват слова стал частью словарного сценария
+### 1. Словарь нормализован
 
-Выделенный текст сразу обрабатывается внутри сценария словаря. Основными бизнес-сущностями являются `dictionary_entries` (общий словарь) и `user_vocabulary` (личный словарь пользователя).
+Словарный слой разделен на:
 
-### 2. `learning_session_answers` хранит структурированные метаданные упражнения
+- `dictionary_entries` — общий словарь смыслов
+- `user_vocabulary` — личный словарь пользователя
 
-Таблица хранит:
+Это позволяет переиспользовать один и тот же словарный entry между несколькими пользователями без дублирования строк.
 
-- `exercise_id`
-- `exercise_type`
-- `target_word`
-- `prompt`
-- `expected_answer`
-- `user_answer`
-- `is_correct`
-- `explanation_ru`
+### 2. `user_vocabulary` хранит и слова, и фразы
 
-Благодаря этому система понимает тип упражнения и целевое слово по явным полям.
+Таблица работает в двух режимах:
 
-### 3. Повторение использует один источник состояния
+- слово: `entry_id` заполнен, `phrase_en` и `phrase_ru` пустые
+- фраза: `entry_id` пустой, `phrase_en` и `phrase_ru` заполнены
 
-Слой повторения хранит состояние в `word_progress`. Данные профиля пользователя, например CEFR, остаются в `users`, а факты повторения остаются в `word_progress`.
+Из-за этого `entry_id` является nullable, а в таблице есть check-ограничение, запрещающее полностью пустую запись.
 
-### 4. Повторение хранит факты, а статусы вычисляются
+### 3. `word_progress` привязан к записи словаря
 
-Текущий слой повторения хранит фактические значения:
+Повторение больше не живет только на уровне строки `word`. Основной ключ для карточки повторения теперь:
+
+- `(user_id, vocabulary_id)` — одна запись прогресса на одну пользовательскую словарную запись
+
+Поле `word` больше не хранится. Источник истины для карточки повторения теперь только `vocabulary_id`, а сама связь обязательна (`NOT NULL`).
+
+### 4. SRS хранит факты, а не статусы
+
+`word_progress` хранит:
 
 - `error_count`
 - `correct_streak`
+- `ease_factor`
+- `interval_days`
 - `last_reviewed_at`
 - `next_review_at`
 
-Статусы `due`, `mastered` и `troubled` вычисляются в логике приложения и пользовательском интерфейсе.
+Статусы вроде `due`, `mastered` и `troubled` вычисляются на уровне приложения.
 
-### 5. Модуль `graph` формирует семантический профиль пользователя
+### 5. Семантический граф отделен от пользовательского слоя
 
-Семантический модуль хранит интересы, смыслы слов, связи словаря со смыслами и связи между смыслами. Его публичный API покрывает пользовательский поток:
+Модуль `graph` хранит:
 
-- интересы (`/learning-graph/me/interests`)
-- создание или обновление семантической записи (`/learning-graph/me/semantic-upsert`)
-- слова из профиля интересов (`/learning-graph/me/interest-words`)
-- смысловые связи (`/learning-graph/me/anchors`)
+- интересы пользователя в `user_interests`
+- общие тематические кластеры в `topic_clusters`
+- общие смыслы слов в `word_senses`
+- привязку пользовательских словарных записей к общим смыслам в `vocabulary_sense_links`
+- общие связи между смыслами в `sense_relations`
+- след ошибок на уровне смысла в `sense_error_events`
 
-### 6. Модуль `review` сфокусирован на повторении
+После денормализации:
 
-Публичная часть модуля покрывает:
+- `topic_clusters` больше не содержит `user_id`
+- `word_senses` больше не содержит `user_id`, `source_sentence`, `source_url`
+- `vocabulary_sense_links` больше не содержит `user_id`
+- `sense_relations` больше не содержит `user_id`
 
-- очередь повторения (`word_progress` с наступившим `next_review_at`)
-- запуск сессии повторения
-- обновление прогресса повторения
-- список прогресса слов с фильтрацией и сортировкой
-- план повторения (due + upcoming)
-- снимок прогресса (всего слов, освоено, проблемных)
-- сводка повторения
+Это значит, что учебная логика и семантическая логика остаются связанными, но общий граф смыслов больше не дублируется по пользователям.
 
-## Почему эта версия лучше подходит для диплома
+### 6. Важные `ON DELETE`-правила
 
-Упрощенная схема сохраняет ключевые возможности проекта:
+Текущая схема опирается на следующие правила:
 
-- персональный словарь с контекстными определениями
-- учебные сессии с историей ответов
-- интервальные повторения на основе результатов пользователя
-- генерацию упражнений с помощью AI и обратную связь
-- семантический профиль через `learning_graph`
-- общий словарь (`dictionary_entries`) позволяет переиспользовать переводы между пользователями
-
-При этом схема остаётся ближе к демонстрируемому пользовательскому циклу и проще объясняется на защите.
-
-Нормализация словаря на `dictionary_entries` + `user_vocabulary` позволяет также переиспользовать переводы между пользователями без повторных вызовов AI: при добавлении слова, уже имеющегося в общем словаре, перевод и определение берутся из базы напрямую.
+- удаление `user_vocabulary` каскадно удаляет связанные строки `word_progress`
+- удаление `user_vocabulary` каскадно удаляет `vocabulary_sense_links`
+- удаление `word_senses` каскадно удаляет `vocabulary_sense_links`
+- удаление `word_senses` каскадно удаляет `sense_relations`
+- удаление `learning_sessions` выставляет `sense_error_events.session_id = NULL`
+- удаление `word_senses` выставляет `sense_error_events.word_sense_id = NULL`
 
 ## Уникальные ограничения
 
 | Таблица | Constraint | Поля |
 |---|---|---|
 | `users` | UK | `email` |
-| `base_lexicon_entries` | UK | `english_lemma` |
 | `dictionary_entries` | UK | `(english_lemma, russian_translation)` |
 | `user_vocabulary` | UK | `(user_id, entry_id)` |
-| `word_progress` | UK | `(user_id, word)` |
+| `user_vocabulary` | UK | `(user_id, phrase_en)` |
+| `word_progress` | UK index | `(user_id, vocabulary_id)` |
 | `learning_session_answers` | UK | `(session_id, exercise_id)` |
 | `user_interests` | UK | `(user_id, interest_key)` |
-| `topic_clusters` | UK | `(user_id, cluster_key)` |
-| `word_senses` | UK | `(user_id, english_lemma, semantic_key)` |
-| `vocabulary_sense_links` | UK | `(user_id, vocabulary_item_id)` |
-| `sense_relations` | UK | `(user_id, left_sense_id, right_sense_id)` |
+| `topic_clusters` | UK | `cluster_key` |
+| `word_senses` | UK | `(english_lemma, semantic_key)` |
+| `vocabulary_sense_links` | UK | `vocabulary_item_id` |
+| `sense_relations` | UK | `(left_sense_id, right_sense_id)` |
 
 ## Mermaid ER-диаграмма
 
@@ -119,14 +122,8 @@ erDiagram
         INTEGER id PK
         VARCHAR_320 email UK
         VARCHAR_200 full_name
+        VARCHAR_512 password_hash
         VARCHAR_2 cefr_level
-        TIMESTAMP created_at
-    }
-
-    base_lexicon_entries {
-        INTEGER id PK
-        VARCHAR_200 english_lemma UK
-        VARCHAR_200 russian_translation
         TIMESTAMP created_at
     }
 
@@ -142,6 +139,8 @@ erDiagram
         INTEGER id PK
         INTEGER user_id FK
         INTEGER entry_id FK
+        VARCHAR_500 phrase_en
+        VARCHAR_500 phrase_ru
         TEXT source_sentence
         VARCHAR_2000 source_url
         TIMESTAMP added_at
@@ -150,9 +149,11 @@ erDiagram
     word_progress {
         INTEGER id PK
         INTEGER user_id FK
-        VARCHAR_200 word
+        INTEGER vocabulary_id FK
         INTEGER error_count
         INTEGER correct_streak
+        FLOAT ease_factor
+        INTEGER interval_days
         TIMESTAMP last_reviewed_at
         TIMESTAMP next_review_at
     }
@@ -190,7 +191,6 @@ erDiagram
 
     topic_clusters {
         INTEGER id PK
-        INTEGER user_id FK
         VARCHAR_64 cluster_key
         VARCHAR_120 name
         TIMESTAMP created_at
@@ -198,20 +198,16 @@ erDiagram
 
     word_senses {
         INTEGER id PK
-        INTEGER user_id FK
         VARCHAR_200 english_lemma
         VARCHAR_120 semantic_key
         VARCHAR_200 russian_translation
         TEXT context_definition_ru
-        TEXT source_sentence
-        VARCHAR_2000 source_url
         INTEGER topic_cluster_id FK
         TIMESTAMP created_at
     }
 
     vocabulary_sense_links {
         INTEGER id PK
-        INTEGER user_id FK
         INTEGER vocabulary_item_id FK
         INTEGER word_sense_id FK
         TIMESTAMP created_at
@@ -219,7 +215,6 @@ erDiagram
 
     sense_relations {
         INTEGER id PK
-        INTEGER user_id FK
         INTEGER left_sense_id FK
         INTEGER right_sense_id FK
         VARCHAR_64 relation_type
@@ -240,23 +235,30 @@ erDiagram
         TIMESTAMP created_at
     }
 
-    users ||--o{ user_vocabulary : owns
-    users ||--o{ word_progress : tracks
-    users ||--o{ learning_sessions : owns
-    users ||--o{ user_interests : has
-    users ||--o{ topic_clusters : has
-    users ||--o{ word_senses : has
-    users ||--o{ vocabulary_sense_links : has
-    users ||--o{ sense_relations : has
-    users ||--o{ sense_error_events : has
+    users ||--o{ user_vocabulary : владеет
+    users ||--o{ word_progress : отслеживает
+    users ||--o{ learning_sessions : владеет
+    users ||--o{ user_interests : имеет
+    users ||--o{ sense_error_events : имеет
 
-    dictionary_entries ||--o{ user_vocabulary : entry_id
-    learning_sessions ||--o{ learning_session_answers : session_id
-    topic_clusters ||--o{ word_senses : topic_cluster_id
-    user_vocabulary ||--o{ vocabulary_sense_links : vocabulary_item_id
-    word_senses ||--o{ vocabulary_sense_links : word_sense_id
-    word_senses ||--o{ sense_relations : left_sense_id
-    word_senses ||--o{ sense_relations : right_sense_id
-    learning_sessions ||--o{ sense_error_events : session_id
-    word_senses ||--o{ sense_error_events : word_sense_id
+    dictionary_entries ||--o{ user_vocabulary : словарная_основа
+    user_vocabulary ||--o{ word_progress : прогресс_по_записи
+    learning_sessions ||--o{ learning_session_answers : содержит_ответы
+    topic_clusters ||--o{ word_senses : объединяет_смыслы
+    user_vocabulary ||--o{ vocabulary_sense_links : связывает_со_смыслом
+    word_senses ||--o{ vocabulary_sense_links : связан_со_словарем
+    word_senses ||--o{ sense_relations : левая_связь
+    word_senses ||--o{ sense_relations : правая_связь
+    learning_sessions ||--o{ sense_error_events : источник_ошибки
+    word_senses ||--o{ sense_error_events : привязка_к_смыслу
 ```
+
+## Комментарий для защиты
+
+Если показывать схему на защите, удобнее объяснять ее не по таблицам, а по трем слоям:
+
+- словарь: `dictionary_entries`, `user_vocabulary`
+- повторение: `word_progress`, `learning_sessions`, `learning_session_answers`
+- семантический профиль и граф: `user_interests`, `topic_clusters`, `word_senses`, `vocabulary_sense_links`, `sense_relations`, `sense_error_events`
+
+Так схема выглядит проще и лучше отражает реальные пользовательские сценарии.

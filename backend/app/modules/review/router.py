@@ -31,7 +31,7 @@ def _progress_to_read(progress: WordProgressModel, vocab_map: dict) -> WordProgr
     vocab_item = vocab_map.get(progress.vocabulary_id) if progress.vocabulary_id is not None else None
     return WordProgressRead(
         user_id=progress.user_id,
-        word=progress.word,
+        word=vocab_item.english_lemma if vocab_item is not None else "",
         vocabulary_id=progress.vocabulary_id,
         russian_translation=vocab_item.russian_translation if vocab_item is not None else None,
         error_count=progress.error_count,
@@ -149,17 +149,6 @@ def list_word_progress_me(
         items=[WordProgressRead(**item) for item in result["items"]],
     )
 
-
-@router.get("/context/me/word-progress/{word}", response_model=WordProgressRead)
-def get_word_progress_me(
-    word: str,
-    current_user_id: int = Depends(get_current_user_id),
-    srs_service: SRSService = Depends(get_srs_service),
-    vocab_service: VocabularyService = Depends(),
-) -> WordProgressRead:
-    progress = srs_service.get_word_progress(user_id=current_user_id, current_user_id=current_user_id, word=word)
-    vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=current_user_id)}
-    return _progress_to_read(progress, vocab_map)
 
 
 @router.delete("/context/me/word-progress/{vocabulary_id}", response_model=WordProgressDeleteResponse)
@@ -341,18 +330,6 @@ def list_word_progress(
         items=[WordProgressRead(**item) for item in result["items"]],
     )
 
-
-@router.get("/context/{user_id}/word-progress/{word}", response_model=WordProgressRead)
-def get_word_progress(
-    user_id: int,
-    word: str,
-    current_user_id: int = Depends(get_current_user_id),
-    srs_service: SRSService = Depends(get_srs_service),
-    vocab_service: VocabularyService = Depends(),
-) -> WordProgressRead:
-    progress = srs_service.get_word_progress(user_id=user_id, current_user_id=current_user_id, word=word)
-    vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=user_id)}
-    return _progress_to_read(progress, vocab_map)
 
 
 @router.delete("/context/{user_id}/word-progress/{vocabulary_id}", response_model=WordProgressDeleteResponse)

@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.modules.vocabulary.models import (
-    BaseLexiconEntryModel,
     DictionaryEntryModel,
     UserVocabularyModel,
 )
@@ -417,50 +416,3 @@ class VocabularyRepository:
                 result.append(lemma)
         return result
 
-    # ------------------------------------------------------------------
-    # BaseLexicon — локальный офлайн-словарь
-    # ------------------------------------------------------------------
-
-    def get_base_lexicon_entry(self, *, english_lemma: str) -> BaseLexiconEntryModel | None:
-        normalized = english_lemma.strip().lower()
-        if not normalized:
-            return None
-        return self._db.scalar(
-            select(BaseLexiconEntryModel).where(BaseLexiconEntryModel.english_lemma == normalized)
-        )
-
-    def count_base_lexicon_entries(self) -> int:
-        return int(self._db.scalar(select(func.count(BaseLexiconEntryModel.id))) or 0)
-
-    def seed_default_base_lexicon_entries(self, *, entries: list[tuple[str, str]]) -> int:
-        created = 0
-        for english_lemma, russian_translation in entries:
-            normalized = (english_lemma or "").strip().lower()
-            translated = (russian_translation or "").strip()
-            if not normalized or not translated:
-                continue
-            if self.get_base_lexicon_entry(english_lemma=normalized) is not None:
-                continue
-            self._db.add(BaseLexiconEntryModel(english_lemma=normalized, russian_translation=translated))
-            created += 1
-        if created:
-            self._db.flush()
-        return created
-
-    def upsert_base_lexicon_entries(self, *, entries: list[tuple[str, str]]) -> int:
-        updated = 0
-        for english_lemma, russian_translation in entries:
-            normalized = (english_lemma or "").strip().lower()
-            translated = (russian_translation or "").strip()
-            if not normalized or not translated:
-                continue
-            existing = self.get_base_lexicon_entry(english_lemma=normalized)
-            if existing is None:
-                self._db.add(BaseLexiconEntryModel(english_lemma=normalized, russian_translation=translated))
-                updated += 1
-            elif existing.russian_translation != translated:
-                existing.russian_translation = translated
-                updated += 1
-        if updated:
-            self._db.flush()
-        return updated
