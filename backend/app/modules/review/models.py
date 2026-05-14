@@ -19,6 +19,7 @@ class WordProgressModel(Base):
     __tablename__ = "word_progress"
     __table_args__ = (
         Index("uq_word_progress_user_vocabulary", "user_id", "vocabulary_id", unique=True),
+        Index("ix_word_progress_user_next_review", "user_id", "next_review_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)

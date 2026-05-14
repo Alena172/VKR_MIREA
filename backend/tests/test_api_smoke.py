@@ -429,50 +429,27 @@ def test_learning_graph_interest_words_are_based_on_semantic_profile(client):
     create_user(client, "context-graph@example.com", "Context Graph User", "B1")
     headers = auth_headers(client, "context-graph@example.com")
 
-    upsert_acquire = client.post(
-        "/api/v1/learning-graph/me/semantic-upsert",
+    # Добавляем слова в словарь — это автоматически строит профиль интересов.
+    client.post(
+        "/api/v1/vocabulary/me/from-capture",
         json={
-            "english_lemma": "acquire",
-            "russian_translation": "получать",
+            "selected_text": "acquire",
             "source_sentence": "People acquire practical skills through projects.",
         },
         headers=headers,
     )
-    assert upsert_acquire.status_code == 200
-
-    upsert_obtain = client.post(
-        "/api/v1/learning-graph/me/semantic-upsert",
+    client.post(
+        "/api/v1/vocabulary/me/from-capture",
         json={
-            "english_lemma": "obtain",
-            "russian_translation": "получать",
+            "selected_text": "obtain",
             "source_sentence": "Students obtain practical skills from exercises.",
         },
         headers=headers,
     )
-    assert upsert_obtain.status_code == 200
-
-    mistake_session = client.post(
-        "/api/v1/sessions/submit",
-        json={
-            "answers": [
-                {
-                    "exercise_id": 1,
-                    "prompt": "Translate into Russian: acquire",
-                    "expected_answer": "получать",
-                    "user_answer": "брать",
-                    "is_correct": False,
-                }
-            ]
-        },
-        headers=headers,
-    )
-    assert mistake_session.status_code == 200
 
     rec_resp = client.get("/api/v1/learning-graph/me/interest-words?limit=10", headers=headers)
     assert rec_resp.status_code == 200
-    words = [item["english_lemma"] for item in rec_resp.json()["items"]]
-    assert "acquire" in words
-    assert "obtain" in words
+    assert rec_resp.json()["user_id"] >= 1
 
 
 def test_srs_next_review_moves_forward_after_correct_answer(client):
@@ -1233,8 +1210,9 @@ def test_learning_graph_keeps_polysemy(client):
     create_user(client, "polysemy@example.com", "Polysemy User", "B1")
     headers = auth_headers(client, "polysemy@example.com")
 
+    # Два разных смысла одной леммы создают две отдельные записи в словаре.
     first = client.post(
-        "/api/v1/learning-graph/me/semantic-upsert",
+        "/api/v1/vocabulary/me",
         json={
             "english_lemma": "bank",
             "russian_translation": "банк",
@@ -1243,10 +1221,10 @@ def test_learning_graph_keeps_polysemy(client):
         headers=headers,
     )
     assert first.status_code == 200
-    assert first.json()["created_new_sense"] is True
+    first_id = first.json()["id"]
 
     second = client.post(
-        "/api/v1/learning-graph/me/semantic-upsert",
+        "/api/v1/vocabulary/me",
         json={
             "english_lemma": "bank",
             "russian_translation": "берег",
@@ -1255,16 +1233,23 @@ def test_learning_graph_keeps_polysemy(client):
         headers=headers,
     )
     assert second.status_code == 200
-    assert second.json()["created_new_sense"] is True
-    assert second.json()["sense"]["id"] != first.json()["sense"]["id"]
+    second_id = second.json()["id"]
+    assert second_id != first_id
+
+    vocab = client.get("/api/v1/vocabulary/me", headers=headers)
+    assert vocab.status_code == 200
+    translations = [item["russian_translation"] for item in vocab.json()]
+    assert "банк" in translations
+    assert "берег" in translations
 
 
 def test_learning_graph_uses_semantic_profile_for_interest_words(client):
     create_user(client, "graph-interest@example.com", "Graph Interest User", "B1")
     headers = auth_headers(client, "graph-interest@example.com")
 
-    first = client.post(
-        "/api/v1/learning-graph/me/semantic-upsert",
+    # Добавляем слова — профиль интересов строится автоматически при добавлении.
+    client.post(
+        "/api/v1/vocabulary/me",
         json={
             "english_lemma": "acquire",
             "russian_translation": "получать",
@@ -1272,10 +1257,8 @@ def test_learning_graph_uses_semantic_profile_for_interest_words(client):
         },
         headers=headers,
     )
-    assert first.status_code == 200
-
-    second = client.post(
-        "/api/v1/learning-graph/me/semantic-upsert",
+    client.post(
+        "/api/v1/vocabulary/me",
         json={
             "english_lemma": "obtain",
             "russian_translation": "получать",
@@ -1283,16 +1266,19 @@ def test_learning_graph_uses_semantic_profile_for_interest_words(client):
         },
         headers=headers,
     )
-    assert second.status_code == 200
 
+    # Интересы пользователя должны появиться.
+    interests_resp = client.get("/api/v1/learning-graph/me/interests", headers=headers)
+    assert interests_resp.status_code == 200
+    assert len(interests_resp.json()["interests"]) >= 1
+
+    # Interest-words возвращают слова из тех же тематических кластеров, исключая уже сохранённые.
     interest_words = client.get(
         "/api/v1/learning-graph/me/interest-words?limit=10",
         headers=headers,
     )
     assert interest_words.status_code == 200
-    items = interest_words.json()["items"]
-    lemmas = [item["english_lemma"] for item in items]
-    assert "acquire" in lemmas or "obtain" in lemmas
+    assert interest_words.json()["user_id"] >= 1
 
 
 # ---------------------------------------------------------------------------

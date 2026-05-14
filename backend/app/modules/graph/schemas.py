@@ -15,28 +15,6 @@ class UserInterestsResponse(BaseModel):
     interests: list[InterestItem]
 
 
-class SemanticUpsertRequest(BaseModel):
-    english_lemma: str = Field(min_length=1, max_length=200)
-    russian_translation: str = Field(min_length=1, max_length=200)
-    context_definition_ru: str | None = Field(default=None, max_length=3000)
-    source_sentence: str | None = Field(default=None, max_length=5000)
-    source_url: str | None = Field(default=None, max_length=2000)
-    topic_hint: str | None = Field(default=None, max_length=120)
-    vocabulary_item_id: int | None = Field(default=None, ge=1)
-
-
-class WordSenseRead(BaseModel):
-    id: int
-    english_lemma: str
-    semantic_key: str
-    russian_translation: str
-
-
-class SemanticUpsertResponse(BaseModel):
-    user_id: int
-    created_new_sense: bool
-    sense: WordSenseRead
-
 
 class InterestWordItem(BaseModel):
     english_lemma: str

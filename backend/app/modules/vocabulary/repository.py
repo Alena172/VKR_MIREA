@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import Depends
-from sqlalchemy import bindparam, func, select, text
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy import bindparam, func, select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -12,26 +9,6 @@ from app.modules.vocabulary.models import (
     DictionaryEntryModel,
     UserVocabularyModel,
 )
-
-
-def _legacy_row_to_models(row) -> tuple[UserVocabularyModel, DictionaryEntryModel]:
-    timestamp = row.added_at or datetime.utcnow()
-    uv = UserVocabularyModel(
-        id=row.id,
-        user_id=row.user_id,
-        entry_id=row.id,
-        source_sentence=row.source_sentence,
-        source_url=row.source_url,
-        added_at=timestamp,
-    )
-    entry = DictionaryEntryModel(
-        id=row.id,
-        english_lemma=row.english_lemma,
-        russian_translation=row.russian_translation,
-        context_definition_ru=row.context_definition_ru,
-        created_at=timestamp,
-    )
-    return uv, entry
 
 
 class VocabularyRepository:
@@ -48,6 +25,7 @@ class VocabularyRepository:
         english_lemma: str,
         russian_translation: str,
         context_definition_ru: str | None,
+        topic_cluster_id: int | None = None,
     ) -> tuple[DictionaryEntryModel, bool]:
         normalized_lemma = english_lemma.strip().lower()
         normalized_translation = russian_translation.strip()
@@ -59,8 +37,14 @@ class VocabularyRepository:
             )
         )
         if existing is not None:
+            updated = False
             if context_definition_ru and not existing.context_definition_ru:
                 existing.context_definition_ru = context_definition_ru
+                updated = True
+            if topic_cluster_id and not existing.topic_cluster_id:
+                existing.topic_cluster_id = topic_cluster_id
+                updated = True
+            if updated:
                 self._db.flush()
             return existing, False
 
@@ -68,6 +52,7 @@ class VocabularyRepository:
             english_lemma=normalized_lemma,
             russian_translation=normalized_translation,
             context_definition_ru=context_definition_ru,
+            topic_cluster_id=topic_cluster_id,
         )
         self._db.add(entry)
         self._db.flush()
@@ -121,18 +106,14 @@ class VocabularyRepository:
         user_id: int,
         item_id: int,
     ) -> tuple[UserVocabularyModel, DictionaryEntryModel] | None:
-        try:
-            row = self._db.execute(
-                select(UserVocabularyModel, DictionaryEntryModel)
-                .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
-                .where(
-                    UserVocabularyModel.id == item_id,
-                    UserVocabularyModel.user_id == user_id,
-                )
-            ).first()
-        except ProgrammingError:
-            self._db.rollback()
-            return None
+        row = self._db.execute(
+            select(UserVocabularyModel, DictionaryEntryModel)
+            .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
+            .where(
+                UserVocabularyModel.id == item_id,
+                UserVocabularyModel.user_id == user_id,
+            )
+        ).first()
         return (row[0], row[1]) if row else None
 
     def add_to_user_vocabulary(
@@ -196,45 +177,26 @@ class VocabularyRepository:
         return item, True
 
     def list_user_vocabulary(self, *, user_id: int) -> list[tuple[UserVocabularyModel, DictionaryEntryModel | None]]:
-        try:
-            # Обычные слова: хранятся через связь с `dictionary_entries`.
-            word_rows = self._db.execute(
-                select(UserVocabularyModel, DictionaryEntryModel)
-                .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
-                .where(UserVocabularyModel.user_id == user_id)
-                .order_by(UserVocabularyModel.added_at.desc())
-            ).all()
-            # Фразы: лежат напрямую в `user_vocabulary`, поэтому `entry_id IS NULL`.
-            phrase_rows = list(self._db.scalars(
-                select(UserVocabularyModel)
-                .where(
-                    UserVocabularyModel.user_id == user_id,
-                    UserVocabularyModel.entry_id.is_(None),
-                )
-                .order_by(UserVocabularyModel.added_at.desc())
-            ))
-            result: list[tuple[UserVocabularyModel, DictionaryEntryModel | None]] = [
-                (uv, entry) for uv, entry in word_rows
-            ]
-            result.extend((uv, None) for uv in phrase_rows)
-            result.sort(key=lambda row: row[0].added_at, reverse=True)
-            return result
-        except ProgrammingError:
-            self._db.rollback()
-            rows = self._db.execute(
-                text(
-                    """
-                    SELECT id, user_id, english_lemma, russian_translation,
-                           context_definition_ru, source_sentence, source_url,
-                           NULL::timestamp AS added_at
-                    FROM vocabulary_items
-                    WHERE user_id = :user_id
-                    ORDER BY id DESC
-                    """
-                ),
-                {"user_id": user_id},
-            ).all()
-            return [_legacy_row_to_models(row) for row in rows]
+        word_rows = self._db.execute(
+            select(UserVocabularyModel, DictionaryEntryModel)
+            .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
+            .where(UserVocabularyModel.user_id == user_id)
+            .order_by(UserVocabularyModel.added_at.desc())
+        ).all()
+        phrase_rows = list(self._db.scalars(
+            select(UserVocabularyModel)
+            .where(
+                UserVocabularyModel.user_id == user_id,
+                UserVocabularyModel.entry_id.is_(None),
+            )
+            .order_by(UserVocabularyModel.added_at.desc())
+        ))
+        result: list[tuple[UserVocabularyModel, DictionaryEntryModel | None]] = [
+            (uv, entry) for uv, entry in word_rows
+        ]
+        result.extend((uv, None) for uv in phrase_rows)
+        result.sort(key=lambda row: row[0].added_at, reverse=True)
+        return result
 
     def update_user_vocabulary_item(
         self,
@@ -261,38 +223,17 @@ class VocabularyRepository:
         normalized = english_lemma.strip().lower()
         if not normalized:
             return None
-        try:
-            row = self._db.execute(
-                select(UserVocabularyModel, DictionaryEntryModel)
-                .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
-                .where(
-                    UserVocabularyModel.user_id == user_id,
-                    DictionaryEntryModel.english_lemma == normalized,
-                )
-                .order_by(UserVocabularyModel.added_at.desc())
-                .limit(1)
-            ).first()
-            return (row[0], row[1]) if row else None
-        except ProgrammingError:
-            self._db.rollback()
-            row = self._db.execute(
-                text(
-                    """
-                    SELECT id, user_id, english_lemma, russian_translation,
-                           context_definition_ru, source_sentence, source_url,
-                           NULL::timestamp AS added_at
-                    FROM vocabulary_items
-                    WHERE user_id = :user_id
-                      AND english_lemma = :lemma
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """
-                ),
-                {"user_id": user_id, "lemma": normalized},
-            ).first()
-            if row is None:
-                return None
-            return _legacy_row_to_models(row)
+        row = self._db.execute(
+            select(UserVocabularyModel, DictionaryEntryModel)
+            .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
+            .where(
+                UserVocabularyModel.user_id == user_id,
+                DictionaryEntryModel.english_lemma == normalized,
+            )
+            .order_by(UserVocabularyModel.added_at.desc())
+            .limit(1)
+        ).first()
+        return (row[0], row[1]) if row else None
 
     # ------------------------------------------------------------------
     # Вспомогательные запросы для смежных модулей
@@ -302,28 +243,15 @@ class VocabularyRepository:
         normalized = [l.strip().lower() for l in english_lemmas if l and l.strip()]
         if not normalized:
             return {}
-        try:
-            rows = self._db.execute(
-                select(DictionaryEntryModel.english_lemma, DictionaryEntryModel.russian_translation)
-                .join(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
-                .where(
-                    UserVocabularyModel.user_id == user_id,
-                    DictionaryEntryModel.english_lemma.in_(normalized),
-                )
-                .order_by(UserVocabularyModel.added_at.desc())
-            ).all()
-        except ProgrammingError:
-            self._db.rollback()
-            legacy_stmt = text(
-                """
-                SELECT english_lemma, russian_translation
-                FROM vocabulary_items
-                WHERE user_id = :user_id
-                  AND english_lemma IN :lemmas
-                ORDER BY id DESC
-                """
-            ).bindparams(bindparam("lemmas", expanding=True))
-            rows = self._db.execute(legacy_stmt, {"user_id": user_id, "lemmas": normalized}).all()
+        rows = self._db.execute(
+            select(DictionaryEntryModel.english_lemma, DictionaryEntryModel.russian_translation)
+            .join(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
+            .where(
+                UserVocabularyModel.user_id == user_id,
+                DictionaryEntryModel.english_lemma.in_(normalized),
+            )
+            .order_by(UserVocabularyModel.added_at.desc())
+        ).all()
         result: dict[str, str] = {}
         for lemma, translation in rows:
             if lemma not in result:
@@ -334,30 +262,16 @@ class VocabularyRepository:
         normalized = [l.strip().lower() for l in english_lemmas if l and l.strip()]
         if not normalized:
             return {}
-        try:
-            rows = self._db.execute(
-                select(DictionaryEntryModel.english_lemma, DictionaryEntryModel.context_definition_ru)
-                .join(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
-                .where(
-                    UserVocabularyModel.user_id == user_id,
-                    DictionaryEntryModel.english_lemma.in_(normalized),
-                    DictionaryEntryModel.context_definition_ru.is_not(None),
-                )
-                .order_by(UserVocabularyModel.added_at.desc())
-            ).all()
-        except ProgrammingError:
-            self._db.rollback()
-            legacy_stmt = text(
-                """
-                SELECT english_lemma, context_definition_ru
-                FROM vocabulary_items
-                WHERE user_id = :user_id
-                  AND english_lemma IN :lemmas
-                  AND context_definition_ru IS NOT NULL
-                ORDER BY id DESC
-                """
-            ).bindparams(bindparam("lemmas", expanding=True))
-            rows = self._db.execute(legacy_stmt, {"user_id": user_id, "lemmas": normalized}).all()
+        rows = self._db.execute(
+            select(DictionaryEntryModel.english_lemma, DictionaryEntryModel.context_definition_ru)
+            .join(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
+            .where(
+                UserVocabularyModel.user_id == user_id,
+                DictionaryEntryModel.english_lemma.in_(normalized),
+                DictionaryEntryModel.context_definition_ru.is_not(None),
+            )
+            .order_by(UserVocabularyModel.added_at.desc())
+        ).all()
         result: dict[str, str] = {}
         for lemma, definition in rows:
             if lemma not in result:
@@ -365,28 +279,12 @@ class VocabularyRepository:
         return result
 
     def list_english_lemmas(self, *, user_id: int) -> list[str]:
-        try:
-            rows = list(self._db.scalars(
-                select(DictionaryEntryModel.english_lemma)
-                .join(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
-                .where(UserVocabularyModel.user_id == user_id)
-                .order_by(UserVocabularyModel.added_at.desc())
-            ))
-        except ProgrammingError:
-            self._db.rollback()
-            rows = list(
-                self._db.scalars(
-                    text(
-                        """
-                        SELECT english_lemma
-                        FROM vocabulary_items
-                        WHERE user_id = :user_id
-                        ORDER BY id DESC
-                        """
-                    ),
-                    {"user_id": user_id},
-                )
-            )
+        rows = list(self._db.scalars(
+            select(DictionaryEntryModel.english_lemma)
+            .join(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
+            .where(UserVocabularyModel.user_id == user_id)
+            .order_by(UserVocabularyModel.added_at.desc())
+        ))
         seen: set[str] = set()
         result: list[str] = []
         for lemma in rows:
@@ -394,4 +292,3 @@ class VocabularyRepository:
                 seen.add(lemma)
                 result.append(lemma)
         return result
-

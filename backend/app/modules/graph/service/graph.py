@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 
 from app.core.db import transaction
 from app.modules.graph.repository import GraphRepository
@@ -10,15 +10,12 @@ from app.modules.graph.schemas import (
     InterestUpsertRequest,
     InterestWordItem,
     InterestWordsResponse,
-    SemanticUpsertRequest,
-    SemanticUpsertResponse,
     UserInterestsResponse,
-    WordSenseRead,
 )
 
 
 class GraphService:
-    """Сервис уровня application для семантического профиля, интересов и смыслов слов."""
+    """Сервис уровня application для профиля интересов пользователя."""
 
     def __init__(
         self,
@@ -53,39 +50,6 @@ class GraphService:
             interests=[InterestItem(interest=i.interest, weight=i.weight) for i in updated],
         )
 
-    def semantic_upsert(
-        self,
-        *,
-        payload: SemanticUpsertRequest,
-        current_user_id: int,
-    ) -> SemanticUpsertResponse:
-        self._get_user_or_404(current_user_id)
-        try:
-            with transaction(self._repo._db):
-                result = self._repo.semantic_upsert(
-                    user_id=current_user_id,
-                    english_lemma=payload.english_lemma,
-                    russian_translation=payload.russian_translation,
-                    context_definition_ru=payload.context_definition_ru,
-                    source_sentence=payload.source_sentence,
-                    source_url=payload.source_url,
-                    topic_hint=payload.topic_hint,
-                    vocabulary_item_id=payload.vocabulary_item_id,
-                )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-        return SemanticUpsertResponse(
-            user_id=current_user_id,
-            created_new_sense=result.created_new,
-            sense=WordSenseRead(
-                id=result.sense.id,
-                english_lemma=result.sense.english_lemma,
-                semantic_key=result.sense.semantic_key,
-                russian_translation=result.sense.russian_translation,
-            ),
-        )
-
     def get_interest_words(
         self,
         *,
@@ -114,7 +78,7 @@ class GraphService:
             ],
         )
 
-    def register_vocabulary_semantics(
+    def register_word_topic(
         self,
         *,
         user_id: int,
@@ -122,24 +86,22 @@ class GraphService:
         russian_translation: str,
         context_definition_ru: str | None,
         source_sentence: str | None,
-        source_url: str | None,
-        vocabulary_item_id: int | None,
-    ) -> dict:
-        result = self._repo.semantic_upsert(
-            user_id=user_id,
+    ) -> int | None:
+        """Инферирует тему слова, создаёт кластер если нужно, обновляет интересы.
+
+        Возвращает topic_cluster_id для записи в dictionary_entries.
+        """
+        cluster_key, display_name = self._repo.infer_topic(
             english_lemma=english_lemma,
             russian_translation=russian_translation,
             context_definition_ru=context_definition_ru,
             source_sentence=source_sentence,
-            source_url=source_url,
-            vocabulary_item_id=vocabulary_item_id,
         )
-        return {
-            "sense_id": result.sense.id,
-            "semantic_key": result.sense.semantic_key,
-            "created_new": result.created_new,
-        }
-
-    def delete_vocabulary_links(self, *, user_id: int, vocabulary_item_id: int) -> int:
-        return self._repo.delete_vocabulary_links(vocabulary_item_id=vocabulary_item_id)
-
+        cluster = self._repo.ensure_cluster(cluster_key=cluster_key, display_name=display_name)
+        self._repo.increase_interest(
+            user_id=user_id,
+            cluster_key=cluster_key,
+            display_name=display_name,
+            confidence=0.55,
+        )
+        return cluster.id

@@ -8,11 +8,8 @@ from alembic import context
 from app.core.config import get_settings
 from app.core.db import Base
 from app.modules.graph.models import (
-    SenseRelationModel,
     TopicClusterModel,
     UserInterestModel,
-    VocabularySenseLinkModel,
-    WordSenseModel,
 )
 from app.modules.identity.models import UserModel
 from app.modules.review.models import WordProgressModel
@@ -32,9 +29,6 @@ _ = (
     AnswerModel,
     UserInterestModel,
     TopicClusterModel,
-    WordSenseModel,
-    VocabularySenseLinkModel,
-    SenseRelationModel,
 )
 
 config = context.config

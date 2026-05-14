@@ -230,6 +230,17 @@ def upgrade() -> None:
     if _column_exists(bind, "vocabulary_sense_links", "user_id"):
         if _constraint_exists(bind, "vocabulary_sense_links", "uq_vocab_sense_link_user_vocab"):
             op.drop_constraint("uq_vocab_sense_link_user_vocab", "vocabulary_sense_links", type_="unique")
+        # Удаляем дубликаты по vocabulary_item_id перед созданием уникального ограничения
+        bind.execute(sa.text(
+            """
+            DELETE FROM vocabulary_sense_links
+            WHERE id NOT IN (
+                SELECT MAX(id)
+                FROM vocabulary_sense_links
+                GROUP BY vocabulary_item_id
+            )
+            """
+        ))
         if not _constraint_exists(bind, "vocabulary_sense_links", "uq_vocab_sense_link_vocab"):
             op.create_unique_constraint("uq_vocab_sense_link_vocab", "vocabulary_sense_links", ["vocabulary_item_id"])
         op.drop_column("vocabulary_sense_links", "user_id")

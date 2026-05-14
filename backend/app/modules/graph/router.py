@@ -3,8 +3,6 @@ from fastapi import APIRouter, Depends, Query
 from app.modules.graph.schemas import (
     InterestUpsertRequest,
     InterestWordsResponse,
-    SemanticUpsertRequest,
-    SemanticUpsertResponse,
     UserInterestsResponse,
 )
 from app.modules.graph.service.graph import GraphService
@@ -29,15 +27,6 @@ def upsert_interests_me(
     service: GraphService = Depends(),
 ) -> UserInterestsResponse:
     return service.upsert_interests(payload=payload, current_user_id=current_user_id)
-
-
-@router.post("/me/semantic-upsert", response_model=SemanticUpsertResponse)
-def semantic_upsert_me(
-    payload: SemanticUpsertRequest,
-    current_user_id: int = Depends(get_current_user_id),
-    service: GraphService = Depends(),
-) -> SemanticUpsertResponse:
-    return service.semantic_upsert(payload=payload, current_user_id=current_user_id)
 
 
 @router.get("/me/interest-words", response_model=InterestWordsResponse)

@@ -15,13 +15,12 @@ from app.main import app
 from app.modules.identity.models import UserModel
 from app.modules.training.models import LearningSessionModel
 from app.modules.vocabulary.models import (
-    BaseLexiconEntryModel,
     DictionaryEntryModel,
     UserVocabularyModel,
 )
 
 # Сохраняем импорты, чтобы SQLAlchemy зарегистрировал metadata всех моделей.
-_ = (UserModel, DictionaryEntryModel, UserVocabularyModel, LearningSessionModel, BaseLexiconEntryModel)
+_ = (UserModel, DictionaryEntryModel, UserVocabularyModel, LearningSessionModel)
 
 
 test_engine = create_engine(

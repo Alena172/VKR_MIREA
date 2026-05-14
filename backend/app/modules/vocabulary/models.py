@@ -24,6 +24,9 @@ class DictionaryEntryModel(Base):
     english_lemma: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     russian_translation: Mapped[str] = mapped_column(String(200), nullable=False)
     context_definition_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
+    topic_cluster_id: Mapped[int | None] = mapped_column(
+        ForeignKey("topic_clusters.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

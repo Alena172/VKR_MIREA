@@ -203,10 +203,18 @@ class VocabularyService:
         )
 
         with transaction(self._repo._db):
+            topic_cluster_id = self._graph().register_word_topic(
+                user_id=user_id,
+                english_lemma=normalized_lemma,
+                russian_translation=normalized_translation,
+                context_definition_ru=definition_resolution.context_definition,
+                source_sentence=normalized_sentence,
+            )
             entry, _ = self._repo.get_or_create_dictionary_entry(
                 english_lemma=normalized_lemma,
                 russian_translation=normalized_translation,
                 context_definition_ru=definition_resolution.context_definition,
+                topic_cluster_id=topic_cluster_id,
             )
             uv, _ = self._repo.add_to_user_vocabulary(
                 user_id=user_id,
@@ -242,10 +250,6 @@ class VocabularyService:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")
         uv, _ = row
         with transaction(self._repo._db):
-            self._graph().delete_vocabulary_links(
-                user_id=current_user_id,
-                vocabulary_item_id=uv.id,
-            )
             self._repo.delete_user_vocabulary_item(uv)
         return {"deleted": True}
 
@@ -331,6 +335,14 @@ class VocabularyService:
                 and existing_row[1].russian_translation == russian_translation
             )
 
+            topic_cluster_id = self._graph().register_word_topic(
+                user_id=user_id,
+                english_lemma=english_lemma,
+                russian_translation=russian_translation,
+                context_definition_ru=definition_resolution.context_definition,
+                source_sentence=semantic_sentence,
+            )
+
             if same_sense:
                 uv, entry = existing_row
             else:
@@ -338,6 +350,7 @@ class VocabularyService:
                     english_lemma=english_lemma,
                     russian_translation=russian_translation,
                     context_definition_ru=definition_resolution.context_definition,
+                    topic_cluster_id=topic_cluster_id,
                 )
                 uv, _ = self._repo.add_to_user_vocabulary(
                     user_id=user_id,
@@ -347,15 +360,6 @@ class VocabularyService:
                 )
 
             self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
-            self._graph().register_vocabulary_semantics(
-                user_id=user_id,
-                english_lemma=english_lemma,
-                russian_translation=russian_translation,
-                context_definition_ru=definition_resolution.context_definition,
-                source_sentence=semantic_sentence,
-                source_url=normalized_url,
-                vocabulary_item_id=uv.id,
-            )
 
         return _to_dto(uv, entry), not same_sense
 
