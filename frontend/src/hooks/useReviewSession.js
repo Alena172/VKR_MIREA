@@ -15,7 +15,6 @@ export function useReviewSession({ onError }) {
   const [plan, setPlan] = useState(null);
   const [summary, setSummary] = useState(null);
   const [interestWords, setInterestWords] = useState([]);
-  const [semanticAnchorsByLemma, setSemanticAnchorsByLemma] = useState({});
   const [sessionSize, setSessionSize] = useState(20);
   const [sessionMode, setSessionMode] = useState(null);
   const [sessionItems, setSessionItems] = useState([]);
@@ -28,7 +27,7 @@ export function useReviewSession({ onError }) {
   const [sessionMessage, setSessionMessage] = useState("");
   const { abortAllRequests, registerController, releaseController } = useAbortControllers();
 
-  /** Загружает сводку, план и semantic anchors для обзорных блоков. */
+  /** Загружает сводку, план и слова по интересам. */
   async function loadReviewMeta() {
     const controller = registerController();
     try {
@@ -39,25 +38,7 @@ export function useReviewSession({ onError }) {
       ]);
       setPlan(planData);
       setSummary(summaryData);
-      const items = interestData?.items || [];
-      setInterestWords(items);
-
-      const topForAnchors = items.slice(0, 3);
-      if (!topForAnchors.length) {
-        setSemanticAnchorsByLemma({});
-        return;
-      }
-      const anchorResults = await Promise.allSettled(
-        topForAnchors.map((item) => api.learningGraphAnchors(item.english_lemma, 3, { signal: controller.signal })),
-      );
-      const anchorsMap = {};
-      topForAnchors.forEach((item, index) => {
-        const result = anchorResults[index];
-        if (result.status === "fulfilled") {
-          anchorsMap[item.english_lemma] = result.value?.anchors || [];
-        }
-      });
-      setSemanticAnchorsByLemma(anchorsMap);
+      setInterestWords(interestData?.items || []);
     } catch (error) {
       if (!isAbortError(error)) {
         onError(getErrorMessage(error));
@@ -179,6 +160,5 @@ export function useReviewSession({ onError }) {
     submitting,
     submitAnswer,
     summary,
-    semanticAnchorsByLemma,
   };
 }

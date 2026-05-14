@@ -95,7 +95,6 @@ def ensure_database_schema_ready(*, engine: Engine, database_url: str) -> None:
     with engine.begin() as conn:
         dictionary_entries_exists = _table_exists(conn, "dictionary_entries")
         user_vocabulary_exists = _table_exists(conn, "user_vocabulary")
-        sense_error_events_exists = _table_exists(conn, "sense_error_events")
         alembic_version_exists = _table_exists(conn, "alembic_version")
 
         current_version = None
@@ -105,7 +104,7 @@ def ensure_database_schema_ready(*, engine: Engine, database_url: str) -> None:
             ).scalar()
 
         shared_dictionary_ready = bool(dictionary_entries_exists and user_vocabulary_exists)
-        if shared_dictionary_ready and sense_error_events_exists:
+        if shared_dictionary_ready:
             return
 
         if current_version == "0013_shared_dictionary":

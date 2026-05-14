@@ -94,7 +94,7 @@ class TrainingService:
         required_count = size - len(prefetched)
         server_prefetch_extra = _PREFETCH_EXTRA if use_prefetch and not fast_start and not incremental else 0
         generation_target = required_count + server_prefetch_extra
-        seeds, anchors_used_count = self._build_seeds(user_id=user_id, vocabulary_items=vocabulary_items)
+        seeds = self._build_seeds(user_id=user_id, vocabulary_items=vocabulary_items)
         generated_items, provider_note = await exercise_builder.build_items(
             seeds=seeds,
             size=generation_target,
@@ -114,7 +114,7 @@ class TrainingService:
         incremental_note = "incremental; " if incremental else ""
         return ExerciseGenerateResultDTO(
             exercises=immediate_items[:size],
-            note=f"{note_prefix}{fast_start_note}{incremental_note}{provider_note}; semantic_context_used={anchors_used_count}",
+            note=f"{note_prefix}{fast_start_note}{incremental_note}{provider_note}",
         )
 
     def _resolve_vocabulary_items(
@@ -145,41 +145,35 @@ class TrainingService:
                 raise ValueError("Need at least 4 different words with saved definitions for definition matching.")
         return vocabulary_items
 
-    def _build_seeds(
-        self,
-        *,
-        user_id: int,
-        vocabulary_items,
-    ) -> tuple[list[ExerciseSeed], int]:
-        anchors_used_count = 0
-        seeds: list[ExerciseSeed] = []
-        for item in vocabulary_items:
-            source_sentence = item.source_sentence
-            anchors = self._graph_service.list_word_anchors(
-                user_id=user_id,
+    def _build_seeds(self, *, user_id: int, vocabulary_items) -> list[ExerciseSeed]:
+        saved_lemmas = {item.english_lemma.strip().lower() for item in vocabulary_items if item.english_lemma}
+        interest_words = self._graph_service.get_interest_words(
+            limit=10,
+            current_user_id=user_id,
+            saved_lemmas=saved_lemmas,
+        )
+        interest_hint = (
+            "Thematically related words to weave in: "
+            + ", ".join(f"{w.english_lemma} ({w.russian_translation})" for w in interest_words.items[:5])
+            + "."
+        ) if interest_words.items else None
+
+        seeds = [
+            ExerciseSeed(
                 english_lemma=item.english_lemma,
-                limit=3,
+                russian_translation=item.russian_translation,
+                context_definition_ru=item.context_definition_ru,
+                source_sentence=(
+                    f"{item.source_sentence} {interest_hint}".strip()
+                    if interest_hint and item.source_sentence
+                    else item.source_sentence or interest_hint
+                ),
             )
-            if anchors:
-                anchor_words = [anchor.english_lemma for anchor in anchors if anchor.english_lemma]
-                if anchor_words:
-                    anchors_used_count += 1
-                    anchor_hint = "Related known words: " + ", ".join(anchor_words) + "."
-                    source_sentence = f"{source_sentence or ''} {anchor_hint}".strip()
-
-            seeds.append(
-                ExerciseSeed(
-                    english_lemma=item.english_lemma,
-                    russian_translation=item.russian_translation,
-                    context_definition_ru=item.context_definition_ru,
-                    source_sentence=source_sentence,
-                )
-            )
-
+            for item in vocabulary_items
+        ]
         if len(seeds) > 1:
             secrets.SystemRandom().shuffle(seeds)
-
-        return seeds, anchors_used_count
+        return seeds
 
 
 def _dedupe_vocabulary_by_lemma(vocabulary_items):

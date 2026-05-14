@@ -103,25 +103,6 @@ function sortVocabularyItems(items, progressById, sortValue) {
   });
 }
 
-function getAnchorRelationMeta(anchor) {
-  if (anchor.relation_type === "semantic_overlap") {
-    return {
-      label: "Похожий контекст",
-      toneClass: "bg-emerald-100 text-emerald-700",
-    };
-  }
-  if (anchor.relation_type === "polysemy_variant") {
-    return {
-      label: "Другая грань слова",
-      toneClass: "bg-violet-100 text-violet-700",
-    };
-  }
-  return {
-    label: "Общий кластер",
-    toneClass: "bg-slate-100 text-slate-700",
-  };
-}
-
 export default function VocabularyPage({ onError }) {
   const navigate = useNavigate();
   const [selectedText, setSelectedText] = useState("apple");
@@ -131,8 +112,8 @@ export default function VocabularyPage({ onError }) {
   const [translationResult, setTranslationResult] = useState("");
   const [items, setItems] = useState([]);
   const [progressById, setProgressById] = useState({});
-  const [anchorsByWord, setAnchorsByWord] = useState({});
-  const [loadingAnchorsByWord, setLoadingAnchorsByWord] = useState({});
+  const [recommendations, setRecommendations] = useState([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortBy, setSortBy] = useState("review_priority");
@@ -272,28 +253,19 @@ export default function VocabularyPage({ onError }) {
     navigate("/review");
   }
 
-  async function toggleAnchors(item) {
-    const wordKey = item.english_lemma.toLowerCase();
-    if (anchorsByWord[wordKey]) {
-      setAnchorsByWord((prev) => {
-        const next = { ...prev };
-        delete next[wordKey];
-        return next;
-      });
-      return;
-    }
-
-    setLoadingAnchorsByWord((prev) => ({ ...prev, [wordKey]: true }));
+  async function loadRecommendations() {
+    setRecommendationsLoading(true);
+    const controller = registerController();
     try {
-      const data = await api.learningGraphAnchors(item.english_lemma, 5);
-      setAnchorsByWord((prev) => ({
-        ...prev,
-        [wordKey]: data?.anchors || [],
-      }));
+      const data = await api.learningGraphInterestWords(8, { signal: controller.signal });
+      setRecommendations(data?.items || []);
     } catch (error) {
-      onError(getErrorMessage(error));
+      if (!isAbortError(error)) {
+        setRecommendations([]);
+      }
     } finally {
-      setLoadingAnchorsByWord((prev) => ({ ...prev, [wordKey]: false }));
+      releaseController(controller);
+      setRecommendationsLoading(false);
     }
   }
 
@@ -311,6 +283,7 @@ export default function VocabularyPage({ onError }) {
 
   useEffect(() => {
     loadVocabulary();
+    loadRecommendations();
   }, []);
 
   const filteredItems = items.filter((item) => {
@@ -345,6 +318,39 @@ export default function VocabularyPage({ onError }) {
         <h2 className="section-title">Словарь и контекстный перевод</h2>
         <p className="muted mt-1 text-sm">Добавляйте новые слова и сразу проверяйте перевод в нужном контексте.</p>
       </header>
+
+      {(recommendations.length > 0 || recommendationsLoading) && (
+        <section className="surface p-4 md:p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <h3 className="text-base font-extrabold text-gray-900">Рекомендации по интересам</h3>
+            <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+              Новые слова для вас
+            </span>
+          </div>
+          <p className="muted mb-3 text-sm">Слова из тематик, которыми вы уже интересуетесь, но ещё не сохранили.</p>
+          {recommendationsLoading ? (
+            <p className="muted text-sm">Загружаю рекомендации...</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {recommendations.map((rec) => (
+                <div
+                  key={rec.english_lemma}
+                  className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2"
+                >
+                  <span className="font-semibold text-slate-900 text-sm">{rec.english_lemma}</span>
+                  <span className="text-slate-500 text-sm">—</span>
+                  <span className="text-slate-700 text-sm">{rec.russian_translation}</span>
+                  {rec.primary_signal && (
+                    <span className="rounded-full bg-white border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-600">
+                      {rec.primary_signal}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <form onSubmit={addViaStudyFlow} className="surface p-4 md:p-5 space-y-3">
@@ -419,9 +425,6 @@ export default function VocabularyPage({ onError }) {
           {sortedItems.map((item) => {
             const progress = progressById[item.id] || null;
             const state = getVocabularyState(item, progress);
-            const wordKey = item.english_lemma.toLowerCase();
-            const relatedAnchors = anchorsByWord[wordKey] || null;
-            const anchorsLoading = Boolean(loadingAnchorsByWord[wordKey]);
             return (
             <li key={item.id} className="surface p-4 md:p-5">
               {editingId === item.id ? (
@@ -476,32 +479,6 @@ export default function VocabularyPage({ onError }) {
                   </div>
                 </div>
               )}
-              {relatedAnchors ? (
-                <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
-                  <p className="text-sm font-semibold text-slate-900">Связанные слова из learning graph</p>
-                  {relatedAnchors.length ? (
-                    <div className="mt-2 grid gap-2">
-                      {relatedAnchors.map((anchor) => (
-                        <div key={`${item.id}-${anchor.english_lemma}`} className="rounded-xl bg-white px-3 py-2 text-sm text-slate-700">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-slate-900">
-                              {anchor.english_lemma} ({anchor.russian_translation})
-                            </span>
-                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getAnchorRelationMeta(anchor).toneClass}`}>
-                              {getAnchorRelationMeta(anchor).label}
-                            </span>
-                            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
-                              score {anchor.score.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm text-slate-600">Для этого слова пока не найдено связанных якорей.</p>
-                  )}
-                </div>
-              ) : null}
             </li>
             );
           })}

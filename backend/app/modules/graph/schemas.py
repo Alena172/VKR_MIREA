@@ -52,14 +52,3 @@ class InterestWordsResponse(BaseModel):
     items: list[InterestWordItem]
 
 
-class SenseAnchorItem(BaseModel):
-    english_lemma: str
-    russian_translation: str
-    relation_type: str
-    score: float
-
-
-class SenseAnchorsResponse(BaseModel):
-    user_id: int
-    english_lemma: str
-    anchors: list[SenseAnchorItem]

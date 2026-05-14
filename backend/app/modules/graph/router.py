@@ -5,12 +5,11 @@ from app.modules.graph.schemas import (
     InterestWordsResponse,
     SemanticUpsertRequest,
     SemanticUpsertResponse,
-    SenseAnchorsResponse,
     UserInterestsResponse,
 )
 from app.modules.graph.service.graph import GraphService
 from app.modules.identity.deps import get_current_user_id
-from app.modules.review.service.srs import SRSService
+from app.modules.vocabulary.service.items import VocabularyService
 
 router = APIRouter(prefix="/learning-graph", tags=["graph"])
 
@@ -46,25 +45,15 @@ def get_interest_words_me(
     limit: int = Query(default=10, ge=1, le=100),
     current_user_id: int = Depends(get_current_user_id),
     graph_service: GraphService = Depends(),
-    srs_service: SRSService = Depends(),
+    vocab_service: VocabularyService = Depends(),
 ) -> InterestWordsResponse:
-    known_lemmas = srs_service.list_mastered_lemmas(user_id=current_user_id)
+    saved_lemmas = {
+        item.english_lemma.strip().lower()
+        for item in vocab_service.list_user_items(user_id=current_user_id)
+        if item.english_lemma
+    }
     return graph_service.get_interest_words(
         limit=limit,
         current_user_id=current_user_id,
-        known_lemmas=known_lemmas,
-    )
-
-
-@router.get("/me/anchors", response_model=SenseAnchorsResponse)
-def get_anchors_me(
-    english_lemma: str = Query(min_length=1, max_length=200),
-    limit: int = Query(default=5, ge=1, le=50),
-    current_user_id: int = Depends(get_current_user_id),
-    service: GraphService = Depends(),
-) -> SenseAnchorsResponse:
-    return service.get_anchors(
-        english_lemma=english_lemma,
-        limit=limit,
-        current_user_id=current_user_id,
+        saved_lemmas=saved_lemmas,
     )

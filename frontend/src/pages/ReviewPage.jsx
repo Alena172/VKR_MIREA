@@ -2,17 +2,6 @@ import { useEffect, useState } from "react";
 import { useReviewSession } from "../hooks/useReviewSession";
 import { clearReviewFocus, loadReviewFocus } from "../lib/studyPresets";
 
-const PROFILE_SIGNAL_LABELS = {
-  InterestProfile: "Профиль интересов",
-  SameInterest: "Та же тема",
-  Polysemy: "Другой смысл слова",
-};
-
-const ANCHOR_RELATION_LABELS = {
-  same_interest: "та же тема",
-  polysemy_variant: "другой смысл",
-};
-
 const DATE_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
   day: "2-digit",
   month: "short",
@@ -116,7 +105,6 @@ export default function ReviewPage({ onError }) {
     sessionSize,
     setIsFlipped,
     setSessionSize,
-    semanticAnchorsByLemma,
     startSession,
     starting,
     submitting,
@@ -242,32 +230,19 @@ export default function ReviewPage({ onError }) {
             {interestWords.length ? (
               <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/50 p-3">
                 <p className="text-sm font-semibold text-gray-900">Слова из профиля интересов</p>
-                <div className="space-y-2">
-                  {interestWords.map((item) => {
-                    const signalLabel = PROFILE_SIGNAL_LABELS[item.primary_signal] || item.primary_signal || "Профиль интересов";
-                    const anchors = semanticAnchorsByLemma[item.english_lemma] || [];
-                    return (
-                      <div key={`interest-word-${item.english_lemma}`} className="rounded-lg border border-blue-100 bg-white p-2">
-                        <p className="text-sm font-semibold text-gray-900">
-                          {item.english_lemma} - {item.russian_translation}
-                        </p>
-                        <p className="mt-1 text-xs text-gray-600">
-                          Сигнал: <span className="font-semibold text-blue-700">{signalLabel}</span>
-                        </p>
-                        {anchors.length ? (
-                          <p className="mt-1 text-xs text-gray-600">
-                            Связанные смыслы:{" "}
-                            {anchors
-                              .map((anchor) => {
-                                const relationLabel = ANCHOR_RELATION_LABELS[anchor.relation_type] || anchor.relation_type;
-                                return `${anchor.english_lemma} (${anchor.russian_translation}, ${relationLabel})`;
-                              })
-                              .join(", ")}
-                          </p>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                <div className="flex flex-wrap gap-2">
+                  {interestWords.map((item) => (
+                    <div key={`interest-word-${item.english_lemma}`} className="rounded-lg border border-blue-100 bg-white px-3 py-2">
+                      <span className="text-sm font-semibold text-gray-900">{item.english_lemma}</span>
+                      <span className="mx-1 text-slate-400">—</span>
+                      <span className="text-sm text-slate-700">{item.russian_translation}</span>
+                      {item.primary_signal && (
+                        <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                          {item.primary_signal}
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : null}

@@ -12,8 +12,6 @@ from app.modules.graph.schemas import (
     InterestWordsResponse,
     SemanticUpsertRequest,
     SemanticUpsertResponse,
-    SenseAnchorItem,
-    SenseAnchorsResponse,
     UserInterestsResponse,
     WordSenseRead,
 )
@@ -93,13 +91,13 @@ class GraphService:
         *,
         limit: int,
         current_user_id: int,
-        known_lemmas: set[str],
+        saved_lemmas: set[str],
     ) -> InterestWordsResponse:
         self._get_user_or_404(current_user_id)
         items = self._repo.list_interest_words(
             user_id=current_user_id,
             limit=limit,
-            known_lemmas=known_lemmas,
+            saved_lemmas=saved_lemmas,
         )
         return InterestWordsResponse(
             user_id=current_user_id,
@@ -113,29 +111,6 @@ class GraphService:
                     primary_signal=item.primary_signal,
                 )
                 for item in items
-            ],
-        )
-
-    def get_anchors(
-        self,
-        *,
-        english_lemma: str,
-        limit: int,
-        current_user_id: int,
-    ) -> SenseAnchorsResponse:
-        self._get_user_or_404(current_user_id)
-        anchors = self._repo.list_anchors(english_lemma=english_lemma, limit=limit)
-        return SenseAnchorsResponse(
-            user_id=current_user_id,
-            english_lemma=english_lemma,
-            anchors=[
-                SenseAnchorItem(
-                    english_lemma=a.english_lemma,
-                    russian_translation=a.russian_translation,
-                    relation_type=a.relation_type,
-                    score=a.score,
-                )
-                for a in anchors
             ],
         )
 
@@ -165,25 +140,6 @@ class GraphService:
             "created_new": result.created_new,
         }
 
-    def register_mistake(
-        self,
-        *,
-        user_id: int,
-        english_lemma: str | None,
-        prompt: str | None,
-        expected_answer: str | None,
-        user_answer: str | None,
-    ) -> None:
-        self._repo.add_sense_error_event(
-            user_id=user_id,
-            english_lemma=english_lemma,
-            prompt=prompt,
-            expected_answer=expected_answer,
-            user_answer=user_answer,
-        )
-
     def delete_vocabulary_links(self, *, user_id: int, vocabulary_item_id: int) -> int:
         return self._repo.delete_vocabulary_links(vocabulary_item_id=vocabulary_item_id)
 
-    def list_word_anchors(self, *, user_id: int, english_lemma: str, limit: int) -> list:
-        return self._repo.list_anchors(english_lemma=english_lemma, limit=limit)

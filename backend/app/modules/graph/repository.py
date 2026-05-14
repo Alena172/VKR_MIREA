@@ -16,7 +16,7 @@ from app.modules.graph.models import (
     VocabularySenseLinkModel,
     WordSenseModel,
 )
-from app.modules.graph.schemas import InterestItem, InterestWordItem, SenseAnchorItem
+from app.modules.graph.schemas import InterestItem, InterestWordItem
 
 
 @dataclass
@@ -362,51 +362,3 @@ class GraphRepository:
 
         items = sorted(best_by_lemma.values(), key=lambda x: (-x.score, x.english_lemma))
         return items[:limit]
-
-    def list_anchors(self, *, english_lemma: str, limit: int) -> list[SenseAnchorItem]:
-        lemma = self._normalize_lemma(english_lemma)
-        if not lemma:
-            return []
-
-        source = self._db.scalar(
-            select(WordSenseModel)
-            .where(WordSenseModel.english_lemma == lemma)
-            .order_by(WordSenseModel.id.desc())
-        )
-        if source is None:
-            return []
-
-        relations = list(self._db.scalars(
-            select(SenseRelationModel).where(
-                or_(
-                    SenseRelationModel.left_sense_id == source.id,
-                    SenseRelationModel.right_sense_id == source.id,
-                )
-            )
-        ))
-        neighbor_ids = {
-            relation.right_sense_id if relation.left_sense_id == source.id else relation.left_sense_id
-            for relation in relations
-        }
-        neighbors = {
-            row.id: row
-            for row in self._db.scalars(
-                select(WordSenseModel).where(WordSenseModel.id.in_(neighbor_ids))
-            )
-        } if neighbor_ids else {}
-
-        anchors: list[SenseAnchorItem] = []
-        for relation in relations:
-            neighbor_id = relation.right_sense_id if relation.left_sense_id == source.id else relation.left_sense_id
-            neighbor = neighbors.get(neighbor_id)
-            if neighbor is None:
-                continue
-            anchors.append(SenseAnchorItem(
-                english_lemma=neighbor.english_lemma,
-                russian_translation=neighbor.russian_translation,
-                relation_type=relation.relation_type,
-                score=round(relation.score, 4),
-            ))
-
-        anchors.sort(key=lambda row: (row.relation_type != "polysemy_variant", -row.score, row.english_lemma))
-        return anchors[:limit]

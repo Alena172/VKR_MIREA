@@ -255,14 +255,6 @@ class SubmissionService:
                 progress_updates.append(
                     WordProgressUpdate(vocabulary_id=item.vocabulary_id, is_correct=item.is_correct)
                 )
-            if item.target_word and not item.is_correct:
-                self._graph_service.register_mistake(
-                    user_id=user_id,
-                    english_lemma=item.target_word,
-                    prompt=item.prompt,
-                    expected_answer=item.expected_answer,
-                    user_answer=item.user_answer,
-                )
 
         self._srs_service.update_learning_progress(user_id=user_id, updates=progress_updates)
 

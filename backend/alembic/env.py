@@ -8,7 +8,6 @@ from alembic import context
 from app.core.config import get_settings
 from app.core.db import Base
 from app.modules.graph.models import (
-    SenseErrorEventModel,
     SenseRelationModel,
     TopicClusterModel,
     UserInterestModel,
@@ -19,7 +18,6 @@ from app.modules.identity.models import UserModel
 from app.modules.review.models import WordProgressModel
 from app.modules.training.models import AnswerModel, LearningSessionModel
 from app.modules.vocabulary.models import (
-    BaseLexiconEntryModel,
     DictionaryEntryModel,
     UserVocabularyModel,
 )
@@ -29,7 +27,6 @@ _ = (
     UserModel,
     DictionaryEntryModel,
     UserVocabularyModel,
-    BaseLexiconEntryModel,
     WordProgressModel,
     LearningSessionModel,
     AnswerModel,
@@ -38,7 +35,6 @@ _ = (
     WordSenseModel,
     VocabularySenseLinkModel,
     SenseRelationModel,
-    SenseErrorEventModel,
 )
 
 config = context.config

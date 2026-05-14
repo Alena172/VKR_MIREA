@@ -253,8 +253,6 @@ export const api = {
   reviewSummary: (options = {}) => request("/context/me/review-summary", options),
   learningGraphInterestWords: (limit = 10, options = {}) =>
     request(`/learning-graph/me/interest-words?limit=${limit}`, options),
-  learningGraphAnchors: (englishLemma, limit = 5, options = {}) =>
-    request(`/learning-graph/me/anchors?english_lemma=${encodeURIComponent(englishLemma)}&limit=${limit}`, options),
 
   translateMe: (payload, options = {}) => request("/translate/me", { method: "POST", body: JSON.stringify(payload), ...options }),
   generateExercisesMe: (payload, options = {}) =>
