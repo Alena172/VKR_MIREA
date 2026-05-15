@@ -309,6 +309,16 @@ class VocabularyService:
         normalized_sentence = source_sentence.strip() if source_sentence else None
         english_lemma = _normalize_english_lemma(selected_text)
 
+        # Fast-path: reuse existing entry without calling AI when the word is already saved.
+        if not force_new_vocabulary_item:
+            existing_row = self._repo.get_latest_vocabulary_item_by_lemma(
+                user_id=user_id, english_lemma=english_lemma
+            )
+            if existing_row is not None:
+                uv, entry = existing_row
+                self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
+                return _to_dto(uv, entry), False
+
         russian_translation, _note, semantic_sentence = await self._generate_capture_ai_data(
             selected_text=selected_text,
             source_sentence=normalized_sentence,

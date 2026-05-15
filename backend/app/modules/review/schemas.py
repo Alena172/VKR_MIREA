@@ -94,8 +94,9 @@ class ReviewSessionStartResponse(BaseModel):
 
 class WordProgressDeleteResponse(BaseModel):
     user_id: int
-    vocabulary_id: int
+    vocabulary_id: int | None = None
     progress_deleted: bool
+    removed_from_difficult_words: bool = False
 
 
 class ProgressSnapshot(BaseModel):

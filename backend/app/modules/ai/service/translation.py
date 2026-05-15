@@ -327,8 +327,15 @@ class TranslationService:
                 "AI-провайдер недоступен. Проверь AI_BASE_URL и AI_MODEL в .env."
             )
 
-        # Уровень LibreTranslate: пробуем до AI для слов и фраз.
-        # Глоссарий пользователя проверяется выше — если есть совпадение, сюда не доходим.
+        # Check user glossary first — if there's a match, skip LibreTranslate and AI entirely.
+        if payload.glossary:
+            glossary_hit = self._resolve_glossary_translation(payload.text, payload.source_context, payload.glossary)
+            if glossary_hit:
+                note = "glossary:user_match"
+                _log.info("translate | provider=%-30s | word=%-20s | result=%s", note, payload.text, glossary_hit)
+                return TranslateWithContextResponse(translated_text=glossary_hit, provider_note=note)
+
+        # LibreTranslate level: try before AI for words and phrases.
         if self._libretranslate is not None:
             if self._is_single_word(payload.text):
                 lt_result = await self._libretranslate_word(payload.text, payload.source_context)

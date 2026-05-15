@@ -127,13 +127,13 @@ def list_word_progress_me(
     )
 
 
-@router.delete("/context/me/word-progress/{vocabulary_id}", response_model=WordProgressDeleteResponse)
+@router.delete("/context/me/word-progress/{word}", response_model=WordProgressDeleteResponse)
 def delete_word_progress_me(
-    vocabulary_id: int,
+    word: str,
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> WordProgressDeleteResponse:
-    result = service.delete_word_progress(user_id=current_user_id, current_user_id=current_user_id, vocabulary_id=vocabulary_id)
+    result = service.delete_word_progress(user_id=current_user_id, current_user_id=current_user_id, word=word)
     return WordProgressDeleteResponse(**result)
 
 

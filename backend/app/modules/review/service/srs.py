@@ -95,17 +95,31 @@ class SRSService:
 
     def submit_review_queue_item(self, *, user_id: int, current_user_id: int, payload) -> WordProgressModel:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
-        if payload.vocabulary_id is None:
-            raise HTTPException(status_code=400, detail="vocabulary_id is required")
-        return self.apply_review(user_id=user_id, vocabulary_id=payload.vocabulary_id, is_correct=payload.is_correct)
+        vocabulary_id = payload.vocabulary_id
+        if vocabulary_id is None:
+            word = getattr(payload, "word", None)
+            if word:
+                items = self._vocab().list_user_items(user_id=user_id)
+                match = next((item for item in items if item.english_lemma.lower() == word.strip().lower()), None)
+                if match:
+                    vocabulary_id = match.id
+        if vocabulary_id is None:
+            raise HTTPException(status_code=400, detail="word not found in vocabulary or vocabulary_id is required")
+        return self.apply_review(user_id=user_id, vocabulary_id=vocabulary_id, is_correct=payload.is_correct)
 
     def submit_review_queue_bulk(self, *, user_id: int, current_user_id: int, payload) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         if not payload.items:
             return {"user_id": user_id, "updated": []}
+        vocab_items = self._vocab().list_user_items(user_id=user_id)
+        word_to_id = {item.english_lemma.lower(): item.id for item in vocab_items}
         updated_rows: list[WordProgressModel] = []
         for item in payload.items:
             vid = getattr(item, "vocabulary_id", None)
+            if vid is None:
+                word = getattr(item, "word", None)
+                if word:
+                    vid = word_to_id.get(word.strip().lower())
             if vid is None:
                 continue
             progress = self.apply_review(user_id=user_id, vocabulary_id=vid, is_correct=item.is_correct)
@@ -170,10 +184,17 @@ class SRSService:
         items = [self._row_to_progress_dict(row, vocab_map, user_id) for row in page_rows]
         return {"user_id": user_id, "total": total, "limit": limit, "offset": offset, "items": items}
 
-    def delete_word_progress(self, *, user_id: int, current_user_id: int, vocabulary_id: int) -> dict:
+    def delete_word_progress(self, *, user_id: int, current_user_id: int, vocabulary_id: int | None = None, word: str | None = None) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
+        if vocabulary_id is None and word:
+            items = self._vocab().list_user_items(user_id=user_id)
+            match = next((item for item in items if item.english_lemma.lower() == word.strip().lower()), None)
+            if match:
+                vocabulary_id = match.id
+        if vocabulary_id is None:
+            return {"user_id": user_id, "vocabulary_id": None, "progress_deleted": False, "removed_from_difficult_words": False}
         deleted = self._repo.delete_word_progress_by_vocabulary_id(user_id=user_id, vocabulary_id=vocabulary_id)
-        return {"user_id": user_id, "vocabulary_id": vocabulary_id, "progress_deleted": deleted}
+        return {"user_id": user_id, "vocabulary_id": vocabulary_id, "progress_deleted": deleted, "removed_from_difficult_words": deleted}
 
     def get_review_plan(self, *, user_id: int, current_user_id: int, limit: int, horizon_hours: int) -> dict:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
