@@ -85,19 +85,31 @@ function DefinitionMatchSummary({ item }) {
   const rows = buildDefinitionMatchRows(item);
 
   return (
-    <div className="mt-3 space-y-3 text-sm text-slate-700">
+    <div className="mt-3 space-y-2">
       {rows.map((row) => (
-        <div
-          key={`${item.exercise_id}-${row.word}`}
-          className={`rounded-xl border p-3 ${row.isCorrect ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}
-        >
-          <p className="font-semibold text-slate-900">{row.word}</p>
-          <p className="mt-2"><strong>Твоё сопоставление:</strong> {row.userDefinition}</p>
-          {!row.isCorrect ? (
-            <p className="mt-1"><strong>Правильное определение:</strong> {row.expectedDefinition}</p>
-          ) : (
-            <p className="mt-1 text-green-700">Сопоставлено верно.</p>
-          )}
+        <div key={`${item.exercise_id}-${row.word}`} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className={`flex items-center gap-2 px-4 py-2 ${row.isCorrect ? "bg-green-50" : "bg-red-50"}`}>
+            <span className={`text-base ${row.isCorrect ? "text-green-600" : "text-red-500"}`}>
+              {row.isCorrect ? "✓" : "✗"}
+            </span>
+            <span className="font-bold text-slate-900">{row.word}</span>
+          </div>
+          <div className="px-4 py-3 space-y-2 text-sm">
+            {row.isCorrect ? (
+              <p className="text-slate-600">{row.expectedDefinition}</p>
+            ) : (
+              <>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-400 mb-0.5">Твой вариант</p>
+                  <p className="text-slate-600">{row.userDefinition}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-green-600 mb-0.5">Правильно</p>
+                  <p className="text-slate-700">{row.expectedDefinition}</p>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       ))}
     </div>
@@ -195,13 +207,8 @@ function TrainingFeedbackCard({ item }) {
 
   return (
     <article className="rounded-xl border border-red-200 bg-red-50 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">{EXERCISE_TYPE_META[item.exercise_type] || "Упражнение"}</p>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-          #{item.exercise_id}
-        </span>
-      </div>
-      <p className="mt-3 text-sm font-medium text-slate-800">{item.prompt}</p>
+      <p className="text-sm font-semibold text-slate-900">{EXERCISE_TYPE_META[item.exercise_type] || "Упражнение"}</p>
+      {!isDefinitionMatch ? <p className="mt-2 text-sm font-medium text-slate-800">{item.prompt}</p> : null}
       {isDefinitionMatch ? <DefinitionMatchSummary item={item} /> : null}
       {isWordScramble ? <WordScrambleSummary item={item} /> : null}
       {!isDefinitionMatch && !isWordScramble ? (

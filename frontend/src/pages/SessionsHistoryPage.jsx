@@ -22,6 +22,42 @@ const EXERCISE_COLORS = {
   unknown: "bg-slate-100 text-slate-600",
 };
 
+function safeParseJsonArray(value) {
+  try { const p = JSON.parse(value); return Array.isArray(p) ? p : []; } catch { return []; }
+}
+
+function DefinitionMatchAnswerDetail({ answer }) {
+  const expected = safeParseJsonArray(answer.expected_answer);
+  const user = safeParseJsonArray(answer.user_answer);
+  const userByWord = new Map(user.map((p) => [p.word?.toLowerCase(), p.definition]));
+  return (
+    <div className="mt-2 space-y-2">
+      {expected.map((pair) => {
+        const userDef = userByWord.get(pair.word?.toLowerCase());
+        const correct = userDef === pair.definition;
+        return (
+          <div key={pair.word} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+            <div className={`flex items-center gap-2 px-3 py-1.5 ${correct ? "bg-green-50" : "bg-red-50"}`}>
+              <span className={`text-sm font-bold ${correct ? "text-green-600" : "text-red-500"}`}>{correct ? "✓" : "✗"}</span>
+              <span className="font-bold text-slate-900 text-sm">{pair.word}</span>
+            </div>
+            <div className="px-3 py-2 text-sm space-y-1">
+              {correct ? (
+                <p className="text-slate-600">{pair.definition}</p>
+              ) : (
+                <>
+                  <div><p className="text-xs font-semibold uppercase tracking-wide text-red-400 mb-0.5">Твой вариант</p><p className="text-slate-600">{userDef || "—"}</p></div>
+                  <div><p className="text-xs font-semibold uppercase tracking-wide text-green-600 mb-0.5">Правильно</p><p className="text-slate-700">{pair.definition}</p></div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function formatDate(value) {
   if (!value) return "-";
   const date = new Date(value);
@@ -818,21 +854,33 @@ export default function SessionsHistoryPage({ onError }) {
                   : "border-red-200 bg-red-50";
                 return (
                   <li key={answer.id} className={`rounded-xl border p-3 text-sm ${cardBg}`}>
-                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
                       <ExerciseChip exerciseType={exerciseType} />
                       <span className={`text-xs font-bold ${answer.is_correct ? "text-emerald-700" : "text-red-700"}`}>
                         {answer.is_correct ? "✓ Верно" : "✗ Ошибка"}
                       </span>
                     </div>
-                    <div className="font-semibold text-gray-900">{answer.prompt || "Без prompt"}</div>
-                    <div className="mt-1 text-slate-500">
-                      Ожидалось: <span className="font-medium text-gray-800">{answer.expected_answer || "-"}</span>
-                    </div>
-                    <div className="text-slate-500">
-                      Ответ: <span className="font-medium text-gray-800">{answer.user_answer}</span>
-                    </div>
+                    {exerciseType === "word_definition_match" ? (
+                      <DefinitionMatchAnswerDetail answer={answer} />
+                    ) : exerciseType === "word_scramble" ? (
+                      <div className="space-y-1">
+                        <p className="font-semibold text-slate-900">{answer.target_word || answer.prompt}</p>
+                        <div className="flex gap-4 mt-1">
+                          <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-0.5">Твой ответ</p><p className="font-bold uppercase tracking-wide">{answer.user_answer || "—"}</p></div>
+                          {!answer.is_correct && <div><p className="text-xs font-semibold uppercase tracking-wide text-green-600 mb-0.5">Правильно</p><p className="font-bold uppercase tracking-wide">{answer.expected_answer || "—"}</p></div>}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-gray-900">{answer.prompt}</p>
+                        <div className="mt-2 space-y-1 text-slate-600">
+                          <p><span className="font-semibold text-slate-700">Ответ:</span> {answer.user_answer}</p>
+                          {!answer.is_correct && <p><span className="font-semibold text-green-700">Правильно:</span> {answer.expected_answer}</p>}
+                        </div>
+                      </>
+                    )}
                     {answer.explanation_ru ? (
-                      <div className="mt-1 text-slate-600 italic">{answer.explanation_ru}</div>
+                      <div className="mt-2 text-slate-600 italic">{answer.explanation_ru}</div>
                     ) : null}
                   </li>
                 );
