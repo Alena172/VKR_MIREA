@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import json
 import re
+from collections.abc import Awaitable, Callable
 from difflib import SequenceMatcher
 
 _RUSSIAN_STOPWORDS = {
@@ -218,6 +221,36 @@ def evaluate_simple_exercise(
         return is_correct, explanation_ru
 
     return False, None
+
+
+async def is_answer_correct_async(
+    expected: str | None,
+    user_answer: str | None,
+    *,
+    exercise_type: str | None = None,
+    english_prompt: str | None = None,
+    llm_check: Callable[..., Awaitable[bool]] | None = None,
+) -> bool:
+    """Hybrid check: fast string match first, LLM fallback for sentence translation."""
+    if is_answer_correct(expected, user_answer):
+        return True
+
+    is_sentence_type = (exercise_type or "").startswith("sentence_translation")
+    if not is_sentence_type or llm_check is None:
+        return False
+
+    # Only invoke LLM when answers are substantively different but possibly equivalent.
+    if not is_semantic_override_candidate(expected, user_answer):
+        return False
+
+    try:
+        return await llm_check(
+            english_prompt=english_prompt or "",
+            expected_answer=expected or "",
+            user_answer=user_answer or "",
+        )
+    except Exception:
+        return False
 
 
 def extract_progress_word(

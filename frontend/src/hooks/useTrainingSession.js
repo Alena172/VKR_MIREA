@@ -4,7 +4,7 @@ import { useAbortControllers } from "./useAbortControllers";
 
 /** Управляет тренировкой: генерацией батча, буфером и отправкой ответов. */
 export function useTrainingSession({ onError }) {
-  const [size, setSize] = useState(6);
+  const [size, setSize] = useState(5);
   const [mode, setMode] = useState("sentence_translation_full");
   const [selectedVocabularyIds, setSelectedVocabularyIds] = useState([]);
   const [focusLabel, setFocusLabel] = useState("");
@@ -17,27 +17,9 @@ export function useTrainingSession({ onError }) {
   const [submittingCurrent, setSubmittingCurrent] = useState(false);
   const [sessionResult, setSessionResult] = useState(null);
   const [isTrainingActive, setIsTrainingActive] = useState(false);
-  const [generationNote, setGenerationNote] = useState("");
   const { abortAllRequests, registerController, releaseController } = useAbortControllers();
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
-
-  async function generateBatch(targetMode, batchSize, vocabularyIds, signal) {
-    const result = await api.generateExercisesMe(
-      {
-        size: batchSize,
-        mode: targetMode,
-        vocabulary_ids: vocabularyIds || [],
-        fast_start: false,
-        incremental: false,
-      },
-      { signal },
-    );
-    if (!result || !result.exercises || result.exercises.length === 0) {
-      throw new Error("Не удалось получить задание.");
-    }
-    return { exercises: result.exercises, note: result.note || "" };
-  }
 
   function resetSessionState() {
     abortAllRequests();
@@ -48,7 +30,6 @@ export function useTrainingSession({ onError }) {
     setSubmittedAnswers([]);
     setSessionResult(null);
     setIsTrainingActive(false);
-    setGenerationNote("");
     setLoadingCurrent(false);
     setSubmittingCurrent(false);
   }
@@ -58,7 +39,7 @@ export function useTrainingSession({ onError }) {
     setSessionResult(result);
   }
 
-  /** Загружает все упражнения одним запросом — между заданиями ожидания нет. */
+  /** Загружает все упражнения одним запросом — бэкенд отдаёт из серверного буфера. */
   async function startTraining(options = {}) {
     const nextMode = options.overrideMode || mode;
     const nextSize = options.overrideSize || size;
@@ -66,17 +47,25 @@ export function useTrainingSession({ onError }) {
     const nextFocusLabel = options.focusLabel || focusLabel;
 
     abortAllRequests();
-    setLoadingCurrent(true);
     onError("");
+    setLoadingCurrent(true);
+
     try {
       const controller = registerController();
       try {
-        const { exercises: allExercises, note } = await generateBatch(
-          nextMode,
-          nextSize,
-          nextVocabularyIds,
-          controller.signal,
+        const result = await api.generateExercisesMe(
+          {
+            size: nextSize,
+            mode: nextMode,
+            vocabulary_ids: nextVocabularyIds || [],
+            fast_start: false,
+            incremental: false,
+          },
+          { signal: controller.signal },
         );
+        if (!result?.exercises?.length) throw new Error("Не удалось получить задание.");
+        const allExercises = result.exercises;
+
         setMode(nextMode);
         setSize(nextSize);
         setSelectedVocabularyIds(nextVocabularyIds);
@@ -86,7 +75,6 @@ export function useTrainingSession({ onError }) {
         setCurrentAnswer("");
         setSubmittedAnswers([]);
         setBufferExercises(allExercises.slice(1));
-        setGenerationNote(note);
         setSessionResult(null);
         setIsTrainingActive(true);
       } finally {
@@ -153,9 +141,7 @@ export function useTrainingSession({ onError }) {
   }
 
   const answerReady = useMemo(() => {
-    if (!currentExercise) {
-      return false;
-    }
+    if (!currentExercise) return false;
     return currentAnswer.trim().length > 0;
   }, [currentAnswer, currentExercise]);
 
@@ -164,7 +150,6 @@ export function useTrainingSession({ onError }) {
     currentAnswer,
     currentExercise,
     currentIndex,
-    generationNote,
     focusLabel,
     isTrainingActive,
     loadingCurrent,

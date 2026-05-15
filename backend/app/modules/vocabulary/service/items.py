@@ -222,8 +222,8 @@ class VocabularyService:
                 source_sentence=normalized_sentence,
                 source_url=normalized_url,
             )
+            self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
 
-        self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
         return _to_dto(uv, entry)
 
     def update_item(
@@ -316,7 +316,8 @@ class VocabularyService:
             )
             if existing_row is not None:
                 uv, entry = existing_row
-                self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
+                with transaction(self._repo._db):
+                    self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
                 return _to_dto(uv, entry), False
 
         russian_translation, _note, semantic_sentence = await self._generate_capture_ai_data(

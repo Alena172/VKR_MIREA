@@ -15,7 +15,7 @@ export function useReviewSession({ onError }) {
   const [plan, setPlan] = useState(null);
   const [summary, setSummary] = useState(null);
   const [interestWords, setInterestWords] = useState([]);
-  const [sessionSize, setSessionSize] = useState(20);
+  const [sessionSize, setSessionSize] = useState(10);
   const [sessionMode, setSessionMode] = useState(null);
   const [sessionItems, setSessionItems] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);

@@ -47,7 +47,7 @@ def _progress_to_read(progress: WordProgressModel, vocab_map: dict) -> WordProgr
 
 @router.get("/context/me/review-queue", response_model=ReviewQueueResponse)
 def get_review_queue_me(
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20, ge=1),
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ReviewQueueResponse:
@@ -139,7 +139,7 @@ def delete_word_progress_me(
 
 @router.get("/context/me/review-plan", response_model=ReviewPlanResponse)
 def get_review_plan_me(
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int = Query(default=10, ge=1),
     horizon_hours: int = Query(default=24, ge=1, le=168),
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),

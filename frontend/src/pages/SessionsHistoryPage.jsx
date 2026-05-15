@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { Trophy } from "lucide-react";
 import { api, getErrorMessage, isAbortError } from "../lib/api";
 import { useAbortControllers } from "../hooks/useAbortControllers";
 
 const ANALYTICS_SESSION_LIMIT = 12;
+const HEATMAP_SESSION_LIMIT = 200;
 const SPARKLINE_LIMIT = 10;
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -59,8 +61,94 @@ function findTrackedWord(answer, vocabularyWords) {
   return findVocabularyWordInPrompt(answer.prompt, vocabularyWords);
 }
 
+/** Считает максимальную серию активных дней из списка сессий. */
+function calcMaxStreak(sessions) {
+  if (!sessions || sessions.length === 0) return 0;
+  const toDay = (iso) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const days = [...new Set(sessions.map((s) => toDay(s.created_at)))].sort();
+  let maxStreak = 1;
+  let cur = 1;
+  for (let i = 1; i < days.length; i++) {
+    const prev = new Date(days[i - 1]);
+    const curr = new Date(days[i]);
+    const diff = (curr - prev) / (1000 * 60 * 60 * 24);
+    if (diff === 1) {
+      cur += 1;
+      maxStreak = Math.max(maxStreak, cur);
+    } else {
+      cur = 1;
+    }
+  }
+  return maxStreak;
+}
+
+/** Строит данные тепловой карты точности: средний accuracy за день, за последние 16 недель. */
+function buildAccuracyHeatmapData(sessions) {
+  const dayTotals = new Map(); // date -> { sum, count }
+  sessions.forEach((s) => {
+    const d = new Date(s.created_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const prev = dayTotals.get(key) || { sum: 0, count: 0 };
+    dayTotals.set(key, { sum: prev.sum + Number(s.accuracy || 0), count: prev.count + 1 });
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startDay = new Date(today);
+  startDay.setDate(startDay.getDate() - 111 - ((today.getDay() + 6) % 7));
+
+  const weeks = [];
+  let week = [];
+  let cursor = new Date(startDay);
+  while (cursor <= today) {
+    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    const entry = dayTotals.get(key);
+    const avgAccuracy = entry ? entry.sum / entry.count : null;
+    week.push({ date: key, avgAccuracy, isFuture: cursor > today });
+    if (week.length === 7) { weeks.push(week); week = []; }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  if (week.length > 0) weeks.push(week);
+  return weeks;
+}
+
+/** Строит данные тепловой карты: Map<"YYYY-MM-DD", count> за последние 16 недель. */
+function buildHeatmapData(sessions) {
+  const counts = new Map();
+  sessions.forEach((s) => {
+    const d = new Date(s.created_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+
+  // 16 недель назад от сегодня (112 дней)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // Сдвигаем начало к ближайшему понедельнику назад
+  const startDay = new Date(today);
+  startDay.setDate(startDay.getDate() - 111 - ((today.getDay() + 6) % 7));
+
+  const weeks = [];
+  let week = [];
+  let cursor = new Date(startDay);
+  while (cursor <= today) {
+    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    week.push({ date: key, count: counts.get(key) || 0, isFuture: cursor > today });
+    if (week.length === 7) {
+      weeks.push(week);
+      week = [];
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  if (week.length > 0) weeks.push(week);
+  return weeks;
+}
+
 // analyticsSessions — dedicated list from loadAnalyticsData, not the paginated view
-function buildAnalytics({ analyticsSessions, answersBySessionId, vocabularyWords }) {
+function buildAnalytics({ analyticsSessions, allSessions, answersBySessionId, vocabularyWords, masteredCount }) {
   if (!analyticsSessions.length) return null;
 
   const sorted = [...analyticsSessions].sort(
@@ -130,6 +218,17 @@ function buildAnalytics({ analyticsSessions, answersBySessionId, vocabularyWords
       label: `#${s.id} — ${Math.round(Number(s.accuracy || 0) * 100)}%`,
     }));
 
+  // Personal records
+  const allForRecords = allSessions.length ? allSessions : analyticsSessions;
+  const bestAccuracy = allForRecords.length
+    ? allForRecords.reduce((sum, s) => sum + Number(s.accuracy || 0), 0) / allForRecords.length
+    : 0;
+  const maxStreak = calcMaxStreak(allForRecords);
+
+  // Heatmaps
+  const heatmapWeeks = buildHeatmapData(allForRecords);
+  const accuracyHeatmapWeeks = buildAccuracyHeatmapData(allForRecords);
+
   return {
     trendDelta,
     recentAccuracy,
@@ -138,6 +237,9 @@ function buildAnalytics({ analyticsSessions, answersBySessionId, vocabularyWords
     rankedFormats,
     rankedWords,
     sparklineData,
+    records: { bestAccuracy, maxStreak, masteredWords: masteredCount, totalSessions: allForRecords.length },
+    heatmapWeeks,
+    accuracyHeatmapWeeks,
   };
 }
 
@@ -146,6 +248,156 @@ function AnalyticsCard({ title, children }) {
     <section className="surface p-4 md:p-5">
       <h3 className="text-base font-extrabold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+const RECORD_ITEMS = [
+  {
+    key: "bestAccuracy",
+    label: "Средняя точность",
+    icon: "🏆",
+    format: (v) => `${Math.round(v * 100)}%`,
+  },
+  {
+    key: "maxStreak",
+    label: "Макс. серия дней",
+    icon: "🔥",
+    format: (v) => `${v} ${v === 1 ? "день" : v >= 2 && v <= 4 ? "дня" : "дней"}`,
+  },
+  {
+    key: "masteredWords",
+    label: "Освоено слов",
+    icon: "⚡",
+    format: (v) => `${v} ${v === 1 ? "слово" : v >= 2 && v <= 4 ? "слова" : "слов"}`,
+  },
+  {
+    key: "totalSessions",
+    label: "Всего сессий",
+    icon: "📈",
+    format: (v) => `${v}`,
+  },
+];
+
+function RecordsBlock({ records }) {
+  if (!records) return null;
+  return (
+    <section className="surface p-4 md:p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Trophy className="h-5 w-5 text-amber-500" />
+        <h3 className="text-base font-extrabold text-gray-900">Личные рекорды</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {RECORD_ITEMS.map(({ key, label, icon, format }) => (
+          <div key={key} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+            <p className="text-2xl">{icon}</p>
+            <p className="mt-1 text-xl font-extrabold text-gray-900">{format(records[key] ?? 0)}</p>
+            <p className="mt-0.5 text-xs font-medium text-slate-500 leading-tight">{label}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const HEATMAP_COLORS = [
+  "bg-slate-100",       // 0 сессий
+  "bg-emerald-200",     // 1
+  "bg-emerald-400",     // 2
+  "bg-emerald-600",     // 3+
+];
+
+function heatColor(count) {
+  if (count === 0) return HEATMAP_COLORS[0];
+  if (count === 1) return HEATMAP_COLORS[1];
+  if (count === 2) return HEATMAP_COLORS[2];
+  return HEATMAP_COLORS[3];
+}
+
+const DAY_LABELS = ["Пн", "", "Ср", "", "Пт", "", "Вс"];
+
+const ACCURACY_COLORS = [
+  "bg-slate-100",      // нет данных
+  "bg-red-300",        // < 50%
+  "bg-amber-300",      // 50–74%
+  "bg-emerald-300",    // 75–89%
+  "bg-emerald-600",    // 90–100%
+];
+
+function accuracyColor(avgAccuracy) {
+  if (avgAccuracy === null) return ACCURACY_COLORS[0];
+  if (avgAccuracy < 0.5) return ACCURACY_COLORS[1];
+  if (avgAccuracy < 0.75) return ACCURACY_COLORS[2];
+  if (avgAccuracy < 0.9) return ACCURACY_COLORS[3];
+  return ACCURACY_COLORS[4];
+}
+
+function HeatmapGrid({ weeks, colorFn, tooltipFn, hasDataFn }) {
+  return (
+    <div className="overflow-x-auto">
+      <div className="flex gap-1.5 min-w-max">
+        <div className="flex flex-col gap-1.5 mr-1">
+          {DAY_LABELS.map((label, i) => (
+            <div key={i} className="h-4 w-6 flex items-center justify-end">
+              <span className="text-[9px] text-slate-400 font-medium">{label}</span>
+            </div>
+          ))}
+        </div>
+        {weeks.map((week, wi) => (
+          <div key={wi} className="flex flex-col gap-1.5">
+            {week.map((day, di) => (
+              <div
+                key={di}
+                className={`group relative h-4 w-4 rounded-sm ${day.isFuture ? "bg-transparent" : colorFn(day)}`}
+              >
+                {!day.isFuture && hasDataFn(day) && (
+                  <div className="pointer-events-none absolute top-full left-1/2 z-10 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-[10px] text-white group-hover:block">
+                    {tooltipFn(day)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HeatmapsBlock({ activityWeeks, accuracyWeeks }) {
+  if (!activityWeeks?.length && !accuracyWeeks?.length) return null;
+  return (
+    <section className="surface p-4 md:p-5">
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="min-w-0">
+          <h3 className="text-sm font-extrabold text-gray-900 mb-3">Активность за 16 недель</h3>
+          <HeatmapGrid
+            weeks={activityWeeks}
+            colorFn={(day) => heatColor(day.count)}
+            hasDataFn={(day) => day.count > 0}
+            tooltipFn={(day) => `${day.date}: ${day.count} ${day.count === 1 ? "сессия" : day.count < 5 ? "сессии" : "сессий"}`}
+          />
+          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+            <span>Меньше</span>
+            {HEATMAP_COLORS.map((c, i) => <div key={i} className={`h-4 w-4 rounded-sm ${c}`} />)}
+            <span>Больше</span>
+          </div>
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-extrabold text-gray-900 mb-3">Точность по дням за 16 недель</h3>
+          <HeatmapGrid
+            weeks={accuracyWeeks}
+            colorFn={(day) => accuracyColor(day.avgAccuracy)}
+            hasDataFn={(day) => day.avgAccuracy !== null}
+            tooltipFn={(day) => `${day.date}: ${Math.round(day.avgAccuracy * 100)}%`}
+          />
+          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+            <span>Хуже</span>
+            {ACCURACY_COLORS.slice(1).map((c, i) => <div key={i} className={`h-4 w-4 rounded-sm ${c}`} />)}
+            <span>Лучше</span>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -231,6 +483,9 @@ export default function SessionsHistoryPage({ onError }) {
   const [sessions, setSessions] = useState([]);
   // Separate state for analytics — always holds the last ANALYTICS_SESSION_LIMIT sessions
   const [analyticsSessions, setAnalyticsSessions] = useState([]);
+  // All sessions for heatmap and records (up to HEATMAP_SESSION_LIMIT)
+  const [allSessions, setAllSessions] = useState([]);
+  const [masteredCount, setMasteredCount] = useState(0);
   const [total, setTotal] = useState(0);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [answers, setAnswers] = useState([]);
@@ -252,8 +507,8 @@ export default function SessionsHistoryPage({ onError }) {
 
   // Analytics always uses the dedicated analyticsSessions, never the paginated view
   const analytics = useMemo(
-    () => buildAnalytics({ analyticsSessions, answersBySessionId, vocabularyWords }),
-    [analyticsSessions, answersBySessionId, vocabularyWords],
+    () => buildAnalytics({ analyticsSessions, allSessions, answersBySessionId, vocabularyWords, masteredCount }),
+    [analyticsSessions, allSessions, answersBySessionId, vocabularyWords, masteredCount],
   );
 
   async function loadSessions(targetPage = safePage) {
@@ -301,14 +556,17 @@ export default function SessionsHistoryPage({ onError }) {
     setLoadingAnalytics(true);
     const controller = registerController();
     try {
-      const [recentSessions, vocabulary] = await Promise.all([
+      const [recentSessions, allSessionsResp, vocabulary, reviewSummary] = await Promise.all([
         api.listSessionsMe({ limit: ANALYTICS_SESSION_LIMIT, offset: 0 }, { signal: controller.signal }),
+        api.listSessionsMe({ limit: HEATMAP_SESSION_LIMIT, offset: 0 }, { signal: controller.signal }),
         api.listVocabularyMe({ signal: controller.signal }),
+        api.reviewSummary({ signal: controller.signal }),
       ]);
 
       const recentItems = recentSessions.items || [];
-      // Store analytics sessions separately — not mixed with the paginated list
       setAnalyticsSessions(recentItems);
+      setAllSessions(allSessionsResp.items || []);
+      setMasteredCount(reviewSummary?.mastered ?? 0);
       setVocabularyWords(
         vocabulary
           .map((item) => normalizeWord(item.english_lemma))
@@ -361,7 +619,7 @@ export default function SessionsHistoryPage({ onError }) {
           <div>
             <p className="kicker">History</p>
             <h2 className="section-title">История сессий</h2>
-            <p className="muted mt-1 text-sm">Смотри не только список попыток, но и то, где обучение реально буксует.</p>
+            <p className="muted mt-1 text-sm">Отслеживай прогресс и находи слова, которые стоит повторить.</p>
           </div>
           <button
             className="btn-secondary"
@@ -380,17 +638,11 @@ export default function SessionsHistoryPage({ onError }) {
           ) : analytics ? (
             <div className="space-y-3">
               <TrendBadge trendDelta={analytics.trendDelta} />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Последние сессии</p>
-                  <p className="mt-1 text-2xl font-extrabold text-slate-900">
-                    {analytics.recentAccuracy !== null ? `${Math.round(analytics.recentAccuracy * 100)}%` : "-"}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Окно анализа</p>
-                  <p className="mt-1 text-2xl font-extrabold text-slate-900">{analytics.recentSessionCount}</p>
-                </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Средняя точность</p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900">
+                  {analytics.recentAccuracy !== null ? `${Math.round(analytics.recentAccuracy * 100)}%` : "-"}
+                </p>
               </div>
               <AccuracySparkline data={analytics.sparklineData} />
             </div>
@@ -441,6 +693,14 @@ export default function SessionsHistoryPage({ onError }) {
           )}
         </AnalyticsCard>
       </div>
+
+      {!loadingAnalytics && analytics?.records && (
+        <RecordsBlock records={analytics.records} />
+      )}
+
+      {!loadingAnalytics && (analytics?.heatmapWeeks || analytics?.accuracyHeatmapWeeks) && (
+        <HeatmapsBlock activityWeeks={analytics.heatmapWeeks} accuracyWeeks={analytics.accuracyHeatmapWeeks} />
+      )}
 
       <section className="surface p-4 md:p-5">
         <div className="grid gap-3 md:grid-cols-5">

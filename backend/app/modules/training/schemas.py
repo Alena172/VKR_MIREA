@@ -90,8 +90,18 @@ class SessionAnswerFeedback(BaseModel):
     explanation_ru: str
 
 
+class SubmittedAnswerResult(BaseModel):
+    exercise_id: int
+    exercise_type: str | None = None
+    prompt: str | None = None
+    expected_answer: str | None = None
+    user_answer: str
+    is_correct: bool
+
+
 class SessionSubmitResponse(BaseModel):
     session: SessionSummary
+    answers: list[SubmittedAnswerResult] = Field(default_factory=list)
     incorrect_feedback: list[SessionAnswerFeedback] = Field(default_factory=list)
     advice_feedback: list[SessionAnswerFeedback] = Field(default_factory=list)
 
@@ -143,6 +153,7 @@ class SessionSubmitResultDTO:
     """Результат сохранения и оценки учебной сессии."""
 
     session: Any
+    evaluated_answers: list[Any]
     incorrect_feedback: list[SessionAnswerFeedbackDTO]
     advice_feedback: list[SessionAnswerFeedbackDTO]
 

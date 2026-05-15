@@ -260,10 +260,7 @@ function renderBubble(selectionContext) {
     createElement("p", "vkr-study-bubble__title", "Перевод выделения"),
     createElement("p", "vkr-study-bubble__selection", selectionContext.selectedText),
   );
-  const closeButton = createElement("button", "vkr-study-bubble__close", "×");
-  closeButton.type = "button";
-  closeButton.addEventListener("click", closeActiveBubble);
-  header.append(titleWrap, closeButton);
+  header.append(titleWrap);
 
   const body = createElement("div", "vkr-study-bubble__body");
   const translationBox = createElement("div", "vkr-study-bubble__translation");
@@ -278,10 +275,7 @@ function renderBubble(selectionContext) {
   const addButton = createElement("button", "vkr-study-bubble__button vkr-study-bubble__button--primary", "Добавить в словарь");
   addButton.type = "button";
   addButton.disabled = true;
-  const closeSecondaryButton = createElement("button", "vkr-study-bubble__button vkr-study-bubble__button--secondary", "Закрыть");
-  closeSecondaryButton.type = "button";
-  closeSecondaryButton.addEventListener("click", closeActiveBubble);
-  actions.append(addButton, closeSecondaryButton);
+  actions.append(addButton);
 
   const status = createElement("p", "vkr-study-bubble__status vkr-study-bubble__status--muted", "");
   status.setAttribute("data-role", "status");
@@ -313,7 +307,6 @@ function renderBubble(selectionContext) {
           : "Это слово уже было в словаре пользователя.",
         "success",
       );
-      closeSecondaryButton.textContent = "Готово";
     } catch (error) {
       addButton.disabled = false;
       setBubbleStatus(bubble, `Ошибка добавления: ${error.message}`, "error");

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
-import { Activity, Award, BarChart3, BookMarked, BookOpen, Clock, Home, Plus, Target, TrendingUp } from "lucide-react";
+import { Activity, Award, BarChart3, BookMarked, BookOpen, Clock, Flame, Home, Plus, Star, Target, TrendingUp, Trophy } from "lucide-react";
 import VocabularyPage from "./pages/VocabularyPage";
 import ReviewPage from "./pages/ReviewPage";
 import TrainingPage from "./pages/TrainingPage";
@@ -144,7 +144,6 @@ export default function App() {
         <div className="p-6 border-b border-gray-200">
           <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
           <p className="text-sm text-gray-600 mt-1">Умный словарь</p>
-          <p className="mt-3 inline-flex rounded-full bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700">ID: {userId}</p>
         </div>
 
         <nav className="p-4">
@@ -197,6 +196,122 @@ export default function App() {
   );
 }
 
+/** Считает streak активных дней подряд до сегодня (включительно). */
+function calcStreak(sessions) {
+  if (!sessions || sessions.length === 0) return 0;
+
+  const toDay = (iso) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  };
+
+  const activeDays = new Set(sessions.map((s) => toDay(s.created_at)));
+  const today = new Date();
+  let streak = 0;
+
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    if (activeDays.has(toDay(d.toISOString()))) {
+      streak += 1;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/**
+ * Уровни по доле освоенных слов.
+ * thresholdPct — минимальный % освоенных для входа в этот уровень.
+ */
+const LEVELS = [
+  { label: "Старт",       thresholdPct: 0,  color: "bg-blue-400"  },
+  { label: "Базовый",     thresholdPct: 10, color: "bg-blue-500"  },
+  { label: "Средний",     thresholdPct: 30, color: "bg-blue-600"  },
+  { label: "Продвинутый", thresholdPct: 60, color: "bg-blue-700"  },
+  { label: "Мастер",      thresholdPct: 90, color: "bg-blue-800"  },
+];
+
+function vocabLevel(mastered, total) {
+  const pct = total > 0 ? (mastered / total) * 100 : 0;
+  let tier = 0;
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (pct >= LEVELS[i].thresholdPct) { tier = i; break; }
+  }
+  const current = LEVELS[tier];
+  const next = LEVELS[tier + 1] ?? null;
+  return { label: current.label, tier, color: current.color, pct, next };
+}
+
+function StreakBlock({ streak, sessionsTotal }) {
+  const todayHasSession = streak > 0;
+  const isAtRisk = !todayHasSession && sessionsTotal > 0;
+
+  return (
+    <div className={`card p-5 flex items-center gap-4 ${isAtRisk ? "border-amber-300 bg-amber-50" : ""}`}>
+      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-3xl
+        ${streak >= 7 ? "bg-orange-100" : streak > 0 ? "bg-amber-100" : "bg-slate-100"}`}>
+        <Flame className={`h-7 w-7 ${streak >= 7 ? "text-orange-500" : streak > 0 ? "text-amber-500" : "text-slate-400"}`} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-500">Серия активности</p>
+        <p className="text-3xl font-extrabold text-gray-900 leading-none mt-0.5">
+          {streak} <span className="text-base font-medium text-gray-500">{streak === 1 ? "день" : streak >= 2 && streak <= 4 ? "дня" : "дней"}</span>
+        </p>
+        {isAtRisk && (
+          <p className="mt-1 text-xs font-semibold text-amber-700">
+            ⚠ Сегодня ещё не занимался — серия прервётся!
+          </p>
+        )}
+        {streak >= 7 && (
+          <p className="mt-1 text-xs font-semibold text-orange-600">🔥 Отличная серия, не останавливайся!</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VocabLevelBlock({ mastered, total }) {
+  const level = vocabLevel(mastered, total);
+  const nextThresholdPct = level.next ? level.next.thresholdPct : 100;
+  const prevThresholdPct = LEVELS[level.tier].thresholdPct;
+  const range = nextThresholdPct - prevThresholdPct;
+  const pctInRange = level.next
+    ? Math.min(100, Math.round(((level.pct - prevThresholdPct) / range) * 100))
+    : 100;
+
+  const wordsToNext = level.next && total > 0
+    ? Math.ceil((level.next.thresholdPct / 100) * total) - mastered
+    : 0;
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100">
+          <Star className="h-5 w-5 text-violet-600" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-gray-500">Уровень словаря</p>
+          <p className="text-xl font-extrabold text-gray-900 leading-none">{level.label}</p>
+        </div>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${level.color}`}
+          style={{ width: `${pctInRange}%` }}
+        />
+      </div>
+      <div className="mt-1.5 flex justify-between text-xs text-slate-500">
+        <span>{mastered} из {total} слов освоено</span>
+        {level.next && wordsToNext > 0 && (
+          <span>до «{level.next.label}»: ещё {wordsToNext} {wordsToNext === 1 ? "слово" : wordsToNext >= 2 && wordsToNext <= 4 ? "слова" : "слов"}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HomePage({ onError }) {
   const [stats, setStats] = useState({
     total_words: 0,
@@ -204,6 +319,8 @@ function HomePage({ onError }) {
     due_now: 0,
     mastered: 0,
     sessions_total: 0,
+    streak: 0,
+    recentSessions: [],
   });
   const [loading, setLoading] = useState(true);
   const { registerController, releaseController } = useAbortControllers();
@@ -213,10 +330,11 @@ function HomePage({ onError }) {
       setLoading(true);
       const controller = registerController();
       try {
-        const [vocabulary, reviewSummary, sessions] = await Promise.all([
+        const [vocabulary, reviewSummary, sessions, recentSessions] = await Promise.all([
           api.listVocabularyMe({ signal: controller.signal }),
           api.reviewSummary({ signal: controller.signal }),
           api.listSessionsMe({ limit: 1, offset: 0 }, { signal: controller.signal }),
+          api.listSessionsMe({ limit: 60, offset: 0 }, { signal: controller.signal }),
         ]);
         setStats({
           total_words: vocabulary.length,
@@ -224,6 +342,8 @@ function HomePage({ onError }) {
           due_now: reviewSummary.due_now,
           mastered: reviewSummary.mastered,
           sessions_total: sessions.total,
+          streak: calcStreak(recentSessions.items || []),
+          recentSessions: recentSessions.items || [],
         });
       } catch (e) {
         if (!isAbortError(e)) {
@@ -255,8 +375,14 @@ function HomePage({ onError }) {
       <header>
         <h1 className="text-3xl font-bold text-gray-900">Добро пожаловать!</h1>
         <p className="text-gray-600 mt-2">Начните изучать английские слова с умным подходом</p>
-        <p className="text-xs text-gray-500 mt-2">Завершено сессий: {stats.sessions_total}</p>
       </header>
+
+      {!loading && (
+        <section className="grid gap-4 sm:grid-cols-2">
+          <StreakBlock streak={stats.streak} sessionsTotal={stats.sessions_total} />
+          <VocabLevelBlock mastered={stats.mastered} total={stats.total_words} />
+        </section>
+      )}
 
       <section>
         <h2 className="text-2xl font-semibold text-gray-900 mb-6">Ваша статистика</h2>

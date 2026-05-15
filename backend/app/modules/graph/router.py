@@ -31,7 +31,7 @@ def upsert_interests_me(
 
 @router.get("/me/interest-words", response_model=InterestWordsResponse)
 def get_interest_words_me(
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int = Query(default=10, ge=1),
     current_user_id: int = Depends(get_current_user_id),
     graph_service: GraphService = Depends(),
     vocab_service: VocabularyService = Depends(),

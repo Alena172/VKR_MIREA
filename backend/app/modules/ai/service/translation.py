@@ -321,12 +321,6 @@ class TranslationService:
         self,
         payload: TranslateWithContextRequest,
     ) -> TranslateWithContextResponse:
-        if self._translation_strict_remote and not self._remote_enabled():
-            raise self._provider_unavailable_error(
-                "Translation provider is unavailable. "
-                "AI-провайдер недоступен. Проверь AI_BASE_URL и AI_MODEL в .env."
-            )
-
         # Check user glossary first — if there's a match, skip LibreTranslate and AI entirely.
         if payload.glossary:
             glossary_hit = self._resolve_glossary_translation(payload.text, payload.source_context, payload.glossary)
@@ -334,6 +328,12 @@ class TranslationService:
                 note = "glossary:user_match"
                 _log.info("translate | provider=%-30s | word=%-20s | result=%s", note, payload.text, glossary_hit)
                 return TranslateWithContextResponse(translated_text=glossary_hit, provider_note=note)
+
+        if self._translation_strict_remote and not self._remote_enabled():
+            raise self._provider_unavailable_error(
+                "Translation provider is unavailable. "
+                "AI-провайдер недоступен. Проверь AI_BASE_URL и AI_MODEL в .env."
+            )
 
         # LibreTranslate level: try before AI for words and phrases.
         if self._libretranslate is not None:

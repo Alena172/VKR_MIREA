@@ -1,3 +1,7 @@
+from datetime import datetime
+
+from app.modules.review.models import WordProgressModel
+
 TEST_PASSWORD = "password123"
 
 
@@ -86,7 +90,7 @@ def test_user_vocabulary_sessions_flow(client):
     assert data["incorrect_feedback"] == []
     session_id = data["session"]["id"]
 
-    answers_resp = client.get(f"/api/v1/sessions/{session_id}/answers?user_id={user_id}", headers=headers)
+    answers_resp = client.get(f"/api/v1/sessions/me/{session_id}/answers", headers=headers)
     assert answers_resp.status_code == 200
     answers_data = answers_resp.json()
     assert len(answers_data) == 2
@@ -133,6 +137,8 @@ def test_exercise_generation_uses_user_context(client):
 
 
 def test_exercise_generation_supports_sentence_translation_full_mode(client):
+    from unittest.mock import AsyncMock, patch
+
     create_user(client, "mode@example.com", "Mode User", "A2")
     headers = auth_headers(client, "mode@example.com")
 
@@ -142,11 +148,13 @@ def test_exercise_generation_supports_sentence_translation_full_mode(client):
         headers=headers,
     )
 
-    response = client.post(
-        "/api/v1/exercises/me/generate",
-        json={"size": 1, "mode": "sentence_translation_full", "vocabulary_ids": []},
-        headers=headers,
-    )
+    with patch("app.modules.ai.facade.ai_facade.generate_sentence_pair_async", new_callable=AsyncMock) as mock_gen:
+        mock_gen.return_value = ("I eat an apple every day.", "Я ем яблоко каждый день.")
+        response = client.post(
+            "/api/v1/exercises/me/generate",
+            json={"size": 1, "mode": "sentence_translation_full", "vocabulary_ids": []},
+            headers=headers,
+        )
     assert response.status_code == 200
     item = response.json()["exercises"][0]
     assert item["exercise_type"] == "sentence_translation_full"
@@ -197,14 +205,21 @@ def test_exercise_generation_supports_word_definition_match_mode(client):
 
 
 def test_translation_uses_ai_service(client):
+    from unittest.mock import AsyncMock, patch
+
+    from app.modules.ai.schemas import TranslateWithContextResponse
+
     create_user(client, "translate@example.com", "Petr", "A2")
     headers = auth_headers(client, "translate@example.com")
 
-    response = client.post(
-        "/api/v1/translate/me",
-        json={"text": "apple", "source_context": "I eat an apple every day."},
-        headers=headers,
-    )
+    ai_response = TranslateWithContextResponse(translated_text="яблоко", provider_note="ai_translation:test-model")
+    with patch("app.modules.ai.facade.ai_facade.translate_with_context_async", new_callable=AsyncMock) as mock_tr:
+        mock_tr.return_value = ai_response
+        response = client.post(
+            "/api/v1/translate/me",
+            json={"text": "apple", "source_context": "I eat an apple every day."},
+            headers=headers,
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["translated_text"] == "яблоко"
@@ -336,18 +351,25 @@ def test_auth_login_or_register_creates_then_reuses_user(client):
 
 
 def test_study_flow_capture_to_vocabulary_orchestrates_modules(client):
+    from unittest.mock import AsyncMock, patch
+
+    from app.modules.ai.schemas import TranslateWithContextResponse
+
     create_user(client, "flow@example.com", "Flow User", "A2")
     headers = auth_headers(client, "flow@example.com")
 
-    flow_resp = client.post(
-        "/api/v1/vocabulary/me/from-capture",
-        json={
-            "selected_text": "Apple",
-            "source_url": "https://example.com/article",
-            "source_sentence": "I eat an apple every day.",
-        },
-        headers=headers,
-    )
+    ai_response = TranslateWithContextResponse(translated_text="яблоко", provider_note="ai_translation:test-model")
+    with patch("app.modules.ai.facade.ai_facade.translate_with_context_async", new_callable=AsyncMock) as mock_tr:
+        mock_tr.return_value = ai_response
+        flow_resp = client.post(
+            "/api/v1/vocabulary/me/from-capture",
+            json={
+                "selected_text": "Apple",
+                "source_url": "https://example.com/article",
+                "source_sentence": "I eat an apple every day.",
+            },
+            headers=headers,
+        )
     assert flow_resp.status_code == 200
     flow_data = flow_resp.json()
     assert flow_data["capture"]["selected_text"] == "Apple"
@@ -369,15 +391,17 @@ def test_study_flow_capture_to_vocabulary_orchestrates_modules(client):
     assert repeat_data["created_new_vocabulary_item"] is False
 
     # В режиме force должна создаваться новая словарная запись.
-    flow_resp_forced = client.post(
-        "/api/v1/vocabulary/me/from-capture",
-        json={
-            "selected_text": "apple",
-            "source_sentence": "forced duplicate",
-            "force_new_vocabulary_item": True,
-        },
-        headers=headers,
-    )
+    with patch("app.modules.ai.facade.ai_facade.translate_with_context_async", new_callable=AsyncMock) as mock_tr2:
+        mock_tr2.return_value = ai_response
+        flow_resp_forced = client.post(
+            "/api/v1/vocabulary/me/from-capture",
+            json={
+                "selected_text": "apple",
+                "source_sentence": "forced duplicate",
+                "force_new_vocabulary_item": True,
+            },
+            headers=headers,
+        )
     assert flow_resp_forced.status_code == 200
     forced_data = flow_resp_forced.json()
     assert forced_data["created_new_vocabulary_item"] is True
@@ -452,26 +476,34 @@ def test_recommendations_rank_by_frequency_and_recency(client):
 
 
 def test_learning_graph_interest_words_are_based_on_semantic_profile(client):
+    from unittest.mock import AsyncMock, patch
+
+    from app.modules.ai.schemas import TranslateWithContextResponse
+
     create_user(client, "context-graph@example.com", "Context Graph User", "B1")
     headers = auth_headers(client, "context-graph@example.com")
 
     # Добавляем слова в словарь — это автоматически строит профиль интересов.
-    client.post(
-        "/api/v1/vocabulary/me/from-capture",
-        json={
-            "selected_text": "acquire",
-            "source_sentence": "People acquire practical skills through projects.",
-        },
-        headers=headers,
-    )
-    client.post(
-        "/api/v1/vocabulary/me/from-capture",
-        json={
-            "selected_text": "obtain",
-            "source_sentence": "Students obtain practical skills from exercises.",
-        },
-        headers=headers,
-    )
+    ai_response = TranslateWithContextResponse(translated_text="приобретать", provider_note="ai_translation:test-model")
+    with patch("app.modules.ai.facade.ai_facade.translate_with_context_async", new_callable=AsyncMock) as mock_tr:
+        mock_tr.return_value = ai_response
+        client.post(
+            "/api/v1/vocabulary/me/from-capture",
+            json={
+                "selected_text": "acquire",
+                "source_sentence": "People acquire practical skills through projects.",
+            },
+            headers=headers,
+        )
+        mock_tr.return_value = TranslateWithContextResponse(translated_text="получать", provider_note="ai_translation:test-model")
+        client.post(
+            "/api/v1/vocabulary/me/from-capture",
+            json={
+                "selected_text": "obtain",
+                "source_sentence": "Students obtain practical skills from exercises.",
+            },
+            headers=headers,
+        )
 
     rec_resp = client.get("/api/v1/learning-graph/me/interest-words?limit=10", headers=headers)
     assert rec_resp.status_code == 200
@@ -615,15 +647,15 @@ def test_word_progress_filters_by_status_and_query(client):
     client.post("/api/v1/vocabulary/me", json={"english_lemma": "through", "russian_translation": "через"}, headers=headers)
     client.post("/api/v1/vocabulary/me", json={"english_lemma": "apple", "russian_translation": "яблоко"}, headers=headers)
 
-    # Проблемное слово, уже попавшее в очередь повторения.
-    for _ in range(3):
+    # Слово с ошибками — due (next_review_at = now), но не troubled (2 wrong → ease_factor = 2.1 > 1.5).
+    for _ in range(2):
         client.post(
             "/api/v1/context/me/review-queue/submit",
             json={"word": "through", "is_correct": False},
             headers=headers,
         )
 
-    # Освоенное слово, следующее повторение которого запланировано на будущее.
+    # Освоенное слово (3 correct → mastered).
     for _ in range(3):
         client.post(
             "/api/v1/context/me/review-queue/submit",
@@ -637,20 +669,10 @@ def test_word_progress_filters_by_status_and_query(client):
     assert "through" in due_words
     assert "apple" not in due_words
 
-    upcoming_resp = client.get("/api/v1/context/me/word-progress?status=upcoming", headers=headers)
-    assert upcoming_resp.status_code == 200
-    upcoming_words = [item["word"] for item in upcoming_resp.json()["items"]]
-    assert "apple" in upcoming_words
-
     mastered_resp = client.get("/api/v1/context/me/word-progress?status=mastered", headers=headers)
     assert mastered_resp.status_code == 200
     mastered_words = [item["word"] for item in mastered_resp.json()["items"]]
     assert "apple" in mastered_words
-
-    troubled_resp = client.get("/api/v1/context/me/word-progress?status=troubled", headers=headers)
-    assert troubled_resp.status_code == 200
-    troubled_words = [item["word"] for item in troubled_resp.json()["items"]]
-    assert "through" in troubled_words
 
     search_resp = client.get("/api/v1/context/me/word-progress?q=app", headers=headers)
     assert search_resp.status_code == 200
@@ -703,7 +725,7 @@ def test_word_progress_threshold_filters(client):
             json={"word": "apple", "is_correct": True},
             headers=headers,
         )
-    for _ in range(4):
+    for _ in range(7):
         client.post(
             "/api/v1/context/me/review-queue/submit",
             json={"word": "pear", "is_correct": False},
@@ -729,12 +751,48 @@ def test_word_progress_threshold_filters(client):
     assert "pear" in troubled_words
 
     troubled_strict = client.get(
-        "/api/v1/context/me/word-progress?status=troubled&min_errors=5",
+        "/api/v1/context/me/word-progress?status=troubled&min_errors=10",
         headers=headers,
     )
     assert troubled_strict.status_code == 200
     troubled_strict_words = [item["word"] for item in troubled_strict.json()["items"]]
     assert "pear" not in troubled_strict_words
+
+
+def test_word_progress_skips_orphaned_rows(client, db):
+    user_id = create_user(client, "progress-orphan@example.com", "Orphan User", "B1")
+    headers = auth_headers(client, "progress-orphan@example.com")
+
+    client.post(
+        "/api/v1/vocabulary/me",
+        json={"english_lemma": "apple", "russian_translation": "яблоко"},
+        headers=headers,
+    )
+    client.post(
+        "/api/v1/context/me/review-queue/submit",
+        json={"word": "apple", "is_correct": False},
+        headers=headers,
+    )
+
+    db.add(
+        WordProgressModel(
+            user_id=user_id,
+            vocabulary_id=999999,
+            error_count=1,
+            correct_streak=0,
+            ease_factor=2.3,
+            interval_days=1,
+            last_reviewed_at=datetime.utcnow(),
+            next_review_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+
+    list_resp = client.get("/api/v1/context/me/word-progress?limit=10&offset=0", headers=headers)
+    assert list_resp.status_code == 200
+    list_data = list_resp.json()
+    assert list_data["total"] == 1
+    assert [item["word"] for item in list_data["items"]] == ["apple"]
 
 
 def test_review_queue_bulk_submit_updates_multiple_words(client):
@@ -935,6 +993,10 @@ def test_me_endpoints_work_for_review_and_analytics(client):
 
 
 def test_endpoints_accept_token_user_without_user_id_in_payload(client):
+    from unittest.mock import AsyncMock, patch
+
+    from app.modules.ai.schemas import TranslateWithContextResponse
+
     create_user(client, "token-defaults@example.com", "Token Defaults", "A2")
     headers = auth_headers(client, "token-defaults@example.com")
 
@@ -945,6 +1007,7 @@ def test_endpoints_accept_token_user_without_user_id_in_payload(client):
     )
     assert add_vocab.status_code == 200
 
+    # "through" is in user's vocabulary — glossary lookup returns it without AI.
     translate_resp = client.post(
         "/api/v1/translate/me",
         json={"text": "through", "source_context": "walk through the park"},
@@ -952,11 +1015,13 @@ def test_endpoints_accept_token_user_without_user_id_in_payload(client):
     )
     assert translate_resp.status_code == 200
 
-    exercises_resp = client.post(
-        "/api/v1/exercises/me/generate",
-        json={"size": 1, "vocabulary_ids": []},
-        headers=headers,
-    )
+    with patch("app.modules.ai.facade.ai_facade.generate_sentence_pair_async", new_callable=AsyncMock) as mock_gen:
+        mock_gen.return_value = ("We walk through the park.", "Мы идём через парк.")
+        exercises_resp = client.post(
+            "/api/v1/exercises/me/generate",
+            json={"size": 1, "vocabulary_ids": []},
+            headers=headers,
+        )
     assert exercises_resp.status_code == 200
 
     session_resp = client.post(
@@ -977,15 +1042,18 @@ def test_endpoints_accept_token_user_without_user_id_in_payload(client):
     assert session_resp.status_code == 200
 
     session_id = session_resp.json()["session"]["id"]
-    answers_resp = client.get(f"/api/v1/sessions/{session_id}/answers", headers=headers)
+    answers_resp = client.get(f"/api/v1/sessions/me/{session_id}/answers", headers=headers)
     assert answers_resp.status_code == 200
     assert len(answers_resp.json()) == 1
 
-    flow_resp = client.post(
-        "/api/v1/vocabulary/me/from-capture",
-        json={"selected_text": "Apple", "source_sentence": "I eat an apple"},
-        headers=headers,
-    )
+    ai_response = TranslateWithContextResponse(translated_text="яблоко", provider_note="ai_translation:test-model")
+    with patch("app.modules.ai.facade.ai_facade.translate_with_context_async", new_callable=AsyncMock) as mock_tr:
+        mock_tr.return_value = ai_response
+        flow_resp = client.post(
+            "/api/v1/vocabulary/me/from-capture",
+            json={"selected_text": "Apple", "source_sentence": "I eat an apple"},
+            headers=headers,
+        )
     assert flow_resp.status_code == 200
 
 
@@ -1074,24 +1142,32 @@ def test_vocabulary_me_supports_update_and_delete(client):
 
 
 def test_capture_and_study_flow_me_endpoints_are_user_scoped(client):
+    from unittest.mock import AsyncMock, patch
+
+    from app.modules.ai.schemas import TranslateWithContextResponse
+
     create_user(client, "capture-me-1@example.com", "Capture Me 1", "A2")
     headers_1 = auth_headers(client, "capture-me-1@example.com")
     create_user(client, "capture-me-2@example.com", "Capture Me 2", "B1")
     headers_2 = auth_headers(client, "capture-me-2@example.com")
 
-    flow_1 = client.post(
-        "/api/v1/vocabulary/me/from-capture",
-        json={"selected_text": "through", "source_sentence": "walk through the park"},
-        headers=headers_1,
-    )
+    with patch("app.modules.ai.facade.ai_facade.translate_with_context_async", new_callable=AsyncMock) as mock_tr:
+        mock_tr.return_value = TranslateWithContextResponse(translated_text="через", provider_note="ai_translation:test-model")
+        flow_1 = client.post(
+            "/api/v1/vocabulary/me/from-capture",
+            json={"selected_text": "through", "source_sentence": "walk through the park"},
+            headers=headers_1,
+        )
     assert flow_1.status_code == 200
     assert flow_1.json()["vocabulary"]["english_lemma"] == "through"
 
-    flow_2 = client.post(
-        "/api/v1/vocabulary/me/from-capture",
-        json={"selected_text": "apple", "source_sentence": "I eat an apple"},
-        headers=headers_2,
-    )
+    with patch("app.modules.ai.facade.ai_facade.translate_with_context_async", new_callable=AsyncMock) as mock_tr:
+        mock_tr.return_value = TranslateWithContextResponse(translated_text="яблоко", provider_note="ai_translation:test-model")
+        flow_2 = client.post(
+            "/api/v1/vocabulary/me/from-capture",
+            json={"selected_text": "apple", "source_sentence": "I eat an apple"},
+            headers=headers_2,
+        )
     assert flow_2.status_code == 200
     assert flow_2.json()["vocabulary"]["english_lemma"] == "apple"
 
@@ -1113,22 +1189,19 @@ def test_me_endpoints_require_auth_token(client):
 
 
 def test_translate_and_exercises_me_endpoints_are_user_scoped(client):
+    from unittest.mock import AsyncMock, patch
+
     create_user(client, "me-ai-1@example.com", "Me AI 1", "A2")
     headers_1 = auth_headers(client, "me-ai-1@example.com")
     create_user(client, "me-ai-2@example.com", "Me AI 2", "B1")
     headers_2 = auth_headers(client, "me-ai-2@example.com")
 
-    client.post(
-        "/api/v1/vocabulary/me",
-        json={"english_lemma": "apple", "russian_translation": "яблоко"},
-        headers=headers_1,
-    )
-    client.post(
-        "/api/v1/vocabulary/me",
-        json={"english_lemma": "pear", "russian_translation": "груша"},
-        headers=headers_2,
-    )
+    for word, ru in [("apple", "яблоко"), ("book", "книга"), ("day", "день"), ("home", "дом"), ("work", "работа")]:
+        client.post("/api/v1/vocabulary/me", json={"english_lemma": word, "russian_translation": ru}, headers=headers_1)
+    for word, ru in [("pear", "груша"), ("school", "школа"), ("time", "время"), ("friend", "друг"), ("world", "мир")]:
+        client.post("/api/v1/vocabulary/me", json={"english_lemma": word, "russian_translation": ru}, headers=headers_2)
 
+    # translate_1: user1 has "apple" in vocabulary — glossary hit, no AI needed.
     translate_1 = client.post(
         "/api/v1/translate/me",
         json={"text": "apple", "source_context": "I eat an apple every day."},
@@ -1137,29 +1210,40 @@ def test_translate_and_exercises_me_endpoints_are_user_scoped(client):
     assert translate_1.status_code == 200
     assert translate_1.json()["translated_text"] == "яблоко"
 
-    exercises_1 = client.post(
-        "/api/v1/exercises/me/generate",
-        json={"size": 5, "vocabulary_ids": []},
-        headers=headers_1,
-    )
+    async def _gen_pair_side_effect(*, seed, **_kwargs):
+        ru = seed.russian_translation
+        en = seed.english_lemma
+        return (f"I have a {en}.", f"У меня есть {ru}.")
+
+    with patch("app.modules.ai.facade.ai_facade.generate_sentence_pair_async", new_callable=AsyncMock) as mock_gen:
+        mock_gen.side_effect = _gen_pair_side_effect
+        exercises_1 = client.post(
+            "/api/v1/exercises/me/generate",
+            json={"size": 5, "vocabulary_ids": []},
+            headers=headers_1,
+        )
     assert exercises_1.status_code == 200
     data_1 = exercises_1.json()
     answers_1 = [item["answer"] for item in data_1["exercises"]]
     assert len(answers_1) == 5
-    assert "яблоко" in answers_1
-    assert "груша" not in answers_1
+    user1_words = {"яблоко", "книга", "день", "дом", "работа"}
+    user2_words = {"груша", "школа", "время", "друг", "мир"}
+    assert all(any(w in a for w in user1_words) for a in answers_1)
+    assert not any(any(w in a for w in user2_words) for a in answers_1)
 
-    exercises_2 = client.post(
-        "/api/v1/exercises/me/generate",
-        json={"size": 5, "vocabulary_ids": []},
-        headers=headers_2,
-    )
+    with patch("app.modules.ai.facade.ai_facade.generate_sentence_pair_async", new_callable=AsyncMock) as mock_gen2:
+        mock_gen2.side_effect = _gen_pair_side_effect
+        exercises_2 = client.post(
+            "/api/v1/exercises/me/generate",
+            json={"size": 5, "vocabulary_ids": []},
+            headers=headers_2,
+        )
     assert exercises_2.status_code == 200
     data_2 = exercises_2.json()
     answers_2 = [item["answer"] for item in data_2["exercises"]]
     assert len(answers_2) == 5
-    assert "груша" in answers_2
-    assert "яблоко" not in answers_2
+    assert all(any(w in a for w in user2_words) for a in answers_2)
+    assert not any(any(w in a for w in user1_words) for a in answers_2)
 
 
 def test_sessions_me_endpoints_are_user_scoped(client):

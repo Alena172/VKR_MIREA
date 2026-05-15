@@ -136,7 +136,7 @@ export default function ReviewPage({ onError }) {
               <div>
                 <p className="kicker">Spaced Repetition</p>
                 <h2 className="section-title">Сессии повторения</h2>
-                <p className="muted mt-1 text-sm">Запусти SRS-сессию или случайную сессию вне SRS.</p>
+                <p className="muted mt-1 text-sm">Повторяй слова по интервальному методу или запусти случайную сессию.</p>
               </div>
               <button className="btn-secondary" onClick={loadReviewMeta} type="button">
                 Обновить
@@ -208,7 +208,6 @@ export default function ReviewPage({ onError }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="chip">Сейчас к повторению: {dueItems.length}</span>
                     <span className="chip">На ближайшее время: {upcomingItems.length}</span>
-                    {plan.recommended_words.length ? <span className="chip">Фокус: {plan.recommended_words.slice(0, 3).join(", ")}</span> : null}
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-2">
@@ -227,25 +226,6 @@ export default function ReviewPage({ onError }) {
               );
             })() : null}
 
-            {interestWords.length ? (
-              <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/50 p-3">
-                <p className="text-sm font-semibold text-gray-900">Слова из профиля интересов</p>
-                <div className="flex flex-wrap gap-2">
-                  {interestWords.map((item) => (
-                    <div key={`interest-word-${item.english_lemma}`} className="rounded-lg border border-blue-100 bg-white px-3 py-2">
-                      <span className="text-sm font-semibold text-gray-900">{item.english_lemma}</span>
-                      <span className="mx-1 text-slate-400">—</span>
-                      <span className="text-sm text-slate-700">{item.russian_translation}</span>
-                      {item.primary_signal && (
-                        <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                          {item.primary_signal}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </section>
         </>
       ) : null}
@@ -277,11 +257,8 @@ export default function ReviewPage({ onError }) {
               <div className="h-2 rounded-full bg-slate-200">
                 <div className="h-2 rounded-full bg-blue-600 transition-all" style={{ width: `${progressPercent}%` }} />
               </div>
-              {currentItem && currentDifficultyMeta && currentTimingMeta ? (
+              {currentItem && currentTimingMeta ? (
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${currentDifficultyMeta.toneClass}`}>
-                    {currentDifficultyMeta.label}
-                  </span>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${currentTimingMeta.toneClass}`}>
                     {currentTimingMeta.label}
                   </span>
@@ -439,9 +416,6 @@ function ReviewPlanItemCard({ item }) {
           <p className="text-sm font-semibold text-slate-900">{item.word}</p>
           <p className="text-sm text-slate-600">{item.russian_translation || "Перевод уточняется"}</p>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${difficultyMeta.toneClass}`}>
-          {difficultyMeta.label}
-        </span>
       </div>
       <div className="mt-2 flex flex-wrap gap-2 text-xs">
         <span className={`rounded-full px-2.5 py-1 font-semibold ${timingMeta.toneClass}`}>{timingMeta.label}</span>

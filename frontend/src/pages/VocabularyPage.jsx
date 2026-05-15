@@ -114,6 +114,8 @@ export default function VocabularyPage({ onError }) {
   const [progressById, setProgressById] = useState({});
   const [recommendations, setRecommendations] = useState([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [addingLemmas, setAddingLemmas] = useState(new Set());
+  const [addedLemmas, setAddedLemmas] = useState(new Set());
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortBy, setSortBy] = useState("review_priority");
@@ -253,11 +255,29 @@ export default function VocabularyPage({ onError }) {
     navigate("/review");
   }
 
+  async function addFromRecommendation(rec) {
+    setAddingLemmas((prev) => new Set(prev).add(rec.english_lemma));
+    const controller = registerController();
+    try {
+      await api.addVocabularyMe(
+        { english_lemma: rec.english_lemma, russian_translation: rec.russian_translation },
+        { signal: controller.signal },
+      );
+      setAddedLemmas((prev) => new Set(prev).add(rec.english_lemma));
+      await loadVocabulary();
+    } catch (error) {
+      if (!isAbortError(error)) onError(getErrorMessage(error));
+    } finally {
+      releaseController(controller);
+      setAddingLemmas((prev) => { const next = new Set(prev); next.delete(rec.english_lemma); return next; });
+    }
+  }
+
   async function loadRecommendations() {
     setRecommendationsLoading(true);
     const controller = registerController();
     try {
-      const data = await api.learningGraphInterestWords(8, { signal: controller.signal });
+      const data = await api.learningGraphInterestWords(6, { signal: controller.signal });
       setRecommendations(data?.items || []);
     } catch (error) {
       if (!isAbortError(error)) {
@@ -321,32 +341,38 @@ export default function VocabularyPage({ onError }) {
 
       {(recommendations.length > 0 || recommendationsLoading) && (
         <section className="surface p-4 md:p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <h3 className="text-base font-extrabold text-gray-900">Рекомендации по интересам</h3>
-            <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
-              Новые слова для вас
-            </span>
+          <div className="mb-1 flex items-center gap-2">
+            <p className="kicker">Для вас</p>
           </div>
-          <p className="muted mb-3 text-sm">Слова из тематик, которыми вы уже интересуетесь, но ещё не сохранили.</p>
+          <h3 className="text-base font-extrabold text-gray-900 mb-0.5">Рекомендации по интересам</h3>
+          <p className="muted mb-4 text-sm">Слова из тематик, которыми вы уже интересуетесь.</p>
           {recommendationsLoading ? (
             <p className="muted text-sm">Загружаю рекомендации...</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {recommendations.map((rec) => (
-                <div
-                  key={rec.english_lemma}
-                  className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2"
-                >
-                  <span className="font-semibold text-slate-900 text-sm">{rec.english_lemma}</span>
-                  <span className="text-slate-500 text-sm">—</span>
-                  <span className="text-slate-700 text-sm">{rec.russian_translation}</span>
-                  {rec.primary_signal && (
-                    <span className="rounded-full bg-white border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-600">
-                      {rec.primary_signal}
-                    </span>
-                  )}
-                </div>
-              ))}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {recommendations.map((rec) => {
+                const isAdding = addingLemmas.has(rec.english_lemma);
+                const isAdded = addedLemmas.has(rec.english_lemma);
+                return (
+                  <div
+                    key={rec.english_lemma}
+                    className={`flex flex-col gap-1.5 rounded-2xl border px-5 py-4 transition-colors ${isAdded ? "border-green-200 bg-green-50" : "border-blue-100 bg-blue-50"}`}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-lg font-extrabold ${isAdded ? "text-green-900" : "text-blue-900"}`}>{rec.english_lemma}</span>
+                      <span className={`text-sm ${isAdded ? "text-green-700" : "text-blue-700"}`}>{rec.russian_translation}</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isAdding || isAdded}
+                      onClick={() => addFromRecommendation(rec)}
+                      className={`mt-1 self-start text-xs transition-colors disabled:opacity-50 ${isAdded ? "text-green-600 cursor-default" : "text-blue-500 hover:text-blue-800"}`}
+                    >
+                      {isAdding ? "Добавляю..." : isAdded ? "✓ Добавлено" : "+ В словарь"}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
@@ -354,7 +380,7 @@ export default function VocabularyPage({ onError }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <form onSubmit={addViaStudyFlow} className="surface p-4 md:p-5 space-y-3">
-          <h3 className="text-base font-extrabold text-gray-900">Добавление через Study Flow</h3>
+          <h3 className="text-base font-extrabold text-gray-900">Добавить слово из контекста</h3>
           <input className="field" value={selectedText} onChange={(e) => setSelectedText(e.target.value)} placeholder="Выделенное слово" />
           <textarea
             className="field"
@@ -383,7 +409,7 @@ export default function VocabularyPage({ onError }) {
           />
           <div className="flex flex-wrap items-center gap-2">
             <button className="btn-primary" type="submit">Перевести</button>
-            {translationResult ? <span className="chip">Результат: {translationResult}</span> : null}
+            {translationResult ? <span className="chip">{translationResult}</span> : null}
           </div>
         </form>
       </div>
@@ -446,16 +472,6 @@ export default function VocabularyPage({ onError }) {
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${state.toneClass}`}>
                         {state.label}
                       </span>
-                      {!item.context_definition_ru ? (
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          Нет определения
-                        </span>
-                      ) : null}
-                      {!item.source_sentence ? (
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          Нет контекста
-                        </span>
-                      ) : null}
                       {progress ? (
                         <>
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
@@ -467,7 +483,6 @@ export default function VocabularyPage({ onError }) {
                         </>
                       ) : null}
                     </div>
-                    <div className="mt-2 text-sm text-slate-600">{state.description}</div>
                     {item.context_definition_ru ? (
                       <div className="mt-2 text-sm text-gray-700">{item.context_definition_ru}</div>
                     ) : null}

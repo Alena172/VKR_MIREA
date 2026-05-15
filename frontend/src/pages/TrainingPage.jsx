@@ -127,10 +127,12 @@ function buildTrainingInsights(sessionResult, submittedAnswers) {
     return null;
   }
 
-  const incorrectAnswers = submittedAnswers.filter((a) => a.is_correct === false);
+  // Prefer server-evaluated answers (with LLM correction) over local optimistic state
+  const answers = sessionResult.answers?.length ? sessionResult.answers : submittedAnswers;
+  const incorrectAnswers = answers.filter((a) => a.is_correct === false);
 
   const weakAreas = new Map();
-  submittedAnswers.forEach((answer) => {
+  answers.forEach((answer) => {
     const key = answer.exercise_type || "unknown";
     const current = weakAreas.get(key) || { incorrect: 0, total: 0 };
     weakAreas.set(key, {
@@ -219,10 +221,8 @@ export default function TrainingPage({ onError }) {
     currentExercise,
     currentIndex,
     focusLabel,
-    generationNote,
     isTrainingActive,
     loadingCurrent,
-    loadingPrefetch,
     mode,
     progressPercent,
     resetSessionState,
@@ -299,7 +299,7 @@ export default function TrainingPage({ onError }) {
       <header className="surface p-4 md:p-5">
         <p className="kicker">Training</p>
         <h2 className="section-title">Тренировка</h2>
-        <p className="muted mt-1 text-sm">Первое упражнение приходит как можно раньше, а остальная сессия догружается в фоне, пока ты решаешь текущее задание.</p>
+        <p className="muted mt-1 text-sm">Выбери тип и количество упражнений, затем нажми «Начать».</p>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <label className="text-sm">
@@ -339,8 +339,6 @@ export default function TrainingPage({ onError }) {
             </button>
           ) : null}
           {isTrainingActive ? <span className="chip">Задание {currentIndex + 1} из {size}</span> : null}
-          {generationNote ? <span className="chip">{generationNote}</span> : null}
-          {isTrainingActive && !loadingPrefetch ? <span className="chip">Остальные задания готовятся в фоне</span> : null}
           {focusLabel ? <span className="chip">Фокус: {focusLabel}</span> : null}
           {selectedVocabularyIds.length ? (
             <button
@@ -375,7 +373,15 @@ export default function TrainingPage({ onError }) {
       ) : null}
 
       {isTrainingActive && currentExercise ? (
-        <article className="surface p-4 md:p-5">
+        <article
+          className="surface p-4 md:p-5"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && answerReady && !loadingCurrent && !submittingCurrent) {
+              e.preventDefault();
+              submitCurrentAndContinue();
+            }
+          }}
+        >
           <p className="text-base font-semibold">{currentExercise.prompt}</p>
           {renderExercise()}
 
@@ -383,7 +389,6 @@ export default function TrainingPage({ onError }) {
             <button onClick={submitCurrentAndContinue} className="btn-primary disabled:opacity-50" type="button" disabled={loadingCurrent || submittingCurrent || !answerReady}>
               {submittingCurrent ? "Сохраняю..." : currentIndex + 1 >= size ? "Завершить и отправить" : "Следующее задание"}
             </button>
-            {loadingPrefetch ? <span className="chip">Подгружаю следующую партию...</span> : null}
           </div>
         </article>
       ) : null}
@@ -422,9 +427,7 @@ export default function TrainingPage({ onError }) {
                     ))}
                   </div>
                 </div>
-              ) : (
-                <p className="mt-4 text-sm text-green-700">Ошибок нет. Это хороший момент перейти к следующему режиму или к повторению SRS.</p>
-              )}
+              ) : null}
             </>
           ) : null}
         </section>

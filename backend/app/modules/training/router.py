@@ -13,6 +13,7 @@ from app.modules.training.schemas import (
     SessionHistoryResponse,
     SessionSubmitRequest,
     SessionSubmitResponse,
+    SubmittedAnswerResult,
 )
 from app.modules.training.service.exercises import TrainingService
 from app.modules.training.service.submission import SubmissionService
@@ -51,7 +52,7 @@ async def generate_me(
 
 @router.get("/sessions/me", response_model=SessionHistoryResponse)
 def list_my_sessions(
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int = Query(default=10, ge=1),
     offset: int = Query(default=0, ge=0),
     min_accuracy: float | None = Query(default=None, ge=0.0, le=1.0),
     max_accuracy: float | None = Query(default=None, ge=0.0, le=1.0),
@@ -109,12 +110,23 @@ async def submit_session(
         requested_user_id=payload.user_id,
         current_user_id=current_user_id,
     )
-    result = service.submit(
+    result = await service.submit(
         user_id=target_user_id,
         answers=payload.answers,
     )
     return SessionSubmitResponse(
         session=result.session,
+        answers=[
+            SubmittedAnswerResult(
+                exercise_id=a.exercise_id,
+                exercise_type=a.exercise_type,
+                prompt=a.prompt,
+                expected_answer=a.expected_answer,
+                user_answer=a.user_answer,
+                is_correct=a.is_correct,
+            )
+            for a in result.evaluated_answers
+        ],
         incorrect_feedback=[],
         advice_feedback=[],
     )
