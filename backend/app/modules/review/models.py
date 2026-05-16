@@ -13,17 +13,17 @@ from app.core.db import Base
 class WordProgressModel(Base):
     """Состояние SRS для одной записи личного словаря пользователя.
 
-    Ключ: (user_id, vocabulary_id) — одна карточка = один смысл слова.
+    Ключ: vocabulary_id — одна карточка = один смысл слова.
+    Пользователь определяется через user_vocabulary.user_id.
     """
 
     __tablename__ = "word_progress"
     __table_args__ = (
-        Index("uq_word_progress_user_vocabulary", "user_id", "vocabulary_id", unique=True),
-        Index("ix_word_progress_user_next_review", "user_id", "next_review_at"),
+        Index("uq_word_progress_vocabulary", "vocabulary_id", unique=True),
+        Index("ix_word_progress_next_review_at", "next_review_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     vocabulary_id: Mapped[int] = mapped_column(
         ForeignKey("user_vocabulary.id", ondelete="CASCADE"), nullable=False, index=True
     )

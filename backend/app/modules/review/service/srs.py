@@ -150,7 +150,7 @@ class SRSService:
             return {"user_id": user_id, "mode": "random", "total_items": 0, "items": []}
         sampled = secrets.SystemRandom().sample(valid_items, k=min(size, len(valid_items)))
         vocab_ids = [item.id for item in sampled]
-        progress_map = self._repo.get_progress_map_by_vocabulary_ids(user_id=user_id, vocabulary_ids=vocab_ids)
+        progress_map = self._repo.get_progress_map_by_vocabulary_ids(vocabulary_ids=vocab_ids)
         items = self._build_review_session_items_from_vocab(user_id=user_id, vocab_items=sampled, progress_map=progress_map)
         return {"user_id": user_id, "mode": "random", "total_items": len(items), "items": items}
 
@@ -207,7 +207,7 @@ class SRSService:
         if vocabulary_id is None:
             return {"user_id": user_id, "vocabulary_id": None, "progress_deleted": False, "removed_from_difficult_words": False}
         with transaction(self._repo._db):
-            deleted = self._repo.delete_word_progress_by_vocabulary_id(user_id=user_id, vocabulary_id=vocabulary_id)
+            deleted = self._repo.delete_word_progress_by_vocabulary_id(vocabulary_id=vocabulary_id)
         return {"user_id": user_id, "vocabulary_id": vocabulary_id, "progress_deleted": deleted, "removed_from_difficult_words": deleted}
 
     def get_review_plan(self, *, user_id: int, current_user_id: int, limit: int, horizon_hours: int) -> dict:
@@ -268,7 +268,7 @@ class SRSService:
         is_correct: bool,
     ) -> WordProgressModel | None:
         now = datetime.utcnow()
-        row = self._repo.get_or_create_word_progress(user_id, vocabulary_id, now=now)
+        row = self._repo.get_or_create_word_progress(vocabulary_id, now=now)
 
         if is_correct:
             new_streak = row.correct_streak + 1
@@ -295,7 +295,7 @@ class SRSService:
             )
 
     def ensure_word_progress_entry(self, *, user_id: int, vocabulary_id: int) -> bool:
-        return self._repo.ensure_word_progress(user_id=user_id, vocabulary_id=vocabulary_id) is not None
+        return self._repo.ensure_word_progress(vocabulary_id=vocabulary_id) is not None
 
     def update_learning_progress(self, *, user_id: int, updates: list[WordProgressUpdate]) -> list[int]:
         updated_ids: list[int] = []

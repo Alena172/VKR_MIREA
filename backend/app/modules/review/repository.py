@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.modules.review.models import WordProgressModel
+from app.modules.vocabulary.models import UserVocabularyModel
 
 
 class ReviewRepository:
@@ -19,7 +20,6 @@ class ReviewRepository:
 
     def get_or_create_word_progress(
         self,
-        user_id: int,
         vocabulary_id: int,
         *,
         now: datetime,
@@ -27,14 +27,12 @@ class ReviewRepository:
         """Возвращает существующую SRS-карточку или создаёт новую с дефолтными значениями SM-2."""
         row = self._db.scalar(
             select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
                 WordProgressModel.vocabulary_id == vocabulary_id,
             )
         )
         if row is not None:
             return row
         row = WordProgressModel(
-            user_id=user_id,
             vocabulary_id=vocabulary_id,
             error_count=0,
             correct_streak=0,
@@ -69,31 +67,28 @@ class ReviewRepository:
 
     def ensure_word_progress(
         self,
-        user_id: int,
         vocabulary_id: int,
     ) -> WordProgressModel | None:
         return self.get_or_create_word_progress(
-            user_id, vocabulary_id, now=datetime.utcnow()
+            vocabulary_id, now=datetime.utcnow()
         )
 
     def get_word_progress_by_vocabulary_id(
-        self, user_id: int, vocabulary_id: int
+        self, vocabulary_id: int
     ) -> WordProgressModel | None:
         return self._db.scalar(
             select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
                 WordProgressModel.vocabulary_id == vocabulary_id,
             )
         )
 
     def get_progress_map_by_vocabulary_ids(
-        self, user_id: int, vocabulary_ids: list[int]
+        self, vocabulary_ids: list[int]
     ) -> dict[int, WordProgressModel]:
         if not vocabulary_ids:
             return {}
         rows = list(self._db.scalars(
             select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
                 WordProgressModel.vocabulary_id.in_(vocabulary_ids),
             )
         ))
@@ -103,8 +98,9 @@ class ReviewRepository:
         now = datetime.utcnow()
         return list(self._db.scalars(
             select(WordProgressModel)
+            .join(UserVocabularyModel, UserVocabularyModel.id == WordProgressModel.vocabulary_id)
             .where(
-                WordProgressModel.user_id == user_id,
+                UserVocabularyModel.user_id == user_id,
                 WordProgressModel.next_review_at <= now,
             )
             .order_by(WordProgressModel.next_review_at.asc(), WordProgressModel.error_count.desc())
@@ -114,8 +110,10 @@ class ReviewRepository:
     def count_due_word_progress(self, user_id: int) -> int:
         now = datetime.utcnow()
         return int(self._db.scalar(
-            select(func.count(WordProgressModel.id)).where(
-                WordProgressModel.user_id == user_id,
+            select(func.count(WordProgressModel.id))
+            .join(UserVocabularyModel, UserVocabularyModel.id == WordProgressModel.vocabulary_id)
+            .where(
+                UserVocabularyModel.user_id == user_id,
                 WordProgressModel.next_review_at <= now,
             )
         ) or 0)
@@ -130,8 +128,9 @@ class ReviewRepository:
         end = now + horizon
         return list(self._db.scalars(
             select(WordProgressModel)
+            .join(UserVocabularyModel, UserVocabularyModel.id == WordProgressModel.vocabulary_id)
             .where(
-                WordProgressModel.user_id == user_id,
+                UserVocabularyModel.user_id == user_id,
                 WordProgressModel.next_review_at > now,
                 WordProgressModel.next_review_at <= end,
             )
@@ -148,7 +147,11 @@ class ReviewRepository:
         sort_by: Literal["next_review_at", "error_count", "correct_streak"] = "next_review_at",
         sort_order: Literal["asc", "desc"] = "asc",
     ) -> list[WordProgressModel]:
-        query = select(WordProgressModel).where(WordProgressModel.user_id == user_id)
+        query = (
+            select(WordProgressModel)
+            .join(UserVocabularyModel, UserVocabularyModel.id == WordProgressModel.vocabulary_id)
+            .where(UserVocabularyModel.user_id == user_id)
+        )
 
         if sort_by == "error_count":
             primary_col = WordProgressModel.error_count
@@ -161,10 +164,9 @@ class ReviewRepository:
         query = query.order_by(primary_order, WordProgressModel.next_review_at.asc()).offset(offset).limit(limit)
         return list(self._db.scalars(query))
 
-    def delete_word_progress_by_vocabulary_id(self, user_id: int, vocabulary_id: int) -> bool:
+    def delete_word_progress_by_vocabulary_id(self, vocabulary_id: int) -> bool:
         row = self._db.scalar(
             select(WordProgressModel).where(
-                WordProgressModel.user_id == user_id,
                 WordProgressModel.vocabulary_id == vocabulary_id,
             )
         )

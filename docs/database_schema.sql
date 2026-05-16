@@ -1,6 +1,3 @@
--- Актуальный снимок PostgreSQL-схемы для документации.
--- Отражает текущие ORM-модели после оптимизации (миграции 0001–0022).
-
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(320) NOT NULL UNIQUE,
@@ -9,6 +6,8 @@ CREATE TABLE users (
     cefr_level VARCHAR(2) NOT NULL DEFAULT 'A1',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX ix_users_email ON users(email);
 
 CREATE TABLE topic_clusters (
     id SERIAL PRIMARY KEY,
@@ -31,10 +30,8 @@ CREATE TABLE dictionary_entries (
         UNIQUE (english_lemma, russian_translation)
 );
 
-CREATE INDEX ix_dictionary_entries_english_lemma
-    ON dictionary_entries(english_lemma);
-CREATE INDEX ix_dictionary_entries_topic_cluster_id
-    ON dictionary_entries(topic_cluster_id);
+CREATE INDEX ix_dictionary_entries_english_lemma ON dictionary_entries(english_lemma);
+CREATE INDEX ix_dictionary_entries_topic_cluster_id ON dictionary_entries(topic_cluster_id);
 
 CREATE TABLE user_vocabulary (
     id SERIAL PRIMARY KEY,
@@ -57,7 +54,6 @@ CREATE INDEX ix_user_vocabulary_phrase_en ON user_vocabulary(phrase_en);
 
 CREATE TABLE word_progress (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id),
     vocabulary_id INTEGER NOT NULL REFERENCES user_vocabulary(id) ON DELETE CASCADE,
     error_count INTEGER NOT NULL DEFAULT 0,
     correct_streak INTEGER NOT NULL DEFAULT 0,
@@ -67,14 +63,9 @@ CREATE TABLE word_progress (
     next_review_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX uq_word_progress_user_vocabulary
-    ON word_progress(user_id, vocabulary_id);
-CREATE INDEX ix_word_progress_user_id ON word_progress(user_id);
+CREATE UNIQUE INDEX uq_word_progress_vocabulary ON word_progress(vocabulary_id);
 CREATE INDEX ix_word_progress_vocabulary_id ON word_progress(vocabulary_id);
 CREATE INDEX ix_word_progress_next_review_at ON word_progress(next_review_at);
--- Составной индекс для основного запроса SRS: WHERE user_id = ? AND next_review_at <= NOW()
-CREATE INDEX ix_word_progress_user_next_review
-    ON word_progress(user_id, next_review_at);
 
 CREATE TABLE learning_sessions (
     id SERIAL PRIMARY KEY,
@@ -102,10 +93,8 @@ CREATE TABLE learning_session_answers (
         UNIQUE (session_id, exercise_id)
 );
 
-CREATE INDEX ix_learning_session_answers_session_id
-    ON learning_session_answers(session_id);
-CREATE INDEX ix_learning_session_answers_target_word
-    ON learning_session_answers(target_word);
+CREATE INDEX ix_learning_session_answers_session_id ON learning_session_answers(session_id);
+CREATE INDEX ix_learning_session_answers_target_word ON learning_session_answers(target_word);
 
 CREATE TABLE user_interests (
     id SERIAL PRIMARY KEY,

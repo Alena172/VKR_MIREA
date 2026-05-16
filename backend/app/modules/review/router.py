@@ -26,10 +26,10 @@ from app.modules.vocabulary.service.items import VocabularyService
 router = APIRouter(tags=["review"])
 
 
-def _progress_to_read(progress: WordProgressModel, vocab_map: dict) -> WordProgressRead:
+def _progress_to_read(progress: WordProgressModel, vocab_map: dict, user_id: int) -> WordProgressRead:
     vocab_item = vocab_map.get(progress.vocabulary_id) if progress.vocabulary_id is not None else None
     return WordProgressRead(
-        user_id=progress.user_id,
+        user_id=user_id,
         word=vocab_item.english_lemma if vocab_item is not None else "",
         vocabulary_id=progress.vocabulary_id,
         russian_translation=vocab_item.russian_translation if vocab_item is not None else None,
@@ -68,7 +68,7 @@ def submit_review_queue_item_me(
 ) -> WordProgressRead:
     progress = srs_service.submit_review_queue_item(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
     vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=current_user_id)}
-    return _progress_to_read(progress, vocab_map)
+    return _progress_to_read(progress, vocab_map, current_user_id)
 
 
 @router.post("/context/me/review-queue/submit-bulk", response_model=ReviewQueueBulkSubmitResponse)
@@ -80,7 +80,7 @@ def submit_review_queue_bulk_me(
 ) -> ReviewQueueBulkSubmitResponse:
     result = srs_service.submit_review_queue_bulk(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
     vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=current_user_id)}
-    updated = [_progress_to_read(r, vocab_map) for r in result["updated"]]
+    updated = [_progress_to_read(r, vocab_map, current_user_id) for r in result["updated"]]
     return ReviewQueueBulkSubmitResponse(user_id=result["user_id"], updated=updated)
 
 

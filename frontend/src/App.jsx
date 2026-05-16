@@ -222,26 +222,25 @@ function calcStreak(sessions) {
 }
 
 /**
- * Уровни по доле освоенных слов.
- * thresholdPct — минимальный % освоенных для входа в этот уровень.
+ * Уровни по абсолютному количеству освоенных слов.
+ * threshold — минимальное число слов со статусом "закрепляется" для входа в уровень.
  */
 const LEVELS = [
-  { label: "Старт",       thresholdPct: 0,  color: "bg-blue-400"  },
-  { label: "Базовый",     thresholdPct: 10, color: "bg-blue-500"  },
-  { label: "Средний",     thresholdPct: 30, color: "bg-blue-600"  },
-  { label: "Продвинутый", thresholdPct: 60, color: "bg-blue-700"  },
-  { label: "Мастер",      thresholdPct: 90, color: "bg-blue-800"  },
+  { label: "Старт",       threshold: 0,   color: "bg-blue-400"  },
+  { label: "Базовый",     threshold: 10,  color: "bg-blue-500"  },
+  { label: "Средний",     threshold: 30,  color: "bg-blue-600"  },
+  { label: "Продвинутый", threshold: 75,  color: "bg-blue-700"  },
+  { label: "Мастер",      threshold: 150, color: "bg-blue-800"  },
 ];
 
-function vocabLevel(mastered, total) {
-  const pct = total > 0 ? (mastered / total) * 100 : 0;
+function vocabLevel(mastered) {
   let tier = 0;
   for (let i = LEVELS.length - 1; i >= 0; i--) {
-    if (pct >= LEVELS[i].thresholdPct) { tier = i; break; }
+    if (mastered >= LEVELS[i].threshold) { tier = i; break; }
   }
   const current = LEVELS[tier];
   const next = LEVELS[tier + 1] ?? null;
-  return { label: current.label, tier, color: current.color, pct, next };
+  return { label: current.label, tier, color: current.color, next };
 }
 
 function StreakBlock({ streak, sessionsTotal }) {
@@ -273,17 +272,15 @@ function StreakBlock({ streak, sessionsTotal }) {
 }
 
 function VocabLevelBlock({ mastered, total }) {
-  const level = vocabLevel(mastered, total);
-  const nextThresholdPct = level.next ? level.next.thresholdPct : 100;
-  const prevThresholdPct = LEVELS[level.tier].thresholdPct;
-  const range = nextThresholdPct - prevThresholdPct;
-  const pctInRange = level.next
-    ? Math.min(100, Math.round(((level.pct - prevThresholdPct) / range) * 100))
+  const level = vocabLevel(mastered);
+  const prevThreshold = LEVELS[level.tier].threshold;
+  const nextThreshold = level.next ? level.next.threshold : null;
+  const range = nextThreshold !== null ? nextThreshold - prevThreshold : 1;
+  const pctInRange = nextThreshold !== null
+    ? Math.min(100, Math.round(((mastered - prevThreshold) / range) * 100))
     : 100;
 
-  const wordsToNext = level.next && total > 0
-    ? Math.ceil((level.next.thresholdPct / 100) * total) - mastered
-    : 0;
+  const wordsToNext = level.next ? level.next.threshold - mastered : 0;
 
   return (
     <div className="card p-5">
