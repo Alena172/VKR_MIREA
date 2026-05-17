@@ -19,6 +19,8 @@ from app.modules.identity.schemas import (
     TokenResponse,
     TokenIdentityResponse,
     TokenVerifyResponse,
+    UpdateMeRequest,
+    UpdateMeResponse,
     UserCreate,
     UserDTO,
     UserRead,
@@ -165,6 +167,17 @@ class IdentityService:
     def verify_token_payload(self, token: str) -> TokenVerifyResponse:
         user_id = verify_token(token)
         return TokenVerifyResponse(valid=user_id is not None, user_id=user_id)
+
+    def update_me(self, *, user_id: int, payload: UpdateMeRequest) -> UpdateMeResponse:
+        user = self._repo.update_cefr_level(user_id=user_id, cefr_level=payload.cefr_level)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        return UpdateMeResponse(
+            user_id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            cefr_level=user.cefr_level,
+        )
 
     def get_identity_by_user_id(self, *, user_id: int) -> TokenIdentityResponse:
         user = self.get_user_or_404(user_id=user_id)

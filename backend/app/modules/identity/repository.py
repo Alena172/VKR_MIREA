@@ -33,6 +33,16 @@ class IdentityRepository:
         self._db.refresh(user)
         return user
 
+    def update_cefr_level(self, *, user_id: int, cefr_level: str) -> UserModel | None:
+        user = self.get_by_id(user_id)
+        if user is None:
+            return None
+        user.cefr_level = cefr_level
+        with transaction(self._db):
+            pass
+        self._db.refresh(user)
+        return user
+
     def authenticate(self, *, email: str, password: str) -> UserModel | None:
         """Возвращает модель если пароль верный, иначе None."""
         user = self.get_by_email(email)

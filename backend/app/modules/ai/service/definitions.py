@@ -136,18 +136,31 @@ class DefinitionService:
     ) -> str | None:
         """Генерирует английское определение конкретного смысла слова."""
 
+        if source_sentence:
+            sense_hint = (
+                f"The word appears in this sentence: \"{source_sentence}\"\n"
+                f"Its meaning in this sentence translates to Russian as \"{russian_translation}\".\n"
+                "Define ONLY this specific sense as used in the sentence above."
+            )
+        else:
+            sense_hint = (
+                f"Russian translation of the intended sense: \"{russian_translation}\".\n"
+                "Define ONLY the sense that matches this Russian translation."
+            )
+
         content = await self._chat_complete_async(
             system_prompt=(
                 "You are an English lexicography assistant. "
-                "Write a complete and precise definition of the English word sense from the context. "
-                "Write in English only, 1-2 sentences, concise and clear."
+                "Your task: write a precise 1-2 sentence English definition for ONE specific sense of a word. "
+                "Use the context sentence and Russian translation as primary signals to identify which sense to define. "
+                "Do NOT default to the most common or literal meaning — identify the sense from context. "
+                "Write in English only."
             ),
             user_prompt=(
                 f"Word: {english_lemma}\n"
-                f"Russian translation: {russian_translation}\n"
-                f"Context: {source_sentence or 'not provided'}\n"
-                f"CEFR: {cefr_level or 'unknown'}\n"
-                "Return only the English definition for this sense."
+                f"{sense_hint}\n"
+                f"CEFR level of the learner: {cefr_level or 'unknown'}\n"
+                "Return ONLY the English definition for this specific sense, nothing else."
             ),
             temperature=0.1,
             max_tokens=220,

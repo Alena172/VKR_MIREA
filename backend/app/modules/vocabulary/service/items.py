@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException
@@ -22,8 +21,6 @@ if TYPE_CHECKING:
     from app.modules.graph.service.graph import GraphService
     from app.modules.review.service.srs import SRSService
 
-_ENGLISH_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
-
 
 def _to_dto(uv, entry) -> VocabularyItemDTO:
     return VocabularyItemDTO.from_model(uv, entry)
@@ -40,14 +37,6 @@ def _normalize_translation(text: str) -> str:
     return value or "перевод не найден"
 
 
-def _english_tokens(text: str | None) -> list[str]:
-    return [token.lower() for token in _ENGLISH_TOKEN_RE.findall(text or "")]
-
-
-def _is_single_word_capture(text: str) -> bool:
-    return len(_english_tokens(text)) == 1
-
-
 def _build_translation_note(provider_note: str) -> str:
     normalized = provider_note.strip().lower()
     if normalized.startswith("local_heuristic"):
@@ -59,10 +48,6 @@ def _build_translation_note(provider_note: str) -> str:
     if normalized.startswith("glossary"):
         return f"Использован перевод из глоссария ({provider_note})"
     return f"Перевод выполнен ({provider_note})"
-
-
-def _is_single_token(text: str) -> bool:
-    return len(text.strip().split()) == 1
 
 
 class VocabularyService:
@@ -202,39 +187,26 @@ class VocabularyService:
     async def _generate_capture_ai_data(
         self,
         *,
-        selected_text: str,
         source_sentence: str | None,
         english_lemma: str,
         cefr_level: str,
     ) -> tuple[str, str, str | None]:
-        # Быстрый локальный поиск делаем только без контекстного предложения:
-        # если контекст есть, пользователь может сохранять конкретный смысл
-        # слова, и общий словарный перевод окажется неверным.
-        if _is_single_word_capture(selected_text) and not source_sentence:
-            shared_translation = self._repo.find_shared_translation(english_lemma=english_lemma)
-            fast_translation = (
-                shared_translation
-                or ai_service.fast_translate_single_word(english_lemma)
-            )
-            if fast_translation:
-                return (
-                    _normalize_translation(fast_translation),
-                    "fast_local_word_translation; local_definition",
-                    None,
-                )
-
+        # Многозначные слова → AI (LibreTranslate не учитывает контекст для омонимов).
+        # Однозначные слова → LibreTranslate/локальный перевод через translate_with_context_async
+        # (там LibreTranslate идёт первым, AI — только как запасной).
+        # Общий словарь не используется как источник перевода — только для сохранения:
+        # если полученный перевод совпадает с уже существующей записью, она переиспользуется.
+        force_ai = ai_service.is_ambiguous_word(english_lemma)
         contextual_response = await ai_service.translate_with_context_async(
             TranslateWithContextRequest(
                 text=english_lemma,
                 cefr_level=cefr_level,
                 source_context=source_sentence,
+                force_ai=force_ai,
             )
         )
         russian_translation = _normalize_translation(contextual_response.translated_text)
-        translation_note = contextual_response.provider_note
-        semantic_sentence = source_sentence
-
-        return russian_translation, translation_note, semantic_sentence
+        return russian_translation, contextual_response.provider_note, source_sentence
 
     async def capture_to_vocabulary(
         self,
@@ -262,7 +234,6 @@ class VocabularyService:
                 return _to_dto(uv, entry), False
 
         russian_translation, _note, semantic_sentence = await self._generate_capture_ai_data(
-            selected_text=selected_text,
             source_sentence=normalized_sentence,
             english_lemma=english_lemma,
             cefr_level=user.cefr_level,
@@ -328,24 +299,20 @@ class VocabularyService:
     ) -> TranslationResultDTO:
         user_model = self._graph()._identity_service.get_user_or_404(user_id=user_id)
 
-        if _is_single_token(text):
-            count = self._repo.count_shared_translations(english_lemma=text.strip())
-            # Однозначное слово — словарь достаточен даже с контекстом
-            if count == 1:
-                shared = self._repo.find_shared_translation(english_lemma=text.strip())
-                if shared:
-                    return TranslationResultDTO(
-                        translated_text=shared,
-                        note=_build_translation_note("glossary:shared_dictionary"),
-                    )
-            # Без контекста — берём самый популярный перевод из словаря
-            elif count > 1 and not source_context:
-                shared = self._repo.find_shared_translation(english_lemma=text.strip())
-                if shared:
-                    return TranslationResultDTO(
-                        translated_text=shared,
-                        note=_build_translation_note("glossary:shared_dictionary"),
-                    )
+        # Многозначные слова → AI, однозначные → LibreTranslate (AI как запасной).
+        # Глоссарий пользователя НЕ передаём для самого переводимого слова:
+        # это предотвращает навязывание ранее сохранённого смысла при другом контексте.
+        lemma = text.strip().lower()
+        force_ai = ai_service.is_ambiguous_word(text)
+        glossary_items = [
+            {
+                "english_term": item.english_lemma,
+                "russian_translation": item.russian_translation,
+                "source_sentence": item.source_sentence,
+            }
+            for item in self.list_user_items(user_id=user_id)[:50]
+            if item.english_lemma.lower() != lemma
+        ]
 
         try:
             ai_response = await ai_service.translate_with_context_async(
@@ -353,14 +320,8 @@ class VocabularyService:
                     text=text,
                     cefr_level=user_model.cefr_level,
                     source_context=source_context,
-                    glossary=[
-                        {
-                            "english_term": item.english_lemma,
-                            "russian_translation": item.russian_translation,
-                            "source_sentence": item.source_sentence,
-                        }
-                        for item in self.list_user_items(user_id=user_id)[:50]
-                    ],
+                    glossary=glossary_items,
+                    force_ai=force_ai,
                 )
             )
         except AIProviderUnavailableError as exc:

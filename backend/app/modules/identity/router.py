@@ -12,6 +12,8 @@ from app.modules.identity.schemas import (
     TokenResponse,
     TokenVerifyRequest,
     TokenVerifyResponse,
+    UpdateMeRequest,
+    UpdateMeResponse,
 )
 from app.modules.identity.service import IdentityService
 
@@ -69,3 +71,12 @@ def me(
     service: IdentityService = Depends(),
 ) -> TokenIdentityResponse:
     return service.get_identity_by_user_id(user_id=user_id)
+
+
+@router.patch("/auth/me", response_model=UpdateMeResponse)
+def update_me(
+    payload: UpdateMeRequest,
+    user_id: int = Depends(get_current_user_id),
+    service: IdentityService = Depends(),
+) -> UpdateMeResponse:
+    return service.update_me(user_id=user_id, payload=payload)

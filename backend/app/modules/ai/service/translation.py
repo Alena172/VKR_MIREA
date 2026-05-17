@@ -29,7 +29,6 @@ class TranslationService:
         "pear": "груша",
         "truck": "грузовик",
         "through": "через",
-        "book": "книга",
         "language": "язык",
         "word": "слово",
         "sentence": "предложение",
@@ -219,13 +218,15 @@ class TranslationService:
         return None
 
     def _looks_ambiguous(self, text: str) -> bool:
+        from app.modules.ai.free_dictionary_client import _FORCE_AI_WORDS
         lowered = self._normalize_english_text(text)
         if lowered in self._PHRASE_MAP:
             return False
         tokens = self._tokenize(lowered)
         if len(tokens) != 1:
             return False
-        return self._normalize_token(tokens[0]) in self._AMBIGUOUS_MAP
+        norm = self._normalize_token(tokens[0])
+        return norm in self._AMBIGUOUS_MAP or lowered in _FORCE_AI_WORDS or norm in _FORCE_AI_WORDS
 
     def _build_remote_provider_note(self, payload: TranslateWithContextRequest) -> str:
         uses_glossary = bool(payload.glossary)
@@ -336,24 +337,28 @@ class TranslationService:
             )
 
         # LibreTranslate level: try before AI for words and phrases.
+        # Skip for known ambiguous words — LibreTranslate ignores word sense
+        # disambiguation and always returns the most common meaning.
         if self._libretranslate is not None:
-            if self._is_single_word(payload.text):
-                lt_result = await self._libretranslate_word(payload.text, payload.source_context)
-                if lt_result:
-                    note = "libretranslate:word_in_context" if payload.source_context else "libretranslate:word"
-                    _log.info("translate | provider=%-30s | word=%-20s | result=%s", note, payload.text, lt_result)
-                    return TranslateWithContextResponse(
-                        translated_text=lt_result,
-                        provider_note=note,
-                    )
-            else:
-                lt_result = await self._libretranslate.translate_word(payload.text)
-                if lt_result:
-                    _log.info("translate | provider=%-30s | word=%-20s | result=%s", "libretranslate:phrase", payload.text, lt_result[:40])
-                    return TranslateWithContextResponse(
-                        translated_text=lt_result,
-                        provider_note="libretranslate:phrase",
-                    )
+            skip_lt = payload.force_ai or self._looks_ambiguous(payload.text)
+            if not skip_lt:
+                if self._is_single_word(payload.text):
+                    lt_result = await self._libretranslate_word(payload.text, payload.source_context)
+                    if lt_result:
+                        note = "libretranslate:word_in_context" if payload.source_context else "libretranslate:word"
+                        _log.info("translate | provider=%-30s | word=%-20s | result=%s", note, payload.text, lt_result)
+                        return TranslateWithContextResponse(
+                            translated_text=lt_result,
+                            provider_note=note,
+                        )
+                else:
+                    lt_result = await self._libretranslate.translate_word(payload.text)
+                    if lt_result:
+                        _log.info("translate | provider=%-30s | word=%-20s | result=%s", "libretranslate:phrase", payload.text, lt_result[:40])
+                        return TranslateWithContextResponse(
+                            translated_text=lt_result,
+                            provider_note="libretranslate:phrase",
+                        )
 
         glossary_json = json.dumps(
             [

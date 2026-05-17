@@ -16,6 +16,7 @@ class TranslateWithContextRequest(BaseModel):
     cefr_level: str | None = Field(default=None, pattern="^(A1|A2|B1|B2|C1|C2)$")
     source_context: str | None = Field(default=None, max_length=10000)
     glossary: list[TranslateGlossaryItem] = Field(default_factory=list)
+    force_ai: bool = Field(default=False)
 
 
 class TranslateWithContextResponse(BaseModel):

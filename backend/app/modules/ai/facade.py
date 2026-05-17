@@ -201,6 +201,9 @@ class AIFacade:
     def fast_translate_single_word(self, text: str) -> str | None:
         return self._translation_service.fast_translate_single_word(text)
 
+    def is_ambiguous_word(self, text: str) -> bool:
+        return self._translation_service._looks_ambiguous(text)
+
     async def generate_sentence_pair_async(
         self,
         *,

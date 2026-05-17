@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
-import { Activity, Award, BarChart3, BookMarked, BookOpen, Clock, Flame, Home, Plus, Star, Target, TrendingUp, Trophy } from "lucide-react";
+import { Activity, Award, BarChart3, BookMarked, BookOpen, ChevronDown, Clock, Flame, Home, Plus, Star, Target, TrendingUp, Trophy } from "lucide-react";
 import VocabularyPage from "./pages/VocabularyPage";
 import ReviewPage from "./pages/ReviewPage";
 import TrainingPage from "./pages/TrainingPage";
@@ -19,134 +19,250 @@ const NAVIGATION = [
   { name: "История", href: "/history", icon: BarChart3 },
 ];
 
+function AuthPage({ onAuth }) {
+  const [authMode, setAuthMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    if (authMode === "register" && password !== passwordConfirm) {
+      setError("Пароли не совпадают.");
+      return;
+    }
+    try {
+      const authData =
+        authMode === "register"
+          ? await api.authRegister({ email, password, full_name: name, cefr_level: "A2" })
+          : await api.authLogin({ email, password });
+      setAuthToken(authData.access_token);
+      localStorage.setItem(USER_ID_KEY, String(authData.user_id));
+      onAuth(authData);
+    } catch (e) {
+      setError(getErrorMessage(e));
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="card w-full max-w-sm">
+        <div className="card-header text-center">
+          <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
+          <p className="text-sm text-gray-500 mt-1">Платформа изучения английского</p>
+        </div>
+        <div className="card-body">
+          <div className="mb-5 inline-flex w-full rounded-lg bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => { setAuthMode("login"); setError(""); }}
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${authMode === "login" ? "bg-white text-primary-700 shadow-sm" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              Вход
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAuthMode("register"); setError(""); }}
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${authMode === "register" ? "bg-white text-primary-700 shadow-sm" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              Регистрация
+            </button>
+          </div>
+
+          <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
+            <input
+              className="form-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              required
+            />
+            {authMode === "register" && (
+              <input
+                className="form-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Имя (необязательно)"
+              />
+            )}
+            <input
+              className="form-input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Пароль"
+              required
+            />
+            {authMode === "register" && (
+              <input
+                className="form-input"
+                type="password"
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                placeholder="Повторите пароль"
+                required
+              />
+            )}
+            <button className="btn-primary mt-1" type="submit">
+              {authMode === "register" ? "Создать аккаунт" : "Войти"}
+            </button>
+          </form>
+
+          {error && (
+            <p className="mt-3 rounded-lg border border-error-200 bg-error-50 px-3 py-2 text-sm text-error-700">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [error, setError] = useState("");
-  const [email, setEmail] = useState("student@example.com");
-  const [name, setName] = useState("Student");
-  const [password, setPassword] = useState("password123");
-  const [cefr, setCefr] = useState("A2");
-  const [authMode, setAuthMode] = useState("register");
   const [authToken, setAuthTokenState] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
-  const [authStatus, setAuthStatus] = useState("");
   const [userId, setUserId] = useState(() => {
     const stored = localStorage.getItem(USER_ID_KEY);
     return stored ? Number(stored) : 0;
   });
+  const [userEmail, setUserEmail] = useState("");
+  const [userName, setUserName] = useState("");
+  const [userCefr, setUserCefr] = useState("A1");
 
-  async function submitAuth(event) {
-    event?.preventDefault();
-    setError("");
-    setAuthStatus("");
-    try {
-      const authData =
-        authMode === "register"
-          ? await api.authRegister({ email, password, full_name: name, cefr_level: cefr })
-          : await api.authLogin({ email, password });
-      setAuthToken(authData.access_token);
-      setAuthTokenState(authData.access_token);
-      setUserId(authData.user_id);
-      localStorage.setItem(USER_ID_KEY, String(authData.user_id));
-      setAuthStatus(
-        authMode === "register"
-          ? `Создан новый пользователь #${authData.user_id}`
-          : `Вход выполнен (#${authData.user_id})`,
-      );
-    } catch (e) {
-      setError(getErrorMessage(e));
+  function handleAuth(authData) {
+    setAuthTokenState(authData.access_token);
+    setUserId(authData.user_id);
+    if (authData.user) {
+      setUserEmail(authData.user.email || "");
+      setUserName(authData.user.full_name || "");
+      setUserCefr(authData.user.cefr_level || "A2");
     }
   }
 
   function logout() {
     clearAuthToken();
     setAuthTokenState("");
-    setAuthStatus("");
     setUserId(0);
+    setUserEmail("");
+    setUserName("");
+    setUserCefr("A1");
     localStorage.removeItem(USER_ID_KEY);
   }
 
   useEffect(() => {
-    if (authToken && !userId) {
+    if (authToken && userId && !userEmail) {
       api
         .authMe()
         .then((data) => {
-          setUserId(data.user_id);
-          localStorage.setItem(USER_ID_KEY, String(data.user_id));
+          setUserEmail(data.email);
+          setUserName(data.full_name || "");
+          setUserCefr(data.cefr_level);
         })
-        .catch((e) => setError(getErrorMessage(e)));
+        .catch(() => {});
     }
-  }, [authToken, userId]);
+  }, [authToken, userId, userEmail]);
 
   if (!userId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="card max-w-3xl w-full">
-          <div className="card-header">
-            <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
-            <p className="text-sm text-gray-600 mt-1">Вход в платформу изучения английского</p>
-          </div>
-          <div className="card-body">
-            <div className="mb-4 inline-flex rounded-lg bg-gray-100 p-1">
-              <button
-                type="button"
-                onClick={() => setAuthMode("register")}
-                className={`rounded-md px-3 py-2 text-sm font-medium ${authMode === "register" ? "bg-white text-primary-700 shadow-sm" : "text-gray-600"}`}
-              >
-                Регистрация
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthMode("login")}
-                className={`rounded-md px-3 py-2 text-sm font-medium ${authMode === "login" ? "bg-white text-primary-700 shadow-sm" : "text-gray-600"}`}
-              >
-                Вход
-              </button>
-            </div>
-            <form className="grid gap-3 md:grid-cols-5" onSubmit={submitAuth}>
-              <input className="form-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-              {authMode === "register" ? (
-                <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя" />
-              ) : (
-                <div />
-              )}
-              <input
-                className="form-input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Пароль"
-                type="password"
-              />
-              {authMode === "register" ? (
-                <select className="form-input" value={cefr} onChange={(e) => setCefr(e.target.value)}>
-                  {["A1", "A2", "B1", "B2", "C1", "C2"].map((level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div />
-              )}
-              <button className="btn-primary" type="submit">
-                {authMode === "register" ? "Создать аккаунт" : "Войти"}
-              </button>
-            </form>
-            {authStatus ? <p className="mt-3 text-xs text-success-700">{authStatus}</p> : null}
-            {error ? <p className="mt-3 rounded-lg border border-error-200 bg-error-50 px-3 py-2 text-sm text-error-700">{error}</p> : null}
-          </div>
-        </div>
-      </div>
+      <Routes>
+        <Route path="*" element={<AuthPage onAuth={handleAuth} />} />
+      </Routes>
     );
   }
 
   return (
+    <AppShell
+      userEmail={userEmail}
+      userName={userName}
+      userCefr={userCefr}
+      setUserCefr={setUserCefr}
+      error={error}
+      setError={setError}
+      logout={logout}
+    />
+  );
+}
+
+function AppShell({ userEmail, userName, userCefr, setUserCefr, error, setError, logout }) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  async function updateCefr(level) {
+    try {
+      const data = await api.updateMe({ cefr_level: level });
+      setUserCefr(data.cefr_level);
+      setProfileOpen(false);
+    } catch (e) {
+      setError(getErrorMessage(e));
+    }
+  }
+
+  return (
     <div className="min-h-screen bg-gray-50 flex">
-      <aside className="w-64 bg-white shadow-lg border-r border-gray-200">
+      <aside className="w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col">
         <div className="p-6 border-b border-gray-200">
           <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
           <p className="text-sm text-gray-600 mt-1">Умный словарь</p>
+
+          <div className="mt-4 relative" ref={profileRef}>
+            <button
+              type="button"
+              onClick={() => setProfileOpen((v) => !v)}
+              className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-bold text-sm">
+                {(userName || userEmail)?.[0]?.toUpperCase() ?? "?"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{userName || userEmail || "—"}</p>
+                <p className="text-xs text-gray-500">Уровень: {userCefr}</p>
+              </div>
+              <ChevronDown className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${profileOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {profileOpen && (
+              <div className="absolute left-4 right-4 z-50 mt-1 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+                <div className="px-3 py-2 border-b border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Уровень языка</p>
+                </div>
+                <div className="p-1">
+                  {["A1", "A2", "B1", "B2", "C1", "C2"].map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => updateCefr(level)}
+                      className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        level === userCefr
+                          ? "bg-primary-50 text-primary-700 font-semibold"
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {level}
+                      {level === userCefr && <span className="ml-2 text-primary-400">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <nav className="p-4">
+        <nav className="p-4 flex-1">
           {NAVIGATION.map((item) => {
             const Icon = item.icon;
             return (
@@ -169,7 +285,7 @@ export default function App() {
           })}
         </nav>
 
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 border-t border-gray-200 pt-4">
           <button type="button" onClick={logout} className="btn-secondary w-full">
             Выйти
           </button>

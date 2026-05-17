@@ -231,6 +231,7 @@ export const api = {
     request("/auth/login-or-register", { method: "POST", body: JSON.stringify(payload), ...options }),
   authVerify: (payload, options = {}) => request("/auth/verify", { method: "POST", body: JSON.stringify(payload), ...options }),
   authMe: (options = {}) => request("/auth/me", options),
+  updateMe: (payload, options = {}) => request("/auth/me", { method: "PATCH", body: JSON.stringify(payload), ...options }),
 
   listVocabularyMe: (options = {}) => request("/vocabulary/me", options),
   addVocabularyMe: (payload, options = {}) => request("/vocabulary/me", { method: "POST", body: JSON.stringify(payload), ...options }),

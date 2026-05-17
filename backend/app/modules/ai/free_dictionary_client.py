@@ -26,15 +26,15 @@ _POLYSEMY_POS_THRESHOLD = 4
 
 # Слова с сильно различными значениями при малом кол-ве POS → принудительно в AI
 _FORCE_AI_WORDS = frozenset({
-    "bank", "bat", "bark", "bear", "break", "can", "date",
+    "bank", "bat", "bark", "bear", "book", "break", "can", "date",
     "down", "drop", "fall", "file", "fly", "ground", "kind",
     "lead", "left", "letter", "lie", "match", "mean", "mine",
-    "miss", "note", "object", "park", "pass", "pitch", "point",
-    "pool", "post", "pound", "press", "row", "second", "saw",
-    "seal", "set", "show", "sign", "slip", "sound", "spring",
-    "stamp", "state", "stem", "stick", "strike", "suit", "swing",
-    "tank", "tape", "term", "tie", "tip", "top", "train", "trip",
-    "turn", "wake", "well", "wind", "yard",
+    "miss", "model", "models", "note", "object", "park", "pass",
+    "pitch", "point", "pool", "post", "pound", "press", "rock", "row",
+    "second", "saw", "seal", "set", "show", "sign", "slip",
+    "sound", "spring", "stamp", "state", "stem", "stick", "strike",
+    "suit", "swing", "tank", "tape", "term", "tie", "tip", "top",
+    "train", "trip", "turn", "wake", "well", "wind", "yard",
 })
 
 _EN_STOP = {

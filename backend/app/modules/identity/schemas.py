@@ -123,6 +123,21 @@ class RegisterRequest(BaseModel):
     cefr_level: str = Field(default="A1", pattern="^(A1|A2|B1|B2|C1|C2)$")
 
 
+class UpdateMeRequest(BaseModel):
+    """Запрос обновления профиля текущего пользователя."""
+
+    cefr_level: str = Field(pattern="^(A1|A2|B1|B2|C1|C2)$")
+
+
+class UpdateMeResponse(BaseModel):
+    """Обновлённые данные текущего пользователя."""
+
+    user_id: int
+    email: EmailStr
+    full_name: str | None = None
+    cefr_level: str
+
+
 class LoginRequest(BaseModel):
     """Публичный вход через email и пароль."""
 
