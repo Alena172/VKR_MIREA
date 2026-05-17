@@ -46,7 +46,7 @@ class RecommendationScoringService:
                 correct_streak=row.correct_streak,
                 next_review_at=row.next_review_at,
                 ease_factor=row.ease_factor,
-                min_streak=3,
+                min_streak=4,
             )
         ]
 

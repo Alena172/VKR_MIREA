@@ -108,7 +108,7 @@ def list_word_progress_me(
     q: str | None = Query(default=None, max_length=200),
     sort_by: Literal["next_review_at", "error_count", "correct_streak"] = Query(default="next_review_at"),
     sort_order: Literal["asc", "desc"] = Query(default="asc"),
-    min_streak: int = Query(default=3, ge=1, le=50),
+    min_streak: int = Query(default=4, ge=1, le=50),
     min_errors: int = Query(default=3, ge=1, le=50),
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
@@ -169,7 +169,7 @@ def progress_me(
 
 @router.get("/context/me/review-summary", response_model=ReviewSummary)
 def review_summary_me(
-    min_streak: int = Query(default=3, ge=1, le=50),
+    min_streak: int = Query(default=4, ge=1, le=50),
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ReviewSummary:

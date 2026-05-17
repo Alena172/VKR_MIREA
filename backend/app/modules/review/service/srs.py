@@ -135,6 +135,8 @@ class SRSService:
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         if payload.mode == "srs":
             return self._build_srs_review_session(user_id=user_id, size=payload.size)
+        if payload.mode == "troubled":
+            return self._build_troubled_review_session(user_id=user_id, size=payload.size)
         return self._build_random_review_session(user_id=user_id, size=payload.size)
 
     def _build_srs_review_session(self, *, user_id: int, size: int) -> dict:
@@ -153,6 +155,19 @@ class SRSService:
         progress_map = self._repo.get_progress_map_by_vocabulary_ids(vocabulary_ids=vocab_ids)
         items = self._build_review_session_items_from_vocab(user_id=user_id, vocab_items=sampled, progress_map=progress_map)
         return {"user_id": user_id, "mode": "random", "total_items": len(items), "items": items}
+
+    def _build_troubled_review_session(self, *, user_id: int, size: int) -> dict:
+        troubled_rows = [
+            row for row in self._repo.list_word_progress(
+                user_id=user_id, limit=size * 3, offset=0, q=None,
+                sort_by="error_count", sort_order="desc",
+            )
+            if row.error_count > 0
+        ][:size]
+        if not troubled_rows:
+            return {"user_id": user_id, "mode": "troubled", "total_items": 0, "items": []}
+        items = self._build_review_session_items_from_progress(user_id=user_id, rows=troubled_rows)
+        return {"user_id": user_id, "mode": "troubled", "total_items": len(items), "items": items}
 
     def list_word_progress(
         self,
@@ -273,6 +288,11 @@ class SRSService:
         if is_correct:
             new_streak = row.correct_streak + 1
             new_ease = row.ease_factor + _SM2_EASE_CORRECT_DELTA
+            # Два верных ответа подряд у troubled-слова — реабилитация:
+            # сбрасываем ease_factor до дефолтного, чтобы слово вышло из troubled.
+            from app.modules.review.models import _TROUBLED_EASE_THRESHOLD
+            if row.ease_factor <= _TROUBLED_EASE_THRESHOLD and new_streak >= 2:
+                new_ease = _SM2_EASE_DEFAULT
             new_interval = _sm2_next_interval(interval_days=row.interval_days, ease_factor=new_ease, correct_streak=new_streak)
             return self._repo.save_word_progress(
                 row,

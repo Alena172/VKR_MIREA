@@ -58,13 +58,13 @@ def build_review_status(
     correct_streak: int,
     next_review_at: datetime,
     ease_factor: float = 2.5,
-    min_streak: int = 3,
+    min_streak: int = 4,
     now: datetime | None = None,
 ) -> ReviewStatusSnapshot:
     current_time = now or datetime.utcnow()
     is_due = next_review_at <= current_time
     is_troubled = ease_factor <= _TROUBLED_EASE_THRESHOLD
-    is_mastered = correct_streak >= min_streak and ease_factor >= _MASTERED_EASE_THRESHOLD
+    is_mastered = correct_streak >= 4 and ease_factor >= _MASTERED_EASE_THRESHOLD
 
     if is_troubled and not is_mastered:
         return ReviewStatusSnapshot(status="troubled", priority=5, is_due=is_due, is_mastered=False, is_troubled=True)
@@ -82,7 +82,7 @@ def matches_review_status_filter(
     correct_streak: int,
     next_review_at: datetime,
     ease_factor: float = 2.5,
-    min_streak: int = 3,
+    min_streak: int = 4,
     now: datetime | None = None,
 ) -> bool:
     if status_filter == "all":

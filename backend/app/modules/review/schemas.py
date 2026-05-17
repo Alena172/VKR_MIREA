@@ -69,7 +69,7 @@ class ReviewPlanResponse(BaseModel):
 
 
 class ReviewSessionStartRequest(BaseModel):
-    mode: Literal["srs", "random"] = "srs"
+    mode: Literal["srs", "random", "troubled"] = "srs"
     size: int = Field(default=20, ge=1, le=200)
 
 
@@ -87,7 +87,7 @@ class ReviewSessionItem(BaseModel):
 
 class ReviewSessionStartResponse(BaseModel):
     user_id: int
-    mode: Literal["srs", "random"]
+    mode: Literal["srs", "random", "troubled"]
     total_items: int
     items: list[ReviewSessionItem]
 

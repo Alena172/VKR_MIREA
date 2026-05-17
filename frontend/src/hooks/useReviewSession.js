@@ -77,7 +77,12 @@ export function useReviewSession({ onError }) {
       setSessionIncorrect(0);
 
       if (!data.items || data.items.length === 0) {
-        setSessionMessage(mode === "srs" ? "Сейчас нет слов для SRS-повторения." : "В словаре нет слов для случайной сессии.");
+        const msg = mode === "srs"
+          ? "Сейчас нет слов для повторения."
+          : mode === "troubled"
+          ? "Трудных слов пока нет — так держать!"
+          : "В словаре нет слов для случайной сессии.";
+        setSessionMessage(msg);
       }
     } catch (error) {
       if (!isAbortError(error)) {

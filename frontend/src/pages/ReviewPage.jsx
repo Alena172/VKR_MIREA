@@ -2,97 +2,25 @@ import { useEffect, useState } from "react";
 import { useReviewSession } from "../hooks/useReviewSession";
 import { clearReviewFocus, loadReviewFocus } from "../lib/studyPresets";
 
-const DATE_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
-  day: "2-digit",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-function formatReviewMoment(value) {
-  if (!value) {
-    return "Без даты";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Без даты";
-  }
-
-  return DATE_FORMATTER.format(date);
-}
-
-function getTimingMeta(nextReviewAt) {
-  if (!nextReviewAt) {
-    return {
-      label: "Без расписания",
-      toneClass: "bg-slate-100 text-slate-700",
-    };
-  }
-
-  const target = new Date(nextReviewAt);
-  const diffMs = target.getTime() - Date.now();
-
-  if (diffMs <= 0) {
-    return {
-      label: "Пора повторять сейчас",
-      toneClass: "bg-red-100 text-red-700",
-    };
-  }
-
-  const diffHours = diffMs / (1000 * 60 * 60);
-  if (diffHours < 6) {
-    return {
-      label: "Скоро потребуется",
-      toneClass: "bg-amber-100 text-amber-700",
-    };
-  }
-
-  return {
-    label: "Есть запас времени",
-    toneClass: "bg-emerald-100 text-emerald-700",
-  };
-}
-
-function getDifficultyMeta(status, errorCount, correctStreak) {
-  if (status === "troubled") {
-    return {
-      label: "Трудное слово",
-      toneClass: "bg-red-100 text-red-700",
-      description: "Часто вызывает ошибки и требует более частого повторения.",
-    };
-  }
-
-  if (status === "mastered") {
-    return {
-      label: "Закрепляется",
-      toneClass: "bg-emerald-100 text-emerald-700",
-      description: "Слово уже запоминается лучше, но его важно периодически освежать.",
-    };
-  }
-
-  return {
-    label: "В работе",
-    toneClass: "bg-blue-100 text-blue-700",
-    description: "Нужна ещё пара повторений, чтобы слово стало устойчивым.",
-  };
-}
-
 function getSessionProgress(currentIndex, total) {
-  if (!total) {
-    return 0;
-  }
+  if (!total) return 0;
   return Math.min(100, Math.round((currentIndex / total) * 100));
 }
 
+const SESSION_MODES = [
+  { value: "srs", label: "По расписанию", description: "Только слова, которые пора повторить сегодня" },
+  { value: "troubled", label: "Трудные слова", description: "Слова с наибольшим числом ошибок" },
+  { value: "random", label: "Случайные", description: "Произвольная выборка из всего словаря" },
+];
+
 export default function ReviewPage({ onError }) {
   const [reviewFocus, setReviewFocus] = useState(null);
+  const [selectedMode, setSelectedMode] = useState("srs");
   const {
     currentIndex,
     currentItem,
     isFlipped,
     isSessionActive,
-    interestWords,
     loadReviewMeta,
     plan,
     resetSession,
@@ -113,16 +41,12 @@ export default function ReviewPage({ onError }) {
   } = useReviewSession({ onError });
 
   const progressPercent = getSessionProgress(currentIndex, sessionItems.length);
-  const currentTimingMeta = currentItem ? getTimingMeta(currentItem.next_review_at) : null;
-  const currentDifficultyMeta = currentItem
-    ? getDifficultyMeta(currentItem.status, currentItem.error_count, currentItem.correct_streak)
-    : null;
+  const dueCount = plan?.due_now?.length ?? summary?.due_now ?? 0;
+  const troubledCount = summary?.troubled ?? 0;
 
   useEffect(() => {
     const focus = loadReviewFocus();
-    if (!focus) {
-      return;
-    }
+    if (!focus) return;
     setReviewFocus(focus);
     clearReviewFocus();
   }, []);
@@ -132,16 +56,9 @@ export default function ReviewPage({ onError }) {
       {!isSessionActive ? (
         <>
           <header className="surface p-4 md:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="kicker">Spaced Repetition</p>
-                <h2 className="section-title">Сессии повторения</h2>
-                <p className="muted mt-1 text-sm">Повторяй слова по интервальному методу или запусти случайную сессию.</p>
-              </div>
-              <button className="btn-secondary" onClick={loadReviewMeta} type="button">
-                Обновить
-              </button>
-            </div>
+            <p className="kicker">Spaced Repetition</p>
+            <h2 className="section-title">Повторение</h2>
+            <p className="muted mt-1 text-sm">Выберите режим и запустите сессию.</p>
           </header>
 
           {reviewFocus ? (
@@ -150,10 +67,10 @@ export default function ReviewPage({ onError }) {
                 <div>
                   <p className="text-sm font-semibold text-slate-900">Фокус на слове</p>
                   <p className="mt-1 text-sm text-slate-700">
-                    <strong>{reviewFocus.word}</strong> - {reviewFocus.translation}
+                    <strong>{reviewFocus.word}</strong> — {reviewFocus.translation}
                   </p>
-                  <p className="mt-1 text-sm text-slate-700">
-                    Текущий статус: {reviewFocus.stateLabel || (reviewFocus.hasProgress ? "В повторении" : "Ещё не в SRS")}.
+                  <p className="mt-0.5 text-sm text-slate-600">
+                    Статус: {reviewFocus.stateLabel || (reviewFocus.hasProgress ? "В повторении" : "Ещё не в SRS")}
                   </p>
                 </div>
                 <button type="button" className="btn-secondary" onClick={() => setReviewFocus(null)}>
@@ -163,69 +80,70 @@ export default function ReviewPage({ onError }) {
             </section>
           ) : null}
 
-          {summary ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard title="Всего слов в SRS" value={summary.total_tracked} />
-              <StatCard title="К повторению сейчас" value={summary.due_now} />
-              <StatCard title="Хорошо закреплены" value={summary.mastered} />
-              <StatCard title="Вызывают трудности" value={summary.troubled} />
-            </div>
-          ) : null}
+          <section className="surface p-4 md:p-5 space-y-5">
+            {dueCount > 0 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 font-medium">
+                Сейчас к повторению: <span className="font-extrabold text-amber-900">{dueCount}</span> {dueCount === 1 ? "слово" : dueCount >= 2 && dueCount <= 4 ? "слова" : "слов"}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-medium">
+                Всё повторено — новые слова подойдут позже.
+              </div>
+            )}
 
-          <section className="surface space-y-4 p-4 md:p-5">
-            <div className="grid gap-3 md:grid-cols-[220px_1fr]">
-              <label className="text-sm">
-                Размер сессии
+            <div className="grid gap-3 sm:grid-cols-3">
+              {SESSION_MODES.map((mode) => {
+                const isSelected = selectedMode === mode.value;
+                const badge = mode.value === "srs" ? dueCount : mode.value === "troubled" ? troubledCount : null;
+                return (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    onClick={() => setSelectedMode(mode.value)}
+                    className={`rounded-xl border-2 p-4 text-left transition ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-[var(--line)] bg-white hover:border-blue-200 hover:bg-blue-50/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-sm font-semibold ${isSelected ? "text-blue-800" : "text-gray-800"}`}>
+                        {mode.label}
+                      </span>
+                      {badge !== null && (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${isSelected ? "bg-blue-200 text-blue-900" : "bg-slate-100 text-slate-700"}`}>
+                          {badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">{mode.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-end gap-4">
+              <label className="text-sm text-gray-700">
+                Слов в сессии
                 <input
                   type="number"
                   min={1}
                   max={200}
                   value={sessionSize}
-                  onChange={(event) => setSessionSize(Number(event.target.value || 1))}
-                  className="field mt-1"
+                  onChange={(e) => setSessionSize(Number(e.target.value || 1))}
+                  className="field mt-1 w-24"
                   disabled={starting}
                 />
               </label>
-              <div className="flex flex-wrap items-end gap-2">
-                <button type="button" className="btn-primary" onClick={() => startSession("srs")} disabled={starting}>
-                  Запустить SRS-сессию
-                </button>
-                <button type="button" className="btn-secondary" onClick={() => startSession("random")} disabled={starting}>
-                  Случайная сессия
-                </button>
-              </div>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => startSession(selectedMode)}
+                disabled={starting}
+              >
+                {starting ? "Запускаю..." : "Начать повторение"}
+              </button>
             </div>
-
-            {plan ? (() => {
-              const dueItems = plan.due_now ?? [];
-              // Из "upcoming" исключаем слова, которые ещё ни разу не повторялись
-              const upcomingItems = (plan.upcoming ?? []).filter(
-                (item) => item.correct_streak > 0 || item.error_count > 0,
-              );
-              if (dueItems.length === 0 && upcomingItems.length === 0) return null;
-              return (
-                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="chip">Сейчас к повторению: {dueItems.length}</span>
-                    <span className="chip">На ближайшее время: {upcomingItems.length}</span>
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <ReviewPlanColumn
-                      title="Повторить сейчас"
-                      emptyText="Сейчас нет срочных слов."
-                      items={dueItems}
-                    />
-                    <ReviewPlanColumn
-                      title="Скоро подойдут"
-                      emptyText="В ближайшие часы повторений не ожидается."
-                      items={upcomingItems}
-                    />
-                  </div>
-                </div>
-              );
-            })() : null}
-
           </section>
         </>
       ) : null}
@@ -235,7 +153,7 @@ export default function ReviewPage({ onError }) {
           <div className="mx-auto max-w-3xl space-y-4">
             <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/95 p-3 text-sm text-gray-600">
               <span>
-                Режим: <strong>{sessionMode === "srs" ? "Интервальное повторение (SRS)" : "Случайная сессия"}</strong>
+                Режим: <strong>{sessionMode === "srs" ? "По расписанию" : sessionMode === "troubled" ? "Трудные слова" : "Случайные"}</strong>
               </span>
               <span>
                 {Math.min(currentIndex, sessionItems.length)} / {sessionItems.length}
@@ -257,11 +175,8 @@ export default function ReviewPage({ onError }) {
               <div className="h-2 rounded-full bg-slate-200">
                 <div className="h-2 rounded-full bg-blue-600 transition-all" style={{ width: `${progressPercent}%` }} />
               </div>
-              {currentItem && currentTimingMeta ? (
+              {currentItem ? (
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${currentTimingMeta.toneClass}`}>
-                    {currentTimingMeta.label}
-                  </span>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                     Ошибок: {currentItem.error_count}
                   </span>
@@ -286,7 +201,6 @@ export default function ReviewPage({ onError }) {
                       className="relative h-full w-full preserve-3d transition-transform duration-500"
                       style={{ transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)" }}
                     >
-                      {/* Лицевая сторона: слово + контекст */}
                       <div className="absolute inset-0 backface-hidden rounded-xl">
                         <div className="h-full rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-lg">
                           <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
@@ -304,7 +218,6 @@ export default function ReviewPage({ onError }) {
                         </div>
                       </div>
 
-                      {/* Обратная сторона: перевод + определение */}
                       <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-xl">
                         <div className="h-full rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 shadow-lg">
                           <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
@@ -376,57 +289,5 @@ export default function ReviewPage({ onError }) {
         </section>
       ) : null}
     </section>
-  );
-}
-
-function StatCard({ title, value }) {
-  return (
-    <div className="surface p-3">
-      <div className="muted text-xs">{title}</div>
-      <div className="text-2xl font-extrabold text-gray-900">{value}</div>
-    </div>
-  );
-}
-
-function ReviewPlanColumn({ title, emptyText, items }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      {items?.length ? (
-        <div className="mt-3 space-y-2">
-          {items.slice(0, 5).map((item) => (
-            <ReviewPlanItemCard key={`${title}-${item.word}`} item={item} />
-          ))}
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-slate-500">{emptyText}</p>
-      )}
-    </div>
-  );
-}
-
-function ReviewPlanItemCard({ item }) {
-  const difficultyMeta = getDifficultyMeta(item.status, item.error_count, item.correct_streak);
-  const timingMeta = getTimingMeta(item.next_review_at);
-
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-slate-900">{item.word}</p>
-          <p className="text-sm text-slate-600">{item.russian_translation || "Перевод уточняется"}</p>
-        </div>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-xs">
-        <span className={`rounded-full px-2.5 py-1 font-semibold ${timingMeta.toneClass}`}>{timingMeta.label}</span>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-          Ошибок: {item.error_count}
-        </span>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-          Серия: {item.correct_streak}
-        </span>
-      </div>
-      <p className="mt-2 text-xs text-slate-500">Следующее повторение: {formatReviewMoment(item.next_review_at)}</p>
-    </div>
   );
 }
