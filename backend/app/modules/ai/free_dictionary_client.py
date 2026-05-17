@@ -20,21 +20,88 @@ _TIMEOUT = 4.0
 # Минимальный score, при котором доверяем найденному определению
 _SCORE_THRESHOLD = 0.20
 
-# Слово считается многозначным если у него >= N различных частей речи
-# (Wiktionary иногда добавляет сленговые/редкие POS, поэтому ставим 4)
-_POLYSEMY_POS_THRESHOLD = 4
+# Слово считается многозначным если у него >= N различных частей речи.
+# Порог 2: любое слово, которое может быть и существительным, и глаголом
+# (или прилагательным и наречием), отправляется в AI для дизамбигуации.
+_POLYSEMY_POS_THRESHOLD = 2
 
 # Слова с сильно различными значениями при малом кол-ве POS → принудительно в AI
 _FORCE_AI_WORDS = frozenset({
-    "bank", "bat", "bark", "bear", "book", "break", "can", "date",
-    "down", "drop", "fall", "file", "fly", "ground", "kind",
-    "lead", "left", "letter", "lie", "match", "mean", "mine",
-    "miss", "model", "models", "note", "object", "park", "pass",
-    "pitch", "point", "pool", "post", "pound", "press", "rock", "row",
-    "second", "saw", "seal", "set", "show", "sign", "slip",
-    "sound", "spring", "stamp", "state", "stem", "stick", "strike",
-    "suit", "swing", "tank", "tape", "term", "tie", "tip", "top",
-    "train", "trip", "turn", "wake", "well", "wind", "yard",
+    # A
+    "act", "address", "age", "air", "arm", "arms",
+    # B
+    "back", "ball", "band", "bank", "bar", "bark", "base", "bat",
+    "bear", "beat", "bed", "bill", "bit", "blow", "board", "bolt",
+    "bond", "book", "bore", "bound", "bow", "box", "break", "brief",
+    "bright", "broad", "bug", "burn", "book",
+    # C
+    "call", "can", "cap", "care", "carry", "case", "cast", "catch",
+    "charge", "check", "chip", "class", "clear", "close", "cold",
+    "color", "colour", "content", "cool", "count", "course", "cover",
+    "crack", "craft", "cross", "current", "cut",
+    # D
+    "date", "deal", "deck", "deep", "degree", "deposit", "draw",
+    "dress", "drift", "drive", "drop", "dry", "dump",
+    # E
+    "ease", "even", "express",
+    # F
+    "face", "fair", "fall", "fast", "fault", "feel", "field", "few",
+    "figure", "file", "fine", "fire", "fit", "fix", "flat", "fly",
+    "fold", "force", "form", "found", "free", "front",
+    # G
+    "gain", "game", "gear", "get", "give", "go", "grade", "grain",
+    "grant", "grave", "grip", "gross", "ground",
+    # H
+    "hand", "hard", "head", "heat", "hide", "hit", "hold", "hook",
+    "host",
+    # I
+    "issue",
+    # J
+    "jam", "joint",
+    # K
+    "key", "kind",
+    # L
+    "land", "last", "lay", "lead", "lean", "left", "letter", "level",
+    "lie", "light", "like", "line", "live", "log", "long", "look",
+    "lot", "low",
+    # M
+    "mark", "match", "matter", "mean", "measure", "meet", "mine",
+    "miss", "model", "models", "mount", "move",
+    # N
+    "nail", "note",
+    # O
+    "object", "order", "over",
+    # P
+    "pack", "page", "park", "part", "pass", "patch", "pay", "pick",
+    "pitch", "plain", "plan", "plant", "play", "plot", "point",
+    "pool", "pop", "port", "post", "pound", "press", "prime",
+    "produce", "project", "pull",
+    # R
+    "raise", "range", "rank", "rate", "reach", "read", "record",
+    "refuse", "release", "rest", "return", "right", "ring", "rise",
+    "rock", "roll", "round", "row", "run",
+    # S
+    "saw", "scale", "screen", "seal", "season", "second", "sense",
+    "serve", "set", "settle", "shade", "shape", "share", "shift",
+    "shoot", "short", "show", "side", "sight", "sign", "sink",
+    "slip", "smooth", "sort", "sound", "spare", "spell", "spin",
+    "split", "spot", "spread", "spring", "square", "stamp", "stand",
+    "state", "stay", "stem", "step", "stick", "still", "stock",
+    "store", "strain", "strike", "string", "strip", "suit", "switch",
+    "swing",
+    # T
+    "take", "tank", "tape", "tear", "term", "think", "throw",
+    "tie", "tip", "top", "touch", "train", "treat", "trip",
+    "trust", "turn",
+    # U
+    "use",
+    # V
+    "value", "view",
+    # W
+    "wake", "walk", "ward", "waste", "watch", "wave", "wear",
+    "well", "will", "wind", "work",
+    # Y
+    "yard",
 })
 
 _EN_STOP = {

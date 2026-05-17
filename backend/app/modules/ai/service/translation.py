@@ -372,6 +372,14 @@ class TranslationService:
             ensure_ascii=False,
         )
         is_single = self._is_single_word(payload.text)
+        if payload.force_ai and payload.source_context:
+            disambiguation_note = (
+                "ВАЖНО: это многозначное слово. "
+                "Предложение-контекст является ГЛАВНЫМ сигналом — определи значение ТОЛЬКО по нему. "
+                "Игнорируй самое частое или словарное значение, если контекст указывает на другое. "
+            )
+        else:
+            disambiguation_note = ""
         content = await self._chat_complete_async(
             system_prompt=(
                 "Ты переводчик EN→RU. "
@@ -379,8 +387,8 @@ class TranslationService:
                 "если запрос — одно слово. "
                 "Если запрос — фраза, верни только перевод фразы без лишних слов. "
                 "Запрещено: предложения, пояснения, скобки, транслитерация, исходный текст. "
-                "Используй контекст только для выбора значения, не для расширения ответа. "
-                "Если слово есть в глоссарии и подходит — используй его перевод."
+                f"{disambiguation_note}"
+                "Если слово есть в глоссарии и подходит по контексту — используй его перевод."
             ),
             user_prompt=(
                 f"{'Слово' if is_single else 'Фраза'}: {payload.text}\n"

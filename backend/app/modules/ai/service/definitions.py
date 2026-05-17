@@ -75,6 +75,15 @@ class DefinitionService:
             .replace("“", '"')
             .replace("”", '"')
         )
+        # Удаляем мета-фразы вида "In this context, 'X' describes/means/refers to..."
+        cleaned = re.sub(r"^Here'?s?\s+(?:is\s+)?the\s+definition:?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"^Definition:?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            rf"^In this context,\s*['\"]?{re.escape(english_lemma)}['\"]?\s+\w+\s+",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
         cleaned = re.sub(
             rf"^In this context,\s*['\"]?{re.escape(english_lemma)}['\"]?\s+means\s+['\"].+?['\"]\s+in Russian\.\s*",
             "",
@@ -93,6 +102,11 @@ class DefinitionService:
             cleaned,
             flags=re.IGNORECASE,
         )
+        cleaned = re.sub(r"^It signifies\s+", "", cleaned, flags=re.IGNORECASE)
+        # Удаляем хвост вида ". It signifies ... «русское слово»."
+        cleaned = re.sub(r"\.\s+It signifies\s+.+$", ".", cleaned, flags=re.IGNORECASE | re.DOTALL)
+        # Удаляем упоминание русского перевода в конце: , corresponding to ... "слово".
+        cleaned = re.sub(r",?\s+corresponding to\s+.+?[\"'«»][^\"'«»]+[\"'«»]\.?\s*$", ".", cleaned, flags=re.IGNORECASE)
         cleaned = cleaned.replace("Example context:", "").strip(" -,:;")
 
         extracted = self._extract_definition_from_source_sentence(
@@ -150,17 +164,20 @@ class DefinitionService:
 
         content = await self._chat_complete_async(
             system_prompt=(
-                "You are an English lexicography assistant. "
-                "Your task: write a precise 1-2 sentence English definition for ONE specific sense of a word. "
-                "Use the context sentence and Russian translation as primary signals to identify which sense to define. "
-                "Do NOT default to the most common or literal meaning — identify the sense from context. "
-                "Write in English only."
+                "You are an English lexicography assistant writing dictionary definitions. "
+                "Write a precise 1-2 sentence English definition for ONE specific sense of a word. "
+                "Use the context sentence and Russian translation to identify the correct sense. "
+                "FORMAT: output ONLY the definition text. "
+                "FORBIDDEN openers: 'In this context', 'Here\\'s the definition', 'This word', "
+                "'It signifies', 'The word', 'Definition:', any meta-commentary or preamble. "
+                "Write as a dictionary entry — begin directly with the meaning, like: "
+                "'Having little weight.' or 'Requiring great mental effort.'"
             ),
             user_prompt=(
                 f"Word: {english_lemma}\n"
                 f"{sense_hint}\n"
                 f"CEFR level of the learner: {cefr_level or 'unknown'}\n"
-                "Return ONLY the English definition for this specific sense, nothing else."
+                "Definition:"
             ),
             temperature=0.1,
             max_tokens=220,
