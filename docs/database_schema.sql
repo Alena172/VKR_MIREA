@@ -88,7 +88,6 @@ CREATE TABLE learning_session_answers (
     expected_answer VARCHAR(1000),
     user_answer VARCHAR(1000) NOT NULL,
     is_correct BOOLEAN NOT NULL,
-    explanation_ru TEXT,
     CONSTRAINT uq_learning_session_answers_session_exercise
         UNIQUE (session_id, exercise_id)
 );
