@@ -5,8 +5,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException
 
-from app.celery_app import enqueue_task
-from app.core.application import AsyncTaskResponse, application_access
+from app.core.application import application_access
 from app.core.db import transaction
 from app.modules.ai.facade import AIProviderUnavailableError
 from app.modules.ai.facade import ai_facade as ai_service
@@ -14,13 +13,10 @@ from app.modules.ai.schemas import TranslateWithContextRequest
 from app.modules.vocabulary.repository import VocabularyRepository
 from app.modules.vocabulary.schemas import (
     TranslationResultDTO,
-    VocabularyFromCaptureRequest,
-    VocabularyItemCreate,
     VocabularyItemDTO,
     VocabularyItemUpdateMe,
 )
 from app.modules.vocabulary.service.definition import resolve_context_definition
-from app.modules.vocabulary.service.lexicon import lookup_translation
 
 if TYPE_CHECKING:
     from app.modules.graph.service.graph import GraphService
@@ -125,60 +121,6 @@ class VocabularyService:
     def list_user_items(self, *, user_id: int) -> list[VocabularyItemDTO]:
         return [_to_dto(uv, entry) for uv, entry in self._repo.list_user_vocabulary(user_id=user_id)]
 
-    def queue_add_item(
-        self,
-        *,
-        payload: VocabularyItemCreate,
-        current_user_id: int,
-    ) -> AsyncTaskResponse:
-        target_user_id = application_access.resolve_target_user_id(
-            requested_user_id=payload.user_id,
-            current_user_id=current_user_id,
-        )
-        application_access.get_user_or_404(user_id=target_user_id, db=self._repo._db)
-
-        from app.tasks.vocabulary_tasks import add_word_with_ai
-
-        task = enqueue_task(
-            add_word_with_ai,
-            owner_user_id=current_user_id,
-            kwargs={
-                "user_id": target_user_id,
-                "english_lemma": payload.english_lemma.strip().lower(),
-                "russian_translation": payload.russian_translation.strip(),
-                "source_sentence": payload.source_sentence.strip() if payload.source_sentence else None,
-                "source_url": payload.source_url.strip() if payload.source_url else None,
-            },
-        )
-        return AsyncTaskResponse(task_id=task.id)
-
-    def queue_add_item_from_capture(
-        self,
-        *,
-        payload: VocabularyFromCaptureRequest,
-        current_user_id: int,
-    ) -> AsyncTaskResponse:
-        target_user_id = application_access.resolve_target_user_id(
-            requested_user_id=payload.user_id,
-            current_user_id=current_user_id,
-        )
-        application_access.get_user_or_404(user_id=target_user_id, db=self._repo._db)
-
-        from app.tasks.vocabulary_tasks import capture_to_vocabulary_task
-
-        task = enqueue_task(
-            capture_to_vocabulary_task,
-            owner_user_id=current_user_id,
-            kwargs={
-                "user_id": target_user_id,
-                "selected_text": payload.selected_text,
-                "source_url": payload.source_url,
-                "source_sentence": payload.source_sentence,
-                "force_new_vocabulary_item": payload.force_new_vocabulary_item,
-            },
-        )
-        return AsyncTaskResponse(task_id=task.id)
-
     async def create_item_with_ai(
         self,
         *,
@@ -272,7 +214,6 @@ class VocabularyService:
             shared_translation = self._repo.find_shared_translation(english_lemma=english_lemma)
             fast_translation = (
                 shared_translation
-                or lookup_translation(repo=self._repo, english_lemma=english_lemma)
                 or ai_service.fast_translate_single_word(english_lemma)
             )
             if fast_translation:

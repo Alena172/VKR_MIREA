@@ -38,39 +38,47 @@
         </div>
 
         <div id="authForm">
-          <label>
-            Email
-            <input id="email" type="email" placeholder="user@example.com" autocomplete="username" />
-          </label>
+          <div class="auth-tabs">
+            <button id="tabLoginBtn" type="button" class="tab-btn tab-btn-active">Вход</button>
+            <button id="tabRegisterBtn" type="button" class="tab-btn">Регистрация</button>
+          </div>
 
-          <label>
-            Имя
-            <input id="fullName" type="text" placeholder="Как к вам обращаться" autocomplete="name" />
-          </label>
-
-          <label>
-            Пароль
-            <input id="password" type="password" placeholder="Минимум 8 символов" autocomplete="current-password" />
-          </label>
-
-          <div class="actions actions-auth">
-            <button id="registerBtn" type="button" class="button-secondary">Регистрация</button>
+          <!-- Форма входа -->
+          <div id="loginForm">
+            <label>
+              Email
+              <input id="email" type="email" placeholder="user@example.com" autocomplete="username" />
+            </label>
+            <label>
+              Пароль
+              <input id="password" type="password" placeholder="Минимум 8 символов" autocomplete="current-password" />
+            </label>
             <button id="loginBtn" type="button">Войти</button>
+          </div>
+
+          <!-- Форма регистрации -->
+          <div id="registerForm" class="form-hidden">
+            <label>
+              Email
+              <input id="regEmail" type="email" placeholder="user@example.com" autocomplete="username" />
+            </label>
+            <label>
+              Имя
+              <input id="fullName" type="text" placeholder="Как к вам обращаться" autocomplete="name" />
+            </label>
+            <label>
+              Пароль
+              <input id="regPassword" type="password" placeholder="Минимум 8 символов" autocomplete="new-password" />
+            </label>
+            <button id="registerBtn" type="button">Создать аккаунт</button>
           </div>
         </div>
 
         <div id="authSession" class="auth-session auth-session-hidden">
-          <div class="status-grid">
-            <div>
-              <span class="status-label">Пользователь</span>
-              <span id="userEmailValue" class="status-value">-</span>
-            </div>
-            <div>
-              <span class="status-label">User ID</span>
-              <span id="userIdValue" class="status-value">-</span>
-            </div>
+          <div class="status-single">
+            <span class="status-label">Пользователь</span>
+            <span id="userEmailValue" class="status-value">-</span>
           </div>
-
           <div class="actions">
             <button id="logoutBtn" type="button" class="button-ghost">Выйти</button>
           </div>
@@ -81,16 +89,15 @@
         <h2>Как использовать</h2>
         <ol class="steps">
           <li>Войдите в расширение через email и пароль.</li>
-          <li>Включите режим `Studying`.</li>
+          <li>Включите режим Studying.</li>
           <li>Выделите английское слово или короткую фразу на странице.</li>
-          <li>Во всплывающем окне нажмите `Добавить в словарь` или закройте его.</li>
+          <li>Во всплывающем окне нажмите «Добавить в словарь» или закройте его.</li>
         </ol>
+        <a id="openAppLink" href="http://localhost:5173/" target="_blank" class="app-link">
+          Открыть приложение для изучения слов →
+        </a>
       </section>
 
-      <section class="card">
-        <h2>Статус</h2>
-        <pre id="output">Готово к работе.</pre>
-      </section>
     </main>
 
     <script src="popup.js"></script>

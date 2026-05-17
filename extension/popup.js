@@ -15,24 +15,28 @@ const elements = {
   authBadge: document.getElementById("authBadge"),
   authForm: document.getElementById("authForm"),
   authSession: document.getElementById("authSession"),
+  // Вход
+  loginForm: document.getElementById("loginForm"),
   email: document.getElementById("email"),
-  fullName: document.getElementById("fullName"),
   password: document.getElementById("password"),
-  registerBtn: document.getElementById("registerBtn"),
   loginBtn: document.getElementById("loginBtn"),
+  // Регистрация
+  registerForm: document.getElementById("registerForm"),
+  regEmail: document.getElementById("regEmail"),
+  fullName: document.getElementById("fullName"),
+  regPassword: document.getElementById("regPassword"),
+  registerBtn: document.getElementById("registerBtn"),
+  // Табы
+  tabLoginBtn: document.getElementById("tabLoginBtn"),
+  tabRegisterBtn: document.getElementById("tabRegisterBtn"),
+  // Сессия
   logoutBtn: document.getElementById("logoutBtn"),
   userEmailValue: document.getElementById("userEmailValue"),
-  userIdValue: document.getElementById("userIdValue"),
-  output: document.getElementById("output"),
 };
 
 let currentToken = null;
 let currentApiBase = DEFAULT_API_BASE;
 const EXTENSION_VERSION = chrome.runtime.getManifest().version;
-
-function setOutput(data) {
-  elements.output.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
-}
 
 function storageGet(keys) {
   return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
@@ -65,40 +69,20 @@ function getActiveTab() {
 
 async function ensureContentScriptInjected() {
   const tab = await getActiveTab();
-  if (!tab.id) {
-    return;
-  }
+  if (!tab.id) return;
+  if (!tab.url || !/^https?:/i.test(tab.url)) return;
 
-  if (!tab.url || !/^https?:/i.test(tab.url)) {
-    setOutput("Studying активирован, но текущая вкладка не поддерживает инъекцию скрипта.");
-    return;
-  }
-
-  // При повторной инъекции content script сам защитится от двойной инициализации,
-  // поэтому здесь можно безопасно подготавливать вкладку после логина и toggle.
-  await chrome.scripting.insertCSS({
-    target: { tabId: tab.id },
-    files: ["content.css"],
-  });
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ["content.js"],
-  });
+  await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["content.css"] });
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
 }
 
 async function ensureActiveTabUsesCurrentExtensionVersion() {
   const tab = await getActiveTab();
-  if (!tab.id || !tab.url || !/^https?:/i.test(tab.url)) {
-    return false;
-  }
+  if (!tab.id || !tab.url || !/^https?:/i.test(tab.url)) return false;
 
   const stored = await storageGet([STORAGE_KEYS.activeContentVersion]);
-  if (stored[STORAGE_KEYS.activeContentVersion] === EXTENSION_VERSION) {
-    return false;
-  }
+  if (stored[STORAGE_KEYS.activeContentVersion] === EXTENSION_VERSION) return false;
 
-  // После обновления расширения старый content context на вкладке может стать
-  // невалидным, поэтому один раз перезагружаем страницу и фиксируем новую версию.
   await chrome.tabs.reload(tab.id);
   await storageSet({ [STORAGE_KEYS.activeContentVersion]: EXTENSION_VERSION });
   return true;
@@ -115,19 +99,10 @@ async function requestJson(path, { method = "GET", payload = null, token = curre
   });
 
   const text = await response.text();
-  const parsed = text ? (() => {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
-  })() : null;
+  const parsed = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
 
   if (!response.ok) {
-    const detail =
-      (typeof parsed?.detail === "string" && parsed.detail) ||
-      text ||
-      `HTTP ${response.status}`;
+    const detail = (typeof parsed?.detail === "string" && parsed.detail) || text || `HTTP ${response.status}`;
     throw new Error(detail);
   }
 
@@ -140,19 +115,17 @@ function updateStudyingUi(enabled) {
   elements.studyingBadge.className = `badge ${enabled ? "badge-on" : "badge-off"}`;
 }
 
-function updateAuthUi({ loggedIn, email = "-", userId = "-" }) {
+function updateAuthUi({ loggedIn, email = "-" }) {
   elements.authBadge.textContent = loggedIn ? "Выполнена" : "Не выполнена";
   elements.authBadge.className = `badge ${loggedIn ? "badge-ok" : "badge-idle"}`;
-  // После входа оставляем только сводку по сессии, чтобы popup не дублировал форму
-  // и не создавал ощущение, что логин все еще требуется.
   elements.authForm.hidden = loggedIn;
   elements.authSession.classList.toggle("auth-session-hidden", !loggedIn);
   elements.userEmailValue.textContent = email || "-";
-  elements.userIdValue.textContent = userId ? String(userId) : "-";
 
   if (!loggedIn) {
-    elements.fullName.value = "";
     elements.password.value = "";
+    elements.regPassword.value = "";
+    elements.fullName.value = "";
   }
 }
 
@@ -162,18 +135,12 @@ async function syncIdentity() {
     return null;
   }
 
-  // Всегда синхронизируем `/auth/me`, чтобы popup показывал актуальные данные
-  // пользователя даже после перезапуска браузера.
   const identity = await requestJson("/auth/me");
   await storageSet({
     [STORAGE_KEYS.userId]: identity.user_id,
     [STORAGE_KEYS.email]: identity.email,
   });
-  updateAuthUi({
-    loggedIn: true,
-    email: identity.email,
-    userId: identity.user_id,
-  });
+  updateAuthUi({ loggedIn: true, email: identity.email });
   return identity;
 }
 
@@ -182,23 +149,22 @@ async function loadState() {
   currentApiBase = stored[STORAGE_KEYS.apiBase] || DEFAULT_API_BASE;
   currentToken = stored[STORAGE_KEYS.authToken] || null;
 
-  elements.email.value = stored[STORAGE_KEYS.email] || "";
+  const savedEmail = stored[STORAGE_KEYS.email] || "";
+  elements.email.value = savedEmail;
+  elements.regEmail.value = savedEmail;
   updateStudyingUi(Boolean(stored[STORAGE_KEYS.studyingEnabled]));
 
   if (!currentToken) {
     updateAuthUi({ loggedIn: false });
-    setOutput("Войдите и включите режим Studying.");
     return;
   }
 
   try {
     await syncIdentity();
-    setOutput("Расширение готово. Выделите слово на странице.");
-  } catch (error) {
+  } catch {
     currentToken = null;
     await storageRemove([STORAGE_KEYS.authToken, STORAGE_KEYS.userId]);
     updateAuthUi({ loggedIn: false });
-    setOutput(`Сессия сброшена: ${error.message}`);
   }
 }
 
@@ -207,34 +173,16 @@ async function toggleStudying() {
   await storageSet({ [STORAGE_KEYS.studyingEnabled]: enabled });
   updateStudyingUi(enabled);
   if (enabled) {
-    try {
-      const reloaded = await ensureActiveTabUsesCurrentExtensionVersion();
-      await ensureContentScriptInjected();
-      setOutput(
-        reloaded
-          ? "Studying включен. Активная вкладка была перезагружена после обновления расширения. Подождите загрузку страницы и повторите выделение."
-          : "Studying включен. Теперь можно выделять текст на странице.",
-      );
-    } catch (error) {
-      setOutput(`Studying включен, но не удалось подготовить вкладку: ${error.message}`);
-    }
-    return;
+    await ensureActiveTabUsesCurrentExtensionVersion().catch(() => false);
+    await ensureContentScriptInjected().catch(() => {});
   }
-  setOutput("Studying выключен.");
 }
 
 async function login() {
   const email = elements.email.value.trim();
   const password = elements.password.value;
 
-  if (!email) {
-    setOutput("Укажите email.");
-    return;
-  }
-  if (!password || password.length < 8) {
-    setOutput("Пароль должен содержать минимум 8 символов.");
-    return;
-  }
+  if (!email || !password || password.length < 8) return;
 
   try {
     const auth = await requestJson("/auth/login", {
@@ -248,46 +196,26 @@ async function login() {
       [STORAGE_KEYS.email]: auth.user.email,
       [STORAGE_KEYS.userId]: auth.user_id,
     });
-    updateAuthUi({
-      loggedIn: true,
-      email: auth.user.email,
-      userId: auth.user_id,
-    });
+    updateAuthUi({ loggedIn: true, email: auth.user.email });
     elements.password.value = "";
-    // Сразу готовим активную вкладку, чтобы после входа можно было выделять
-    // слова без отдельного ручного обновления страницы.
     await ensureActiveTabUsesCurrentExtensionVersion().catch(() => false);
     await ensureContentScriptInjected().catch(() => {});
-    setOutput(`Вход выполнен. Пользователь #${auth.user_id}.`);
-  } catch (error) {
+  } catch {
     updateAuthUi({ loggedIn: false });
-    setOutput(`Ошибка входа: ${error.message}`);
   }
 }
 
 async function register() {
-  const email = elements.email.value.trim();
+  const email = elements.regEmail.value.trim();
   const fullName = elements.fullName.value.trim();
-  const password = elements.password.value;
+  const password = elements.regPassword.value;
 
-  if (!email) {
-    setOutput("Укажите email.");
-    return;
-  }
-  if (!password || password.length < 8) {
-    setOutput("Пароль должен содержать минимум 8 символов.");
-    return;
-  }
+  if (!email || !password || password.length < 8) return;
 
   try {
     const auth = await requestJson("/auth/register", {
       method: "POST",
-      payload: {
-        email,
-        password,
-        full_name: fullName || null,
-        cefr_level: "A1",
-      },
+      payload: { email, password, full_name: fullName || null, cefr_level: "A1" },
       token: null,
     });
     currentToken = auth.access_token;
@@ -296,34 +224,39 @@ async function register() {
       [STORAGE_KEYS.email]: auth.user.email,
       [STORAGE_KEYS.userId]: auth.user_id,
     });
-    updateAuthUi({
-      loggedIn: true,
-      email: auth.user.email,
-      userId: auth.user_id,
-    });
-    elements.password.value = "";
-    // После регистрации сценарий тот же, что и после входа: готовим вкладку
-    // заранее, чтобы пользователь сразу мог начать выделять слова.
+    updateAuthUi({ loggedIn: true, email: auth.user.email });
+    elements.regPassword.value = "";
     await ensureActiveTabUsesCurrentExtensionVersion().catch(() => false);
     await ensureContentScriptInjected().catch(() => {});
-    setOutput(`Аккаунт создан. Пользователь #${auth.user_id}.`);
-  } catch (error) {
+  } catch {
     updateAuthUi({ loggedIn: false });
-    setOutput(`Ошибка регистрации: ${error.message}`);
   }
 }
 
 async function logout() {
   currentToken = null;
-  elements.password.value = "";
   await storageRemove([STORAGE_KEYS.authToken, STORAGE_KEYS.userId]);
   updateAuthUi({ loggedIn: false });
-  setOutput("Сессия очищена.");
 }
 
+function switchTab(tab) {
+  const isLogin = tab === "login";
+  elements.loginForm.classList.toggle("form-hidden", !isLogin);
+  elements.registerForm.classList.toggle("form-hidden", isLogin);
+  elements.tabLoginBtn.classList.toggle("tab-btn-active", isLogin);
+  elements.tabRegisterBtn.classList.toggle("tab-btn-active", !isLogin);
+}
+
+document.getElementById("openAppLink").addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: "http://localhost:5173/" });
+});
+
+elements.tabLoginBtn.addEventListener("click", () => switchTab("login"));
+elements.tabRegisterBtn.addEventListener("click", () => switchTab("register"));
 elements.studyingEnabled.addEventListener("change", toggleStudying);
-elements.registerBtn.addEventListener("click", register);
 elements.loginBtn.addEventListener("click", login);
+elements.registerBtn.addEventListener("click", register);
 elements.logoutBtn.addEventListener("click", logout);
 
 loadState();

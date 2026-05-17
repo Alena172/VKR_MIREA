@@ -201,12 +201,6 @@ function positionBubble(bubble, rect) {
   bubble.style.left = `${left}px`;
 }
 
-function setBubbleStatus(bubble, message, kind = "muted") {
-  const status = bubble.querySelector("[data-role='status']");
-  status.textContent = message;
-  status.className = `vkr-study-bubble__status vkr-study-bubble__status--${kind}`;
-}
-
 function setBubbleTranslation(bubble, translation, note) {
   bubble.querySelector("[data-role='translation']").textContent = translation;
   bubble.querySelector("[data-role='note']").textContent = note || "";
@@ -277,17 +271,13 @@ function renderBubble(selectionContext) {
   addButton.disabled = true;
   actions.append(addButton);
 
-  const status = createElement("p", "vkr-study-bubble__status vkr-study-bubble__status--muted", "");
-  status.setAttribute("data-role", "status");
-
-  body.append(translationBox, actions, status);
+  body.append(translationBox, actions);
   bubble.append(header, body);
   document.body.appendChild(bubble);
   positionBubble(bubble, selectionContext.rect);
 
   addButton.addEventListener("click", async () => {
     addButton.disabled = true;
-    setBubbleStatus(bubble, "Добавляем в словарь...", "muted");
     try {
       const result = await requestBackend("/vocabulary/me/from-capture", {
         method: "POST",
@@ -300,16 +290,8 @@ function renderBubble(selectionContext) {
       });
       const translation = result?.vocabulary?.russian_translation || "Добавлено";
       setBubbleTranslation(bubble, translation, "Слово сохранено в личный словарь.");
-      setBubbleStatus(
-        bubble,
-        result?.created_new_vocabulary_item
-          ? "Слово добавлено в словарь."
-          : "Это слово уже было в словаре пользователя.",
-        "success",
-      );
     } catch (error) {
       addButton.disabled = false;
-      setBubbleStatus(bubble, `Ошибка добавления: ${error.message}`, "error");
     }
   });
 
@@ -322,7 +304,6 @@ async function translateSelection(selectionContext) {
   if (!currentToken) {
     const bubble = renderBubble(selectionContext);
     setBubbleTranslation(bubble, "Требуется вход", "Откройте popup расширения и выполните авторизацию.");
-    setBubbleStatus(bubble, "Расширение не авторизовано.", "error");
     return;
   }
 
@@ -348,7 +329,6 @@ async function translateSelection(selectionContext) {
       result?.translated_text || "Перевод не найден",
       selectionContext.sourceSentence || "Контекст не найден на странице.",
     );
-    setBubbleStatus(bubble, "Перевод готов. Можно добавить в словарь.", "success");
     bubble.querySelector(".vkr-study-bubble__button--primary").disabled = false;
   } catch (error) {
     if (error.name === "AbortError") {
@@ -359,14 +339,10 @@ async function translateSelection(selectionContext) {
     }
     const message = String(error?.message || "Unknown error");
     const invalidated = message.includes("Extension context invalidated");
-    setBubbleTranslation(bubble, "Не удалось перевести", "Попробуйте выделить более короткую фразу или проверьте backend.");
-    setBubbleStatus(
-      bubble,
-      invalidated
-        ? "Расширение было обновлено. Обновите вкладку и повторите выделение."
-        : `Ошибка перевода: ${message}`,
-      "error",
-    );
+    const errorNote = invalidated
+      ? "Расширение было обновлено. Обновите вкладку и повторите."
+      : "Попробуйте выделить более короткую фразу или проверьте backend.";
+    setBubbleTranslation(bubble, "Не удалось перевести", errorNote);
   } finally {
     pendingTranslateAbortController = null;
   }

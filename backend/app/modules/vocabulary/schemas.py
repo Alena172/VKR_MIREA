@@ -12,16 +12,6 @@ class DictionaryEntryCreate(BaseModel):
     context_definition_ru: str | None = Field(default=None, max_length=3000)
 
 
-class VocabularyItemCreate(BaseModel):
-    """Запрос создания словарной записи (служебный endpoint)."""
-
-    user_id: int | None = Field(default=None, ge=1)
-    english_lemma: str = Field(min_length=1, max_length=200)
-    russian_translation: str = Field(min_length=1, max_length=200)
-    source_sentence: str | None = Field(default=None, max_length=2000)
-    source_url: str | None = Field(default=None, max_length=2000)
-
-
 class VocabularyItemCreateMe(BaseModel):
     """Запрос создания словарной записи для текущего пользователя."""
 
@@ -50,16 +40,6 @@ class VocabularyItemUpdateMe(BaseModel):
 
     source_sentence: str | None = Field(default=None, max_length=2000)
     source_url: str | None = Field(default=None, max_length=2000)
-
-
-class VocabularyFromCaptureRequest(BaseModel):
-    """Запрос сохранения выделенного текста в словарь."""
-
-    user_id: int | None = Field(default=None, ge=1)
-    selected_text: str = Field(min_length=1, max_length=2000)
-    source_url: str | None = Field(default=None, max_length=2000)
-    source_sentence: str | None = Field(default=None, max_length=5000)
-    force_new_vocabulary_item: bool = False
 
 
 class VocabularyFromCaptureRequestMe(BaseModel):
@@ -134,13 +114,6 @@ class VocabularyItemDTO:
             added_at=uv.added_at,
             is_phrase=False,
         )
-
-
-@dataclass(frozen=True)
-class CaptureDTO:
-    """Результат сохранения слова из выделенного текста."""
-
-    vocabulary: VocabularyItemDTO
 
 
 @dataclass(frozen=True)

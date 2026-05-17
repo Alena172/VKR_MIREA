@@ -1,9 +1,9 @@
 body {
   margin: 0;
-  font-family: "Segoe UI", Tahoma, sans-serif;
+  font-family: "Inter", "Segoe UI", Tahoma, sans-serif;
   background:
-    radial-gradient(circle at top left, #fff6d8 0%, #fff8ea 25%, #f6f7fb 70%),
-    linear-gradient(180deg, #fffdf8 0%, #f6f7fb 100%);
+    radial-gradient(ellipse at top left, #e0f2fe 0%, #f0f9ff 40%, #f8fafc 100%),
+    linear-gradient(160deg, #bae6fd 0%, #e0f2fe 40%, #f8fafc 100%);
   color: #18212f;
 }
 
@@ -29,27 +29,34 @@ p {
 
 h1 {
   font-size: 19px;
+  font-weight: 700;
   line-height: 1.2;
+  background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 h2 {
   font-size: 14px;
+  font-weight: 600;
+  color: #0c4a6e;
 }
 
 .subtitle {
   margin-top: 4px;
   font-size: 12px;
-  color: #526071;
+  color: #0369a1;
 }
 
 .card {
   display: grid;
   gap: 10px;
   padding: 12px;
-  border: 1px solid #dfe5ee;
+  border: 1px solid #bae6fd;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 30px rgba(25, 35, 52, 0.06);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 20px rgba(14, 165, 233, 0.08);
 }
 
 .card-title-row {
@@ -70,8 +77,8 @@ h2 {
 
 .badge-off,
 .badge-idle {
-  background: #edf1f6;
-  color: #536273;
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
 .badge-on,
@@ -88,14 +95,62 @@ h2 {
 .hint {
   font-size: 12px;
   line-height: 1.45;
-  color: #526071;
+  color: #0369a1;
+}
+
+/* Табы входа/регистрации */
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f0f9ff;
+}
+
+.tab-btn {
+  border: 0;
+  border-radius: 0;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: #0369a1;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tab-btn:hover {
+  background: #e0f2fe;
+  filter: none;
+}
+
+.tab-btn-active {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: #fff;
+}
+
+.tab-btn-active:hover {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  filter: brightness(0.97);
+}
+
+.form-hidden {
+  display: none !important;
 }
 
 label {
   display: grid;
   gap: 5px;
   font-size: 12px;
-  color: #334155;
+  color: #0c4a6e;
+}
+
+#loginForm,
+#registerForm {
+  display: grid;
+  gap: 10px;
 }
 
 input,
@@ -106,7 +161,7 @@ button {
 input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #cfd8e3;
+  border: 1px solid #bae6fd;
   border-radius: 10px;
   padding: 10px 11px;
   background: #fff;
@@ -114,8 +169,8 @@ input {
 }
 
 input:focus {
-  outline: 2px solid rgba(28, 100, 242, 0.18);
-  border-color: #1d4ed8;
+  outline: 2px solid rgba(14, 165, 233, 0.2);
+  border-color: #0ea5e9;
 }
 
 .actions {
@@ -142,48 +197,39 @@ button {
   padding: 10px 12px;
   cursor: pointer;
   color: #fff;
-  background: linear-gradient(135deg, #1d4ed8 0%, #0f766e 100%);
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   font-weight: 600;
+  font-size: 13px;
 }
 
 button:hover {
-  filter: brightness(0.98);
-}
-
-.button-secondary {
-  background: #e7edf5;
-  color: #243445;
+  filter: brightness(0.97);
 }
 
 .button-ghost {
-  background: #f8fafc;
-  color: #475569;
-  border: 1px solid #d6deea;
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
 }
 
-.status-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.status-grid > div {
+.status-single {
   display: grid;
   gap: 4px;
   padding: 10px;
   border-radius: 10px;
-  background: #f7f9fc;
+  background: #f0f9ff;
+  border: 1px solid #e0f2fe;
 }
 
 .status-label {
   font-size: 11px;
-  color: #64748b;
+  color: #0369a1;
 }
 
 .status-value {
   font-size: 12px;
   font-weight: 600;
-  color: #18212f;
+  color: #0c4a6e;
   word-break: break-word;
 }
 
@@ -193,7 +239,29 @@ button:hover {
   display: grid;
   gap: 6px;
   font-size: 12px;
-  color: #475569;
+  color: #0369a1;
+}
+
+.app-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0ea5e9;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  border: 1px solid #bae6fd;
+  transition: background 0.15s, border-color 0.15s;
+  justify-self: start;
+}
+
+.app-link:hover {
+  background: linear-gradient(135deg, #bae6fd 0%, #e0f2fe 100%);
+  border-color: #7dd3fc;
+  color: #0284c7;
 }
 
 pre {
@@ -202,7 +270,7 @@ pre {
   word-break: break-word;
   font-size: 12px;
   line-height: 1.45;
-  color: #334155;
+  color: #0c4a6e;
 }
 
 .toggle {
@@ -218,7 +286,7 @@ pre {
   width: 54px;
   height: 30px;
   border-radius: 999px;
-  background: #d7dee8;
+  background: #bae6fd;
   position: relative;
   transition: background 0.18s ease;
 }
@@ -231,14 +299,14 @@ pre {
   height: 24px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 3px 10px rgba(14, 165, 233, 0.25);
   transition:
     transform 0.18s ease,
     background 0.18s ease;
 }
 
 .toggle input:checked + .toggle-track {
-  background: linear-gradient(135deg, #16a34a 0%, #0f766e 100%);
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
 }
 
 .toggle input:checked + .toggle-track .toggle-thumb {
