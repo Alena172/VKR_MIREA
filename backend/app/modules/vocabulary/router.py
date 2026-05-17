@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends
 
 from app.modules.identity.deps import get_current_user_id
 from app.modules.vocabulary.schemas import (
+    ChangeSenseRequest,
+    SenseRead,
     TranslateRequestMe,
     TranslateResponse,
     VocabularyFromCaptureRequestMe,
@@ -85,6 +87,31 @@ def update_my_item(
         ),
         from_attributes=True,
     )
+
+
+@router.get("/vocabulary/me/{item_id}/senses", response_model=list[SenseRead])
+def list_item_senses(
+    item_id: int,
+    current_user_id: int = Depends(get_current_user_id),
+    service: VocabularyService = Depends(),
+) -> list[SenseRead]:
+    return service.list_senses(item_id=item_id, current_user_id=current_user_id)
+
+
+@router.patch("/vocabulary/me/{item_id}/sense", response_model=VocabularyItemRead)
+async def change_item_sense(
+    item_id: int,
+    payload: ChangeSenseRequest,
+    current_user_id: int = Depends(get_current_user_id),
+    service: VocabularyService = Depends(),
+) -> VocabularyItemRead:
+    item = await service.change_sense(
+        item_id=item_id,
+        current_user_id=current_user_id,
+        entry_id=payload.entry_id,
+        russian_translation=payload.russian_translation,
+    )
+    return VocabularyItemRead.model_validate(item, from_attributes=True)
 
 
 @router.delete("/vocabulary/me/{item_id}")

@@ -287,6 +287,24 @@ class VocabularyRepository:
                 result[lemma] = definition
         return result
 
+    def list_senses_for_lemma(self, *, english_lemma: str) -> list[DictionaryEntryModel]:
+        normalized = english_lemma.strip().lower()
+        return list(self._db.scalars(
+            select(DictionaryEntryModel)
+            .where(DictionaryEntryModel.english_lemma == normalized)
+            .order_by(DictionaryEntryModel.id.asc())
+        ))
+
+    def change_user_vocabulary_entry(
+        self,
+        item: UserVocabularyModel,
+        *,
+        new_entry_id: int,
+    ) -> UserVocabularyModel:
+        item.entry_id = new_entry_id
+        self._db.flush()
+        return item
+
     def list_english_lemmas(self, *, user_id: int) -> list[str]:
         rows = list(self._db.scalars(
             select(DictionaryEntryModel.english_lemma)

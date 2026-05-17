@@ -42,6 +42,21 @@ class VocabularyItemUpdateMe(BaseModel):
     source_url: str | None = Field(default=None, max_length=2000)
 
 
+class SenseRead(BaseModel):
+    """Один вариант перевода/смысла слова из общего словаря."""
+
+    entry_id: int
+    russian_translation: str
+    context_definition_ru: str | None = None
+
+
+class ChangeSenseRequest(BaseModel):
+    """Запрос смены смысла: либо существующий entry_id, либо новый перевод."""
+
+    entry_id: int | None = Field(default=None)
+    russian_translation: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 class VocabularyFromCaptureRequestMe(BaseModel):
     """Запрос capture-сценария для текущего пользователя."""
 

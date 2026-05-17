@@ -171,6 +171,70 @@ class VocabularyService:
         )
         return _to_dto(uv, entry)
 
+    def list_senses(self, *, item_id: int, current_user_id: int) -> list:
+        from app.modules.vocabulary.schemas import SenseRead
+        row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Vocabulary item not found")
+        _, entry = row
+        entries = self._repo.list_senses_for_lemma(english_lemma=entry.english_lemma)
+        return [
+            SenseRead(
+                entry_id=e.id,
+                russian_translation=e.russian_translation,
+                context_definition_ru=e.context_definition_ru,
+            )
+            for e in entries
+        ]
+
+    async def change_sense(
+        self,
+        *,
+        item_id: int,
+        current_user_id: int,
+        entry_id: int | None,
+        russian_translation: str | None,
+    ) -> VocabularyItemDTO:
+        from app.modules.vocabulary.schemas import ChangeSenseRequest
+        row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Vocabulary item not found")
+        uv, current_entry = row
+
+        if entry_id is not None:
+            # Используем существующий entry из общего словаря
+            target_entry = self._repo._db.get(
+                __import__("app.modules.vocabulary.models", fromlist=["DictionaryEntryModel"]).DictionaryEntryModel,
+                entry_id,
+            )
+            if target_entry is None or target_entry.english_lemma != current_entry.english_lemma:
+                raise HTTPException(status_code=400, detail="Invalid entry_id for this word")
+            with transaction(self._repo._db):
+                self._repo.change_user_vocabulary_entry(uv, new_entry_id=entry_id)
+            return _to_dto(uv, target_entry)
+
+        if russian_translation:
+            # Новый перевод — генерируем определение и создаём запись
+            normalized_translation = russian_translation.strip()
+            user = application_access.get_user_or_404(user_id=current_user_id, db=self._repo._db)
+            definition_resolution = await resolve_context_definition(
+                repo=self._repo,
+                english_lemma=current_entry.english_lemma,
+                russian_translation=normalized_translation,
+                source_sentence=uv.source_sentence,
+                cefr_level=user.cefr_level,
+            )
+            with transaction(self._repo._db):
+                new_entry, _ = self._repo.get_or_create_dictionary_entry(
+                    english_lemma=current_entry.english_lemma,
+                    russian_translation=normalized_translation,
+                    context_definition_ru=definition_resolution.context_definition,
+                )
+                self._repo.change_user_vocabulary_entry(uv, new_entry_id=new_entry.id)
+            return _to_dto(uv, new_entry)
+
+        raise HTTPException(status_code=400, detail="Provide either entry_id or russian_translation")
+
     def delete_item(self, *, item_id: int, current_user_id: int) -> dict[str, bool]:
         row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
         if row is None:

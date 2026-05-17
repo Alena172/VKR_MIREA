@@ -238,6 +238,9 @@ export const api = {
   updateVocabularyMe: (itemId, payload, options = {}) =>
     request(`/vocabulary/me/${itemId}`, { method: "PUT", body: JSON.stringify(payload), ...options }),
   deleteVocabularyMe: (itemId, options = {}) => request(`/vocabulary/me/${itemId}`, { method: "DELETE", ...options }),
+  listVocabularySenses: (itemId, options = {}) => request(`/vocabulary/me/${itemId}/senses`, options),
+  changeVocabularySense: (itemId, payload, options = {}) =>
+    request(`/vocabulary/me/${itemId}/sense`, { method: "PATCH", body: JSON.stringify(payload), ...options }),
 
   studyFlowCaptureToVocabularyMe: (payload, options = {}) =>
     request("/vocabulary/me/from-capture", { method: "POST", body: JSON.stringify(payload), ...options }),
