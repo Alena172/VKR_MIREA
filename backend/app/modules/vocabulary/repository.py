@@ -295,6 +295,19 @@ class VocabularyRepository:
             .order_by(DictionaryEntryModel.id.asc())
         ))
 
+    def find_user_vocabulary_by_entry(
+        self,
+        *,
+        user_id: int,
+        entry_id: int,
+    ) -> UserVocabularyModel | None:
+        return self._db.scalar(
+            select(UserVocabularyModel).where(
+                UserVocabularyModel.user_id == user_id,
+                UserVocabularyModel.entry_id == entry_id,
+            )
+        )
+
     def change_user_vocabulary_entry(
         self,
         item: UserVocabularyModel,

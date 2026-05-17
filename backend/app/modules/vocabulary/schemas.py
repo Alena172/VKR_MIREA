@@ -26,6 +26,7 @@ class VocabularyItemRead(BaseModel):
 
     id: int
     user_id: int
+    entry_id: int | None = None
     english_lemma: str
     russian_translation: str
     context_definition_ru: str | None = None
@@ -95,6 +96,7 @@ class VocabularyItemDTO:
 
     id: int
     user_id: int
+    entry_id: int | None
     english_lemma: str
     russian_translation: str
     context_definition_ru: str | None
@@ -110,6 +112,7 @@ class VocabularyItemDTO:
             return VocabularyItemDTO(
                 id=uv.id,
                 user_id=uv.user_id,
+                entry_id=None,
                 english_lemma=uv.phrase_en or "",
                 russian_translation=uv.phrase_ru or "",
                 context_definition_ru=None,
@@ -121,6 +124,7 @@ class VocabularyItemDTO:
         return VocabularyItemDTO(
             id=uv.id,
             user_id=uv.user_id,
+            entry_id=entry.id,
             english_lemma=entry.english_lemma,
             russian_translation=entry.russian_translation,
             context_definition_ru=entry.context_definition_ru,

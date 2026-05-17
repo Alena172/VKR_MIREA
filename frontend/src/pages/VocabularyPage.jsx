@@ -119,6 +119,7 @@ export default function VocabularyPage({ onError }) {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortBy, setSortBy] = useState("review_priority");
+  const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState(null);
   const [editSentence, setEditSentence] = useState("");
   const [editUrl, setEditUrl] = useState("");
@@ -126,6 +127,7 @@ export default function VocabularyPage({ onError }) {
   const [senses, setSenses] = useState([]);
   const [sensesLoading, setSensesLoading] = useState(false);
   const [customTranslation, setCustomTranslation] = useState("");
+  const [pendingSense, setPendingSense] = useState(null);
   const [loading, setLoading] = useState(false);
   const [studyFlowLoading, setStudyFlowLoading] = useState(false);
   const [studyFlowStatus, setStudyFlowStatus] = useState("");
@@ -251,23 +253,43 @@ export default function VocabularyPage({ onError }) {
     setSensesItemId(null);
     setSenses([]);
     setCustomTranslation("");
+    setPendingSense(null);
   }
 
-  async function applySense(itemId, entryId) {
-    try {
-      await api.changeVocabularySense(itemId, { entry_id: entryId });
-      closeSenses();
-      await loadVocabulary();
-    } catch (e) {
-      onError(getErrorMessage(e));
+  function requestApplySense(itemId, entryId, translation) {
+    const duplicate = items.find((it) => it.id !== itemId && it.entry_id === entryId);
+    if (duplicate) {
+      setPendingSense({ itemId, entryId, translation, type: "entry", duplicateId: duplicate.id, duplicateTranslation: duplicate.russian_translation });
+    } else {
+      confirmApplySense({ itemId, entryId, type: "entry" });
     }
   }
 
-  async function applyCustomTranslation(itemId) {
-    if (!customTranslation.trim()) return;
+  function requestApplyCustomTranslation(itemId) {
+    const trimmed = customTranslation.trim();
+    if (!trimmed) return;
+    const currentItem = items.find((x) => x.id === itemId);
+    const duplicate = items.find(
+      (it) => it.id !== itemId && it.russian_translation === trimmed && it.english_lemma === currentItem?.english_lemma
+    );
+    if (duplicate) {
+      setPendingSense({ itemId, translation: trimmed, type: "custom", duplicateId: duplicate.id, duplicateTranslation: duplicate.russian_translation });
+    } else {
+      confirmApplySense({ itemId, translation: trimmed, type: "custom" });
+    }
+  }
+
+  async function confirmApplySense(pending) {
+    const p = pending ?? pendingSense;
+    if (!p) return;
+    setPendingSense(null);
     setSensesLoading(true);
     try {
-      await api.changeVocabularySense(itemId, { russian_translation: customTranslation.trim() });
+      if (p.type === "entry") {
+        await api.changeVocabularySense(p.itemId, { entry_id: p.entryId });
+      } else {
+        await api.changeVocabularySense(p.itemId, { russian_translation: p.translation });
+      }
       closeSenses();
       await loadVocabulary();
     } catch (e) {
@@ -348,6 +370,8 @@ export default function VocabularyPage({ onError }) {
     loadRecommendations();
   }, []);
 
+  const PAGE_SIZE = 20;
+
   const filteredItems = items.filter((item) => {
     const q = search.trim().toLowerCase();
     const progress = progressById[item.id] || null;
@@ -364,6 +388,8 @@ export default function VocabularyPage({ onError }) {
     );
   });
   const sortedItems = sortVocabularyItems(filteredItems, progressById, sortBy);
+  const visibleItems = sortedItems.slice(0, page * PAGE_SIZE);
+  const hasMore = visibleItems.length < sortedItems.length;
 
   return (
     <section className="space-y-4">
@@ -462,7 +488,7 @@ export default function VocabularyPage({ onError }) {
             <h3 className="text-base font-extrabold text-gray-900">Слова пользователя</h3>
             <p className="muted mt-1 text-sm">Фильтруй словарь по состоянию изучения и быстро находи проблемные карточки.</p>
           </div>
-          <input className="field max-w-xs" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск EN/RU/определение" />
+          <input className="field max-w-xs" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Поиск EN/RU/определение" />
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -470,7 +496,7 @@ export default function VocabularyPage({ onError }) {
             <button
               key={option.value}
               type="button"
-              onClick={() => setActiveFilter(option.value)}
+              onClick={() => { setActiveFilter(option.value); setPage(1); }}
               className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
                 activeFilter === option.value
                   ? "bg-blue-600 text-white"
@@ -490,21 +516,11 @@ export default function VocabularyPage({ onError }) {
         </div>
 
         <ul className="space-y-3">
-          {sortedItems.map((item) => {
+          {visibleItems.map((item) => {
             const progress = progressById[item.id] || null;
             const state = getVocabularyState(item, progress);
             return (
-            <li key={item.id} className="surface p-4 md:p-5">
-              {editingId === item.id ? (
-                <form className="grid gap-2" onSubmit={saveEdit}>
-                  <textarea className="field" rows={2} value={editSentence} onChange={(e) => setEditSentence(e.target.value)} placeholder="Контекстное предложение" />
-                  <input className="field" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="URL источника" />
-                  <div className="flex gap-2">
-                    <button className="btn-primary" type="submit">Сохранить</button>
-                    <button className="btn-secondary" type="button" onClick={cancelEdit}>Отмена</button>
-                  </div>
-                </form>
-              ) : (
+              <li key={item.id} className="surface p-4 md:p-5">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
                   <div className="min-w-0">
                     <div className="text-base font-extrabold text-gray-900">{item.english_lemma} <span className="font-medium text-[var(--text)]">- {item.russian_translation}</span></div>
@@ -534,69 +550,111 @@ export default function VocabularyPage({ onError }) {
                     <button className="btn-danger !px-3.5 !py-2 !text-sm" type="button" onClick={() => deleteItem(item.id)}>Удалить</button>
                   </div>
                 </div>
-              )}
-            </li>
+                {editingId === item.id && (
+                  <form className="mt-3 grid gap-2 border-t border-gray-100 pt-3" onSubmit={saveEdit}>
+                    <textarea className="field" rows={2} value={editSentence} onChange={(e) => setEditSentence(e.target.value)} placeholder="Контекстное предложение" />
+                    <input className="field" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="URL источника" />
+                    <div className="flex gap-2">
+                      <button className="btn-primary" type="submit">Сохранить</button>
+                      <button className="btn-secondary" type="button" onClick={cancelEdit}>Отмена</button>
+                    </div>
+                  </form>
+                )}
+              </li>
             );
           })}
           {!loading && sortedItems.length === 0 ? <li className="muted text-sm">По текущему фильтру слов нет.</li> : null}
           {loading ? <li className="muted text-sm">Загрузка...</li> : null}
         </ul>
+        {hasMore && (
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Загрузить ещё ({sortedItems.length - visibleItems.length})
+            </button>
+          </div>
+        )}
       </section>
 
       {sensesItemId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeSenses}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={pendingSense ? undefined : closeSenses}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-gray-800 mb-3">Выберите значение слова</h3>
 
-            {sensesLoading ? (
-              <p className="text-sm text-gray-500">Загрузка...</p>
-            ) : (
+            {pendingSense ? (
               <>
-                {senses.length > 0 && (
-                  <ul className="mb-4 flex flex-col gap-1">
-                    {senses.map((s) => (
-                      <li key={s.entry_id}>
-                        <button
-                          type="button"
-                          onClick={() => applySense(sensesItemId, s.entry_id)}
-                          className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-primary-50 transition-colors border border-gray-100"
-                        >
-                          <span className="font-medium text-gray-800">{s.russian_translation}</span>
-                          {s.context_definition_ru && (
-                            <span className="block text-xs text-gray-500 mt-0.5 line-clamp-2">{s.context_definition_ru}</span>
-                          )}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  {senses.length > 0 ? "Или введите свой перевод" : "Введите перевод"}
+                <h3 className="text-base font-semibold text-gray-800 mb-2">Подтвердите действие</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Перевод <span className="font-semibold text-gray-800">«{pendingSense.duplicateTranslation}»</span> уже
+                  есть в вашем словаре как отдельная карточка. Если продолжить, текущая карточка будет{" "}
+                  <span className="font-semibold text-gray-800">удалена</span>.
                 </p>
                 <div className="flex gap-2">
-                  <input
-                    className="field flex-1"
-                    placeholder="Например: твёрдый"
-                    value={customTranslation}
-                    onChange={(e) => setCustomTranslation(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && applyCustomTranslation(sensesItemId)}
-                  />
-                  <button
-                    type="button"
-                    className="btn-primary !px-3.5"
-                    onClick={() => applyCustomTranslation(sensesItemId)}
-                    disabled={!customTranslation.trim() || sensesLoading}
-                  >
-                    Добавить
+                  <button type="button" className="btn-primary flex-1" onClick={() => confirmApplySense()}>
+                    Продолжить
+                  </button>
+                  <button type="button" className="btn-secondary flex-1" onClick={() => setPendingSense(null)}>
+                    Отмена
                   </button>
                 </div>
               </>
-            )}
+            ) : (
+              <>
+                <h3 className="text-base font-semibold text-gray-800 mb-3">Выберите значение слова</h3>
 
-            <button type="button" onClick={closeSenses} className="mt-4 w-full btn-secondary !text-sm">
-              Отмена
-            </button>
+                {sensesLoading ? (
+                  <p className="text-sm text-gray-500">Загрузка...</p>
+                ) : (
+                  <>
+                    {senses.length > 0 && (
+                      <ul className="mb-4 flex flex-col gap-1">
+                        {senses.map((s) => (
+                          <li key={s.entry_id}>
+                            <button
+                              type="button"
+                              onClick={() => requestApplySense(sensesItemId, s.entry_id, s.russian_translation)}
+                              className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-primary-50 transition-colors border border-gray-100"
+                            >
+                              <span className="font-medium text-gray-800">{s.russian_translation}</span>
+                              {s.context_definition_ru && (
+                                <span className="block text-xs text-gray-500 mt-0.5 line-clamp-2">{s.context_definition_ru}</span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      {senses.length > 0 ? "Или введите свой перевод" : "Введите перевод"}
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        className="field flex-1"
+                        placeholder="Например: твёрдый"
+                        value={customTranslation}
+                        onChange={(e) => setCustomTranslation(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && requestApplyCustomTranslation(sensesItemId)}
+                      />
+                      <button
+                        type="button"
+                        className="btn-primary !px-3.5"
+                        onClick={() => requestApplyCustomTranslation(sensesItemId)}
+                        disabled={!customTranslation.trim() || sensesLoading}
+                      >
+                        Добавить
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                <button type="button" onClick={closeSenses} className="mt-4 w-full btn-secondary !text-sm">
+                  Отмена
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

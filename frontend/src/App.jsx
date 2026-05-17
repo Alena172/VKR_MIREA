@@ -214,7 +214,7 @@ function AppShell({ userEmail, userName, userCefr, setUserCefr, error, setError,
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <aside className="w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col">
+      <aside className="w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col h-screen sticky top-0">
         <div className="p-6 border-b border-gray-200">
           <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
           <p className="text-sm text-gray-600 mt-1">Умный словарь</p>
@@ -262,7 +262,7 @@ function AppShell({ userEmail, userName, userCefr, setUserCefr, error, setError,
           </div>
         </div>
 
-        <nav className="p-4 flex-1">
+        <nav className="p-4 flex-1 overflow-y-auto">
           {NAVIGATION.map((item) => {
             const Icon = item.icon;
             return (

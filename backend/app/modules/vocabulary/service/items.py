@@ -203,12 +203,16 @@ class VocabularyService:
 
         if entry_id is not None:
             # Используем существующий entry из общего словаря
-            target_entry = self._repo._db.get(
-                __import__("app.modules.vocabulary.models", fromlist=["DictionaryEntryModel"]).DictionaryEntryModel,
-                entry_id,
-            )
+            from app.modules.vocabulary.models import DictionaryEntryModel
+            target_entry = self._repo._db.get(DictionaryEntryModel, entry_id)
             if target_entry is None or target_entry.english_lemma != current_entry.english_lemma:
                 raise HTTPException(status_code=400, detail="Invalid entry_id for this word")
+            # Если у пользователя уже есть запись с этим entry_id — просто удаляем текущую
+            existing = self._repo.find_user_vocabulary_by_entry(user_id=current_user_id, entry_id=entry_id)
+            if existing is not None and existing.id != uv.id:
+                with transaction(self._repo._db):
+                    self._repo.delete_user_vocabulary_item(uv)
+                return _to_dto(existing, target_entry)
             with transaction(self._repo._db):
                 self._repo.change_user_vocabulary_entry(uv, new_entry_id=entry_id)
             return _to_dto(uv, target_entry)
@@ -230,6 +234,10 @@ class VocabularyService:
                     russian_translation=normalized_translation,
                     context_definition_ru=definition_resolution.context_definition,
                 )
+                existing = self._repo.find_user_vocabulary_by_entry(user_id=current_user_id, entry_id=new_entry.id)
+                if existing is not None and existing.id != uv.id:
+                    self._repo.delete_user_vocabulary_item(uv)
+                    return _to_dto(existing, new_entry)
                 self._repo.change_user_vocabulary_entry(uv, new_entry_id=new_entry.id)
             return _to_dto(uv, new_entry)
 
