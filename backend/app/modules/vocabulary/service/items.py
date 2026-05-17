@@ -222,8 +222,9 @@ class VocabularyService:
         normalized_sentence = source_sentence.strip() if source_sentence else None
         english_lemma = _normalize_english_lemma(selected_text)
 
-        # Fast-path: reuse existing entry without calling AI when the word is already saved.
-        if not force_new_vocabulary_item:
+        # Fast-path: reuse existing entry only when there is no context sentence.
+        # With context we must translate first — the new sentence may reveal a different sense.
+        if not force_new_vocabulary_item and not normalized_sentence:
             existing_row = self._repo.get_latest_vocabulary_item_by_lemma(
                 user_id=user_id, english_lemma=english_lemma
             )
