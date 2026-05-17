@@ -1,31 +1,24 @@
-# Диаграммы последовательности модулей серверной части
+# Диаграммы последовательности серверной части
 
-Для отчёта основными считаются диаграммы верхнего уровня по доменным модулям, AI-адаптеру и инфраструктурному слою задач:
+Каталог содержит актуальный основной набор `PlantUML`-диаграмм для модульного монолита FastAPI.
 
-- `01_identity_module_sequence.puml` — модуль `identity`
-- `02_vocabulary_module_sequence.puml` — модуль `vocabulary`
-- `03_training_module_sequence.puml` — модуль `training`
-- `04_graph_module_sequence.puml` — модуль `graph`
-- `05_ai_module_sequence.puml` — AI-адаптер `ai`
-- `06_tasks_platform_sequence.puml` — технический слой `tasks`
+Основной набор для отчета:
 
-Дополнительно в каталоге сохранены более подробные сценарные диаграммы по подмодулям и отдельным потокам:
+- `01_identity_module_sequence.puml` - модуль `identity`: регистрация, вход, JWT и текущий пользователь.
+- `02_vocabulary_module_sequence.puml` - модуль `vocabulary`: перевод, захват слова, фоновое сохранение, общий словарь, SRS и graph-синхронизация.
+- `03_training_module_sequence.puml` - модуль `training`: асинхронная генерация упражнений, использование интересов, проверка ответов и сохранение сессии.
+- `04_review_module_sequence.puml` - модуль `review`: SRS-очередь, отправка результата повторения, план и рекомендации.
+- `05_graph_module_sequence.puml` - модуль `graph`: интересы пользователя, тематические кластеры и тематические подсказки для упражнений.
+- `06_ai_module_sequence.puml` - модуль `ai`: единый фасад перевода, генерации определений и учебных материалов.
+- `07_tasks_platform_sequence.puml` - инфраструктурный слой `tasks`: постановка фоновых задач, привязка владельца и безопасное получение результата.
 
-- `01_auth_sequence.puml`
-- `02_users_sequence.puml`
-- `03_translation_sequence.puml`
-- `04_vocabulary_sequence.puml`
-- `05_capture_sequence.puml`
-- `06_exercise_engine_sequence.puml`
-- `07_learning_session_sequence.puml`
-- `08_review_sequence.puml`
-- `09_graph_sequence.puml`
-- `10_tasks_sequence.puml`
-- `11_ai_sequence.puml`
-- `12_base_lexicon_sequence.puml`
-- `13_vocabulary_delete_sequence.puml`
-- `14_vocabulary_ai_add_sequence.puml`
+Диаграммы отражают текущую структуру `backend/app/modules`:
 
-Их можно использовать как приложение или как детализирующие иллюстрации. Основная схема для пояснительной записки задаётся четырьмя доменными модулями, AI-адаптером и инфраструктурой задач.
+- `identity`
+- `vocabulary`
+- `training`
+- `review`
+- `graph`
+- `ai`
 
-Во всех диаграммах подписи шагов описывают смысл действия для продукта и пользователя.
+Дополнительные старые сценарные диаграммы по отдельным потокам сохранены в каталоге как вспомогательный материал. Основным комплектом для пояснительной записки считается список выше.

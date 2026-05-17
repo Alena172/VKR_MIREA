@@ -8,8 +8,6 @@ from app.modules.ai.chat_client import AIChatClient
 from app.modules.ai.libretranslate_client import LibreTranslateClient
 from app.modules.ai.schemas import (
     AIStatusResponse,
-    ExplainErrorRequest,
-    ExplainErrorResponse,
     ExerciseSeed,
     TranslateWithContextRequest,
     TranslateWithContextResponse,
@@ -96,67 +94,6 @@ class AIFacade:
             timeout_seconds=self._chat_client.timeout_seconds,
             max_retries=self._chat_client.max_retries,
         )
-
-    def _fallback_explain_error(self) -> ExplainErrorResponse:
-        return ExplainErrorResponse(
-            explanation_ru=(
-                "Ответ отличается от ожидаемого. Проверь форму слова, порядок слов "
-                "и значение в контексте предложения."
-            )
-        )
-
-    def _fallback_improvement_hint(self) -> ExplainErrorResponse:
-        return ExplainErrorResponse(
-            explanation_ru=(
-                "Перевод засчитан как верный. Можно улучшить стиль: выбрать более нейтральную "
-                "формулировку и терминологию ближе к учебному контексту."
-            )
-        )
-
-    def explain_error(self, payload: ExplainErrorRequest) -> ExplainErrorResponse:
-        return self._run_sync(self.explain_error_async(payload))
-
-    async def explain_error_async(self, payload: ExplainErrorRequest) -> ExplainErrorResponse:
-        content = await self._chat_completion_async(
-            system_prompt=(
-                "Ты преподаватель английского для русскоязычных пользователей. "
-                "Давай короткое и понятное объяснение ошибки на русском."
-            ),
-            user_prompt=(
-                f"Задание: {payload.english_prompt}\n"
-                f"Ожидался ответ: {payload.expected_answer}\n"
-                f"Ответ пользователя: {payload.user_answer}\n"
-                "Сформулируй объяснение ошибки в 1-2 предложениях."
-            ),
-            temperature=0.1,
-            max_tokens=180,
-        )
-        if content:
-            return ExplainErrorResponse(explanation_ru=content)
-        return self._fallback_explain_error()
-
-    def suggest_improvement(self, payload: ExplainErrorRequest) -> ExplainErrorResponse:
-        return self._run_sync(self.suggest_improvement_async(payload))
-
-    async def suggest_improvement_async(self, payload: ExplainErrorRequest) -> ExplainErrorResponse:
-        content = await self._chat_completion_async(
-            system_prompt=(
-                "Ты преподаватель английского для русскоязычных пользователей. "
-                "Ответ пользователя уже считается правильным. "
-                "Дай мягкую и краткую рекомендацию по стилю перевода на русском, без слова 'ошибка'."
-            ),
-            user_prompt=(
-                f"Задание: {payload.english_prompt}\n"
-                f"Ожидаемый вариант: {payload.expected_answer}\n"
-                f"Вариант пользователя: {payload.user_answer}\n"
-                "Сформулируй рекомендацию в 1-2 предложениях."
-            ),
-            temperature=0.1,
-            max_tokens=180,
-        )
-        if content:
-            return ExplainErrorResponse(explanation_ru=content)
-        return self._fallback_improvement_hint()
 
     def is_translation_semantically_correct(
         self,

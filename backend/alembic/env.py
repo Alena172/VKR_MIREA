@@ -72,14 +72,14 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    from sqlalchemy import create_engine
+    connectable = create_engine(settings.database_url, poolclass=pool.NullPool)
+
+    # Расширяем колонку version_num в отдельной транзакции до основных миграций
+    with connectable.begin() as conn:
+        ensure_alembic_version_column_width(conn)
 
     with connectable.connect() as connection:
-        ensure_alembic_version_column_width(connection)
         context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
 
         with context.begin_transaction():

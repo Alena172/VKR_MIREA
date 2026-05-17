@@ -20,7 +20,6 @@ class AnswerPersistPayload:
     expected_answer: str | None
     user_answer: str
     is_correct: bool
-    explanation_ru: str | None
 
 
 def _apply_session_filters(
@@ -137,7 +136,6 @@ class TrainingRepository:
                     expected_answer=answer.expected_answer,
                     user_answer=answer.user_answer,
                     is_correct=answer.is_correct,
-                    explanation_ru=answer.explanation_ru,
                 )
             )
 

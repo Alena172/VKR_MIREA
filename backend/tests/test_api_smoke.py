@@ -87,7 +87,6 @@ def test_user_vocabulary_sessions_flow(client):
     data = session_resp.json()
     assert data["session"]["total"] == 2
     assert data["session"]["correct"] == 1
-    assert data["incorrect_feedback"] == []
     session_id = data["session"]["id"]
 
     answers_resp = client.get(f"/api/v1/sessions/me/{session_id}/answers", headers=headers)
@@ -310,7 +309,6 @@ def test_session_submit_evaluates_correctness_on_server(client):
     payload = response.json()
     assert payload["session"]["correct"] == 1
     assert payload["session"]["accuracy"] == 1
-    assert payload["incorrect_feedback"] == []
 
 
 

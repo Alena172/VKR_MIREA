@@ -46,7 +46,7 @@ async def _evaluate_answer(answer: SessionAnswer, facade: AIFacade) -> Evaluated
         expected_answer=answer.expected_answer,
     )
     if simple_exercise_type in {"word_scramble", "word_definition_match"}:
-        is_correct, _ = evaluate_simple_exercise(
+        is_correct = evaluate_simple_exercise(
             expected_answer=answer.expected_answer,
             user_answer=answer.user_answer,
             exercise_type=simple_exercise_type,
@@ -136,7 +136,6 @@ class SubmissionService:
                     expected_answer=item.expected_answer,
                     user_answer=item.user_answer,
                     is_correct=item.is_correct,
-                    explanation_ru=None,
                 )
                 for item in evaluated_answers
             ],
@@ -183,6 +182,4 @@ class SubmissionService:
         return SessionSubmitResultDTO(
             session=session_row,
             evaluated_answers=evaluated_answers,
-            incorrect_feedback=[],
-            advice_feedback=[],
         )

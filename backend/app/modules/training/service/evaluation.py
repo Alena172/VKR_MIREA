@@ -207,20 +207,16 @@ def evaluate_simple_exercise(
     expected_answer: str | None,
     user_answer: str | None,
     exercise_type: str,
-) -> tuple[bool, str | None]:
+) -> bool:
     if exercise_type == "word_scramble":
-        is_correct = _normalize_scramble_answer(expected_answer) == _normalize_scramble_answer(user_answer)
-        explanation_ru = None if is_correct else "Слово собрано неверно."
-        return is_correct, explanation_ru
+        return _normalize_scramble_answer(expected_answer) == _normalize_scramble_answer(user_answer)
 
     if exercise_type == "word_definition_match":
         expected_pairs = _parse_definition_match_pairs(expected_answer)
         user_pairs = _parse_definition_match_pairs(user_answer)
-        is_correct = bool(expected_pairs and user_pairs and expected_pairs == user_pairs)
-        explanation_ru = None if is_correct else "Есть неверные сопоставления между словами и определениями."
-        return is_correct, explanation_ru
+        return bool(expected_pairs and user_pairs and expected_pairs == user_pairs)
 
-    return False, None
+    return False
 
 
 async def is_answer_correct_async(

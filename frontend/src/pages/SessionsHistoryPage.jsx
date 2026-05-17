@@ -879,9 +879,6 @@ export default function SessionsHistoryPage({ onError }) {
                         </div>
                       </>
                     )}
-                    {answer.explanation_ru ? (
-                      <div className="mt-2 text-slate-600 italic">{answer.explanation_ru}</div>
-                    ) : null}
                   </li>
                 );
               })}

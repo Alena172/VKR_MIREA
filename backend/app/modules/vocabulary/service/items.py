@@ -387,13 +387,24 @@ class VocabularyService:
     ) -> TranslationResultDTO:
         user_model = self._graph()._identity_service.get_user_or_404(user_id=user_id)
 
-        if _is_single_token(text) and not source_context:
-            shared = self._repo.find_shared_translation(english_lemma=text.strip())
-            if shared:
-                return TranslationResultDTO(
-                    translated_text=shared,
-                    note=_build_translation_note("glossary:shared_dictionary"),
-                )
+        if _is_single_token(text):
+            count = self._repo.count_shared_translations(english_lemma=text.strip())
+            # Однозначное слово — словарь достаточен даже с контекстом
+            if count == 1:
+                shared = self._repo.find_shared_translation(english_lemma=text.strip())
+                if shared:
+                    return TranslationResultDTO(
+                        translated_text=shared,
+                        note=_build_translation_note("glossary:shared_dictionary"),
+                    )
+            # Без контекста — берём самый популярный перевод из словаря
+            elif count > 1 and not source_context:
+                shared = self._repo.find_shared_translation(english_lemma=text.strip())
+                if shared:
+                    return TranslationResultDTO(
+                        translated_text=shared,
+                        note=_build_translation_note("glossary:shared_dictionary"),
+                    )
 
         try:
             ai_response = await ai_service.translate_with_context_async(

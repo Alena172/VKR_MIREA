@@ -127,6 +127,4 @@ async def submit_session(
             )
             for a in result.evaluated_answers
         ],
-        incorrect_feedback=[],
-        advice_feedback=[],
     )

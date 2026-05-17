@@ -1,20 +1,6 @@
 from pydantic import BaseModel, Field
 
 
-class ExplainErrorRequest(BaseModel):
-    """Запрос объяснения ошибки пользователя в упражнении."""
-
-    english_prompt: str = Field(min_length=1, max_length=2000)
-    user_answer: str = Field(min_length=1, max_length=1000)
-    expected_answer: str = Field(min_length=1, max_length=1000)
-
-
-class ExplainErrorResponse(BaseModel):
-    """Пояснение ошибки на русском языке."""
-
-    explanation_ru: str
-
-
 class TranslateGlossaryItem(BaseModel):
     """Подсказка перевода для термина, уже известного системе."""
 

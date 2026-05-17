@@ -59,6 +59,15 @@ class VocabularyRepository:
         self._db.refresh(entry)
         return entry, True
 
+    def count_shared_translations(self, *, english_lemma: str) -> int:
+        normalized = english_lemma.strip().lower()
+        if not normalized:
+            return 0
+        return self._db.scalar(
+            select(func.count(DictionaryEntryModel.id))
+            .where(DictionaryEntryModel.english_lemma == normalized)
+        ) or 0
+
     def find_shared_translation(self, *, english_lemma: str) -> str | None:
         normalized = english_lemma.strip().lower()
         if not normalized:

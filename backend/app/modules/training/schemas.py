@@ -85,11 +85,6 @@ class SessionHistoryResponse(BaseModel):
     items: list[SessionSummary]
 
 
-class SessionAnswerFeedback(BaseModel):
-    exercise_id: int
-    explanation_ru: str
-
-
 class SubmittedAnswerResult(BaseModel):
     exercise_id: int
     exercise_type: str | None = None
@@ -102,8 +97,6 @@ class SubmittedAnswerResult(BaseModel):
 class SessionSubmitResponse(BaseModel):
     session: SessionSummary
     answers: list[SubmittedAnswerResult] = Field(default_factory=list)
-    incorrect_feedback: list[SessionAnswerFeedback] = Field(default_factory=list)
-    advice_feedback: list[SessionAnswerFeedback] = Field(default_factory=list)
 
 
 class SessionAnswerRead(BaseModel):
@@ -118,7 +111,6 @@ class SessionAnswerRead(BaseModel):
     expected_answer: str | None = None
     user_answer: str
     is_correct: bool
-    explanation_ru: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,21 +133,11 @@ class ExerciseGenerateResultDTO:
 
 
 @dataclass(frozen=True)
-class SessionAnswerFeedbackDTO:
-    """Пояснение по конкретному ответу в учебной сессии."""
-
-    exercise_id: int
-    explanation_ru: str
-
-
-@dataclass(frozen=True)
 class SessionSubmitResultDTO:
     """Результат сохранения и оценки учебной сессии."""
 
     session: Any
     evaluated_answers: list[Any]
-    incorrect_feedback: list[SessionAnswerFeedbackDTO]
-    advice_feedback: list[SessionAnswerFeedbackDTO]
 
 
 @dataclass(frozen=True)

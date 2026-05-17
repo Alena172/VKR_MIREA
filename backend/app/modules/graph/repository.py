@@ -35,16 +35,27 @@ class GraphRepository:
     }
     _TOPIC_MARKERS: dict[str, tuple[str, set[str]]] = {
         "technology": ("Technology", {
-            "api", "app", "application", "code", "computer", "data", "database",
-            "deploy", "device", "digital", "frontend", "backend", "internet",
-            "network", "program", "programming", "server", "software", "system",
-            "technology", "tool", "user", "web",
+            "api", "app", "application", "algorithm", "architecture", "array",
+            "authentication", "backend", "browser", "cache", "callback", "code",
+            "compile", "component", "computer", "data", "database", "debug",
+            "deploy", "device", "digital", "endpoint", "execute", "frontend",
+            "function", "implement", "index", "integrate", "interface", "internet",
+            "library", "loop", "memory", "merge", "migrate", "module", "network",
+            "optimize", "output", "parse", "pipeline", "program", "programming",
+            "query", "repository", "request", "response", "runtime", "schema",
+            "server", "session", "software", "syntax", "system", "technology",
+            "token", "tool", "user", "variable", "version", "web",
         }),
         "business": ("Business", {
-            "account", "bank", "budget", "business", "company", "contract",
-            "customer", "finance", "funding", "investor", "market", "money",
-            "office", "payment", "price", "profit", "project", "revenue",
-            "startup", "team", "work",
+            "account", "agreement", "appointment", "arrange", "bank", "budget",
+            "business", "cancel", "company", "contract", "convenient", "customer",
+            "deadline", "delay", "deliver", "discount", "document", "emergency",
+            "estimate", "exchange", "finance", "flexible", "funding", "handle",
+            "industry", "invoice", "investor", "manage", "market", "money",
+            "negotiate", "office", "organization", "organize", "payment", "price",
+            "priority", "professional", "profit", "project", "refund", "reliable",
+            "remind", "revenue", "schedule", "startup", "succeed", "sufficient",
+            "task", "team", "trade", "urgent", "work", "workplace",
         }),
         "travel": ("Travel", {
             "airport", "beach", "booking", "city", "flight", "hotel", "journey",
@@ -52,18 +63,108 @@ class GraphRepository:
             "travel", "trip", "visit",
         }),
         "education": ("Education", {
-            "book", "class", "course", "exam", "exercise", "homework", "learn",
-            "lesson", "practice", "read", "school", "skill", "student", "study",
-            "teacher", "training", "university",
+            "book", "class", "classroom", "college", "course", "curriculum",
+            "degree", "diploma", "exam", "exercise", "grade", "graduation",
+            "homework", "instructor", "knowledge", "learn", "lecture", "lesson",
+            "literacy", "practice", "pupil", "qualification", "quiz", "read",
+            "school", "skill", "student", "study", "teacher", "test",
+            "textbook", "training", "tutor", "university",
+        }),
+        "academic": ("Academic", {
+            "abstract", "accuracy", "analyze", "approach", "assess", "category",
+            "clarify", "classify", "conclude", "confirm", "consistent",
+            "construct", "contribute", "critical", "demonstrate", "derive",
+            "determine", "distribute", "domain", "emphasize", "empirical",
+            "evaluate", "experiment", "framework", "generate", "hypothesis",
+            "indicate", "interpret", "investigate", "justify", "methodology",
+            "observation", "outcome", "parameter", "phenomenon", "propose",
+            "publish", "research", "review", "significant", "synthesize",
+            "theory", "validate", "variable",
         }),
         "daily-life": ("Daily Life", {
-            "apple", "buy", "cook", "day", "eat", "family", "food", "friend",
-            "go", "home", "house", "life", "morning", "shop", "street", "time",
-            "water",
+            "apple", "attend", "buy", "complain", "cook", "day", "eat",
+            "family", "food", "friend", "go", "home", "house", "life",
+            "morning", "progress", "shop", "street", "time", "variety",
+            "volunteer", "water",
         }),
         "nature": ("Nature", {
-            "animal", "forest", "garden", "lake", "mountain", "nature", "plant",
-            "rain", "river", "sea", "sky", "tree", "weather",
+            "animal", "environment", "forest", "garden", "lake", "mountain",
+            "nature", "plant", "rain", "river", "sea", "sky", "tree", "weather",
+        }),
+        "arts-media": ("Arts & Media", {
+            "actor", "author", "biography", "book", "cast", "character",
+            "chapter", "cinema", "classic", "comedy", "critic", "dialogue",
+            "director", "documentary", "drama", "episode", "fiction", "film",
+            "genre", "hero", "heroine", "horror", "literature", "movie",
+            "narrative", "narrator", "novel", "plot", "poetry", "protagonist",
+            "quote", "reader", "scene", "screenplay", "sequel", "series",
+            "setting", "show", "story", "subtitle", "theme", "thriller",
+            "villain", "voice", "writer",
+        }),
+        "law": ("Law", {
+            "accusation", "acquit", "appeal", "arbitration", "attorney",
+            "breach", "case", "civil", "clause", "compensation", "compliance",
+            "constitution", "contract", "conviction", "court", "crime",
+            "criminal", "damages", "defendant", "dispute", "enforcement",
+            "evidence", "fine", "fraud", "guilty", "hearing", "illegal",
+            "injunction", "judge", "judgment", "jurisdiction", "jury",
+            "justice", "law", "lawsuit", "legal", "legislation", "liability",
+            "litigation", "negligence", "obligation", "offense", "penalty",
+            "plaintiff", "prison", "prosecution", "regulation", "rights",
+            "statute", "testimony", "trial", "verdict", "violation", "witness",
+        }),
+        "medicine": ("Medicine", {
+            "anatomy", "antibiotic", "blood", "brain", "cancer", "cardiology",
+            "cell", "chronic", "clinic", "diagnosis", "disease", "disorder",
+            "dose", "drug", "emergency", "epidemic", "examination", "genetic",
+            "heart", "hormone", "hospital", "immune", "infection", "injury",
+            "medicine", "mental", "nerve", "neurology", "nutrition", "organ",
+            "pain", "patient", "pharmacy", "physician", "prescription",
+            "prevention", "psychology", "recovery", "rehabilitation", "surgery",
+            "symptom", "therapy", "treatment", "vaccination", "virus", "wound",
+        }),
+        "science": ("Science", {
+            "atom", "biology", "chemistry", "climate", "cosmos", "element",
+            "energy", "entropy", "evolution", "experiment", "force", "formula",
+            "galaxy", "gravity", "laboratory", "mass", "mathematics", "matter",
+            "molecule", "nucleus", "orbit", "particle", "physics", "planet",
+            "quantum", "radiation", "reaction", "relativity", "space",
+            "spectrum", "statistics", "universe", "velocity", "wave",
+        }),
+        "economics": ("Economics", {
+            "capital", "commodity", "competition", "consumption", "currency",
+            "debt", "demand", "depreciation", "distribution", "dividend",
+            "economic", "economy", "employment", "export", "fiscal", "gdp",
+            "growth", "import", "income", "index", "inflation", "investment",
+            "macroeconomics", "microeconomics", "monetary", "monopoly",
+            "recession", "regulation", "subsidy", "supply", "surplus", "tax",
+            "trade", "unemployment", "wage",
+        }),
+        "general": ("General", {
+            "ability", "accept", "achieve", "action", "activity", "actually",
+            "advantage", "affect", "agree", "allow", "amount", "apply", "argue",
+            "aspect", "assume", "attempt", "attitude", "available", "avoid",
+            "aware", "balance", "behavior", "benefit", "beyond", "cause",
+            "challenge", "change", "character", "claim", "clear", "compare",
+            "complete", "complex", "concept", "concern", "condition", "consider",
+            "continue", "control", "create", "culture", "current", "decision",
+            "define", "describe", "develop", "difference", "difficult", "discuss",
+            "effect", "effort", "element", "enable", "exist", "expect",
+            "experience", "factor", "feature", "focus", "follow", "force",
+            "form", "goal", "growth", "identify", "impact", "important",
+            "improve", "include", "increase", "individual", "influence",
+            "information", "interest", "involve", "issue", "language", "lead",
+            "level", "likely", "limit", "maintain", "matter", "meaning",
+            "measure", "method", "mind", "model", "necessary", "objective",
+            "opinion", "opportunity", "order", "overall", "participate",
+            "particular", "pattern", "perform", "period", "perspective",
+            "plan", "point", "policy", "position", "positive", "possible",
+            "present", "prevent", "principle", "process", "produce", "provide",
+            "purpose", "quality", "range", "reason", "reduce", "relate",
+            "relevant", "require", "resource", "respond", "result", "role",
+            "situation", "society", "solution", "source", "specific", "strategy",
+            "structure", "suggest", "support", "therefore", "value", "various",
+            "view",
         }),
     }
 
@@ -121,9 +222,7 @@ class GraphRepository:
             if score > 0:
                 return topic_key, self._display_name(topic_key)
 
-        fallback_token = next(iter(sorted(tokens)), "general")
-        key = self._normalize_interest_key(fallback_token) or "general"
-        return key, self._display_name(key)
+        return "general", self._display_name("general")
 
     def ensure_cluster(self, *, cluster_key: str, display_name: str) -> TopicClusterModel:
         """Возвращает существующий или создаёт новый глобальный кластер."""
@@ -228,5 +327,30 @@ class GraphRepository:
             if current is None or item.score > current.score:
                 best_by_lemma[lemma] = item
 
-        items = sorted(best_by_lemma.values(), key=lambda x: (-x.score, x.english_lemma))
-        return items[:limit]
+        import random
+        candidates = list(best_by_lemma.values())
+        if not candidates:
+            return []
+        # general получает 30% от своего веса если есть слова из других категорий
+        has_non_general = any(item.primary_signal != "General" for item in candidates)
+        weights = [
+            item.score * 0.3 if (has_non_general and item.primary_signal == "General") else item.score
+            for item in candidates
+        ]
+        k = min(limit, len(candidates))
+        chosen = random.choices(candidates, weights=weights, k=k * 3)
+        # Убираем дубли, сохраняя порядок
+        seen: set[str] = set()
+        result: list[InterestWordItem] = []
+        for item in chosen:
+            if item.english_lemma not in seen:
+                seen.add(item.english_lemma)
+                result.append(item)
+            if len(result) >= limit:
+                break
+        # Если не набрали нужное количество — добираем оставшиеся случайно
+        if len(result) < k:
+            remaining = [i for i in candidates if i.english_lemma not in seen]
+            random.shuffle(remaining)
+            result.extend(remaining[:k - len(result)])
+        return result

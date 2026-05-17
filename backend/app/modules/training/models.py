@@ -96,7 +96,3 @@ class AnswerModel(Base):
         Boolean,
         nullable=False,
     )
-    explanation_ru: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
