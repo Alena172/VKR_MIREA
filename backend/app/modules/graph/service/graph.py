@@ -86,10 +86,10 @@ class GraphService:
         russian_translation: str,
         context_definition_ru: str | None,
         source_sentence: str | None,
-    ) -> int | None:
+    ) -> str | None:
         """Инферирует тему слова, создаёт кластер если нужно, обновляет интересы.
 
-        Возвращает topic_cluster_id для записи в dictionary_entries.
+        Возвращает cluster_key для записи в dictionary_entries.
         """
         cluster_key, display_name = self._repo.infer_topic(
             english_lemma=english_lemma,
@@ -97,11 +97,11 @@ class GraphService:
             context_definition_ru=context_definition_ru,
             source_sentence=source_sentence,
         )
-        cluster = self._repo.ensure_cluster(cluster_key=cluster_key, display_name=display_name)
+        self._repo.ensure_cluster(cluster_key=cluster_key, display_name=display_name)
         self._repo.increase_interest(
             user_id=user_id,
             cluster_key=cluster_key,
             display_name=display_name,
             confidence=0.55,
         )
-        return cluster.id
+        return cluster_key

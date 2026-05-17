@@ -303,18 +303,20 @@ class GraphRepository:
         interest_keys = list(interests)
         saved_lemmas = saved_lemmas or set()
 
-        rows = list(self._db.execute(
-            select(DictionaryEntryModel, TopicClusterModel)
-            .join(TopicClusterModel, DictionaryEntryModel.topic_cluster_id == TopicClusterModel.id)
-            .where(TopicClusterModel.cluster_key.in_(interest_keys))
+        rows = list(self._db.scalars(
+            select(DictionaryEntryModel)
+            .where(DictionaryEntryModel.topic_cluster_key.in_(interest_keys))
         ))
 
         best_by_lemma: dict[str, InterestWordItem] = {}
-        for entry, cluster in rows:
+        for entry in rows:
             lemma = entry.english_lemma.strip().lower()
             if not lemma or lemma in saved_lemmas:
                 continue
-            weight, display_name = interests[cluster.cluster_key]
+            cluster_key = entry.topic_cluster_key
+            if cluster_key not in interests:
+                continue
+            weight, display_name = interests[cluster_key]
             item = InterestWordItem(
                 english_lemma=lemma,
                 russian_translation=entry.russian_translation,

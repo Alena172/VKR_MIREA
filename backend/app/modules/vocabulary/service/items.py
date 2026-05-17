@@ -130,7 +130,7 @@ class VocabularyService:
         )
 
         with transaction(self._repo._db):
-            topic_cluster_id = self._graph().register_word_topic(
+            topic_cluster_key = self._graph().register_word_topic(
                 user_id=user_id,
                 english_lemma=normalized_lemma,
                 russian_translation=normalized_translation,
@@ -141,7 +141,7 @@ class VocabularyService:
                 english_lemma=normalized_lemma,
                 russian_translation=normalized_translation,
                 context_definition_ru=definition_resolution.context_definition,
-                topic_cluster_id=topic_cluster_id,
+                topic_cluster_key=topic_cluster_key,
             )
             uv, _ = self._repo.add_to_user_vocabulary(
                 user_id=user_id,
@@ -331,7 +331,7 @@ class VocabularyService:
                 and existing_row[1].russian_translation == russian_translation
             )
 
-            topic_cluster_id = self._graph().register_word_topic(
+            topic_cluster_key = self._graph().register_word_topic(
                 user_id=user_id,
                 english_lemma=english_lemma,
                 russian_translation=russian_translation,
@@ -346,7 +346,7 @@ class VocabularyService:
                     english_lemma=english_lemma,
                     russian_translation=russian_translation,
                     context_definition_ru=definition_resolution.context_definition,
-                    topic_cluster_id=topic_cluster_id,
+                    topic_cluster_key=topic_cluster_key,
                 )
                 uv, _ = self._repo.add_to_user_vocabulary(
                     user_id=user_id,

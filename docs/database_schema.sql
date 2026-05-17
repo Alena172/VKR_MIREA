@@ -10,28 +10,24 @@ CREATE TABLE users (
 CREATE INDEX ix_users_email ON users(email);
 
 CREATE TABLE topic_clusters (
-    id SERIAL PRIMARY KEY,
-    cluster_key VARCHAR(64) NOT NULL,
+    cluster_key VARCHAR(64) PRIMARY KEY,
     name VARCHAR(120) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_topic_cluster_key UNIQUE (cluster_key)
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX ix_topic_clusters_cluster_key ON topic_clusters(cluster_key);
 
 CREATE TABLE dictionary_entries (
     id SERIAL PRIMARY KEY,
     english_lemma VARCHAR(200) NOT NULL,
     russian_translation VARCHAR(200) NOT NULL,
     context_definition_ru TEXT,
-    topic_cluster_id INTEGER REFERENCES topic_clusters(id),
+    topic_cluster_key VARCHAR(64),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_dictionary_entry_lemma_translation
         UNIQUE (english_lemma, russian_translation)
 );
 
 CREATE INDEX ix_dictionary_entries_english_lemma ON dictionary_entries(english_lemma);
-CREATE INDEX ix_dictionary_entries_topic_cluster_id ON dictionary_entries(topic_cluster_id);
+CREATE INDEX ix_dictionary_entries_topic_cluster_key ON dictionary_entries(topic_cluster_key);
 
 CREATE TABLE user_vocabulary (
     id SERIAL PRIMARY KEY,

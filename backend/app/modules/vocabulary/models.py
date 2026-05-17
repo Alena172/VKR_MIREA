@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -18,15 +18,14 @@ class DictionaryEntryModel(Base):
     __tablename__ = "dictionary_entries"
     __table_args__ = (
         UniqueConstraint("english_lemma", "russian_translation", name="uq_dictionary_entry_lemma_translation"),
+        Index("ix_dictionary_entries_topic_cluster_key", "topic_cluster_key"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     english_lemma: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     russian_translation: Mapped[str] = mapped_column(String(200), nullable=False)
     context_definition_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
-    topic_cluster_id: Mapped[int | None] = mapped_column(
-        ForeignKey("topic_clusters.id"), nullable=True, index=True
-    )
+    topic_cluster_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

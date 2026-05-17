@@ -34,15 +34,11 @@ def upgrade() -> None:
 
     op.create_table(
         "topic_clusters",
-        sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("cluster_key", sa.String(64), nullable=False),
         sa.Column("name", sa.String(120), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("cluster_key", name="uq_topic_cluster_key"),
+        sa.PrimaryKeyConstraint("cluster_key"),
     )
-    op.create_index("ix_topic_clusters_id", "topic_clusters", ["id"])
-    op.create_index("ix_topic_clusters_cluster_key", "topic_clusters", ["cluster_key"])
 
     op.create_table(
         "dictionary_entries",
@@ -50,15 +46,14 @@ def upgrade() -> None:
         sa.Column("english_lemma", sa.String(200), nullable=False),
         sa.Column("russian_translation", sa.String(200), nullable=False),
         sa.Column("context_definition_ru", sa.Text(), nullable=True),
-        sa.Column("topic_cluster_id", sa.Integer(), nullable=True),
+        sa.Column("topic_cluster_key", sa.String(64), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["topic_cluster_id"], ["topic_clusters.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("english_lemma", "russian_translation", name="uq_dictionary_entry_lemma_translation"),
     )
     op.create_index("ix_dictionary_entries_id", "dictionary_entries", ["id"])
     op.create_index("ix_dictionary_entries_english_lemma", "dictionary_entries", ["english_lemma"])
-    op.create_index("ix_dictionary_entries_topic_cluster_id", "dictionary_entries", ["topic_cluster_id"])
+    op.create_index("ix_dictionary_entries_topic_cluster_key", "dictionary_entries", ["topic_cluster_key"])
 
     op.create_table(
         "user_vocabulary",

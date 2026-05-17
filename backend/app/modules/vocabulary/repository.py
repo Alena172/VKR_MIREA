@@ -25,7 +25,7 @@ class VocabularyRepository:
         english_lemma: str,
         russian_translation: str,
         context_definition_ru: str | None,
-        topic_cluster_id: int | None = None,
+        topic_cluster_key: str | None = None,
     ) -> tuple[DictionaryEntryModel, bool]:
         normalized_lemma = english_lemma.strip().lower()
         normalized_translation = russian_translation.strip()
@@ -41,8 +41,8 @@ class VocabularyRepository:
             if context_definition_ru and not existing.context_definition_ru:
                 existing.context_definition_ru = context_definition_ru
                 updated = True
-            if topic_cluster_id and not existing.topic_cluster_id:
-                existing.topic_cluster_id = topic_cluster_id
+            if topic_cluster_key and not existing.topic_cluster_key:
+                existing.topic_cluster_key = topic_cluster_key
                 updated = True
             if updated:
                 self._db.flush()
@@ -52,7 +52,7 @@ class VocabularyRepository:
             english_lemma=normalized_lemma,
             russian_translation=normalized_translation,
             context_definition_ru=context_definition_ru,
-            topic_cluster_id=topic_cluster_id,
+            topic_cluster_key=topic_cluster_key,
         )
         self._db.add(entry)
         self._db.flush()

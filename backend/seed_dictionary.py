@@ -3,7 +3,7 @@
 Скрипт работает напрямую с БД (не через HTTP), но использует те же функции,
 что и основное приложение:
   - resolve_context_definition  (Free Dictionary API → AI fallback)
-  - infer_topic                 (тематические маркеры → topic_cluster_id)
+  - infer_topic                 (тематические маркеры → topic_cluster_key)
   - get_or_create_dictionary_entry
 
 Запуск из папки backend:
@@ -352,7 +352,7 @@ async def seed_words(db_url: str) -> None:
                     context_definition_ru=definition,
                     source_sentence=None,
                 )
-                cluster = graph_repo.ensure_cluster(
+                graph_repo.ensure_cluster(
                     cluster_key=cluster_key,
                     display_name=display_name,
                 )
@@ -362,7 +362,7 @@ async def seed_words(db_url: str) -> None:
                     english_lemma=lemma,
                     russian_translation=translation,
                     context_definition_ru=definition,
-                    topic_cluster_id=cluster.id,
+                    topic_cluster_key=cluster_key,
                 )
                 db.commit()
 
