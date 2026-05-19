@@ -210,7 +210,8 @@ class TranslationService:
             return self._DIRECT_MAP[key]
 
         if len(norm_tokens) == 1 and norm_tokens[0] in self._AMBIGUOUS_MAP:
-            context_tokens = set(self._tokenize(context or ""))
+            raw_context_tokens = self._tokenize(context or "")
+            context_tokens = {self._normalize_token(t) for t in raw_context_tokens}
             variants = self._AMBIGUOUS_MAP[norm_tokens[0]]
             for trigger, translated in variants.items():
                 if trigger in context_tokens:

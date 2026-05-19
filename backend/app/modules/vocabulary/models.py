@@ -59,5 +59,3 @@ class UserVocabularyModel(Base):
     def is_phrase(self) -> bool:
         return self.entry_id is None
 
-
-

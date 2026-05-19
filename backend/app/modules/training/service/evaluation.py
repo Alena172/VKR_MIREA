@@ -98,16 +98,26 @@ def answer_similarity_metrics(expected: str | None, user_answer: str | None) -> 
 
 def is_semantic_override_candidate(expected: str | None, user_answer: str | None) -> bool:
     metrics = answer_similarity_metrics(expected, user_answer)
+    normalized_expected = normalize_answer(expected)
+    normalized_user = normalize_answer(user_answer)
+    expected_tokens = normalized_expected.split()
+    user_tokens = normalized_user.split()
+    # Reject if length ratio is wildly off (< 40% or > 250% of expected length)
+    if expected_tokens and user_tokens:
+        ratio = len(user_tokens) / len(expected_tokens)
+        if ratio < 0.4 or ratio > 2.5:
+            return False
     return (
         (
-            metrics["text_similarity"] >= 0.72
-            and metrics["token_recall"] >= 0.55
-            and metrics["content_recall"] >= 0.6
+            metrics["text_similarity"] >= 0.55
+            and metrics["token_recall"] >= 0.3
+            and metrics["content_recall"] >= 0.35
         )
         or (
-            metrics["canonical_token_recall"] >= 0.72
-            and metrics["canonical_content_recall"] >= 0.78
+            metrics["canonical_token_recall"] >= 0.5
+            and metrics["canonical_content_recall"] >= 0.55
         )
+        or metrics["text_similarity"] >= 0.75
     )
 
 

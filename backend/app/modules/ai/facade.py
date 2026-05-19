@@ -204,6 +204,23 @@ class AIFacade:
     def is_ambiguous_word(self, text: str) -> bool:
         return self._translation_service._looks_ambiguous(text)
 
+    async def translate_phrase_async(self, phrase: str) -> str:
+        """Перевод фразы напрямую через LibreTranslate, без глоссария и AI-логики."""
+        if self._translation_service._libretranslate is not None:
+            result = await self._translation_service._libretranslate.translate_word(phrase)
+            if result:
+                return result.strip()
+        # Fallback: AI без глоссария
+        content = await self._chat_completion_async(
+            system_prompt="Переведи английскую фразу на русский. Верни только перевод без комментариев.",
+            user_prompt=phrase,
+            temperature=0.0,
+            max_tokens=200,
+        )
+        if content:
+            return content.strip().strip('"')
+        return phrase
+
     async def generate_sentence_pair_async(
         self,
         *,

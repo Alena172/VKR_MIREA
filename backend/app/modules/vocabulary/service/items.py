@@ -27,7 +27,11 @@ def _to_dto(uv, entry) -> VocabularyItemDTO:
 
 
 def _normalize_english_lemma(text: str) -> str:
-    return text.strip().split()[0].lower()
+    stripped = text.strip()
+    tokens = stripped.split()
+    if len(tokens) > 1:
+        return stripped.lower()
+    return tokens[0].lower() if tokens else ""
 
 
 def _normalize_translation(text: str) -> str:
@@ -164,6 +168,18 @@ class VocabularyService:
         if row is None:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")
         uv, entry = row
+        if uv.is_phrase and (payload.phrase_en is not None or payload.phrase_ru is not None):
+            if payload.phrase_en is not None:
+                normalized = payload.phrase_en.strip().lower()
+                if not normalized:
+                    raise HTTPException(status_code=400, detail="phrase_en cannot be empty")
+                uv.phrase_en = normalized
+            if payload.phrase_ru is not None:
+                stripped = payload.phrase_ru.strip()
+                if not stripped:
+                    raise HTTPException(status_code=400, detail="phrase_ru cannot be empty")
+                uv.phrase_ru = stripped
+            self._repo._db.flush()
         self._repo.update_user_vocabulary_item(
             uv,
             source_sentence=payload.source_sentence,
@@ -263,12 +279,11 @@ class VocabularyService:
         english_lemma: str,
         cefr_level: str,
     ) -> tuple[str, str, str | None]:
-        # Многозначные слова → AI (LibreTranslate не учитывает контекст для омонимов).
-        # Однозначные слова → LibreTranslate/локальный перевод через translate_with_context_async
-        # (там LibreTranslate идёт первым, AI — только как запасной).
-        # Общий словарь не используется как источник перевода — только для сохранения:
-        # если полученный перевод совпадает с уже существующей записью, она переиспользуется.
-        force_ai = ai_service.is_ambiguous_word(english_lemma)
+        is_phrase = " " in english_lemma.strip()
+        # Фразы → LibreTranslate (force_ai=False, AI идёт только как запасной если LibreTranslate недоступен).
+        # Многозначные одиночные слова → AI (LibreTranslate не учитывает контекст для омонимов).
+        # Однозначные слова → LibreTranslate/локальный перевод через translate_with_context_async.
+        force_ai = False if is_phrase else ai_service.is_ambiguous_word(english_lemma)
         contextual_response = await ai_service.translate_with_context_async(
             TranslateWithContextRequest(
                 text=english_lemma,
@@ -293,6 +308,16 @@ class VocabularyService:
         normalized_url = source_url.strip() if source_url else None
         normalized_sentence = source_sentence.strip() if source_sentence else None
         english_lemma = _normalize_english_lemma(selected_text)
+        is_phrase = " " in english_lemma
+
+        if is_phrase:
+            return await self._capture_phrase(
+                user_id=user_id,
+                english_lemma=english_lemma,
+                normalized_sentence=normalized_sentence,
+                normalized_url=normalized_url,
+                force_new_vocabulary_item=force_new_vocabulary_item,
+            )
 
         # Fast-path: reuse existing entry only when there is no context sentence.
         # With context we must translate first — the new sentence may reveal a different sense.
@@ -359,6 +384,30 @@ class VocabularyService:
 
         return _to_dto(uv, entry), not same_sense
 
+    async def _capture_phrase(
+        self,
+        *,
+        user_id: int,
+        english_lemma: str,
+        normalized_sentence: str | None,
+        normalized_url: str | None,
+        force_new_vocabulary_item: bool,
+    ) -> tuple[VocabularyItemDTO, bool]:
+        russian_translation = await ai_service.translate_phrase_async(english_lemma)
+        with transaction(self._repo._db):
+            uv, created = self._repo.add_phrase_to_user_vocabulary(
+                user_id=user_id,
+                phrase_en=english_lemma,
+                phrase_ru=russian_translation,
+                source_sentence=normalized_sentence,
+                source_url=normalized_url,
+            )
+            if not created and force_new_vocabulary_item:
+                uv.phrase_ru = russian_translation
+                self._repo._db.flush()
+            self._srs().ensure_word_progress_entry(user_id=user_id, vocabulary_id=uv.id)
+        return _to_dto(uv, None), created
+
     # ------------------------------------------------------------------
     # Перевод
     # ------------------------------------------------------------------
@@ -370,9 +419,19 @@ class VocabularyService:
         text: str,
         source_context: str | None,
     ) -> TranslationResultDTO:
+        is_phrase = " " in text.strip()
+
+        if is_phrase:
+            translated = await ai_service.translate_phrase_async(text.strip())
+            return TranslationResultDTO(
+                translated_text=translated,
+                note=_build_translation_note("libretranslate:phrase"),
+            )
+
         user_model = self._graph()._identity_service.get_user_or_404(user_id=user_id)
 
-        # Многозначные слова → AI, однозначные → LibreTranslate (AI как запасной).
+        # Многозначные одиночные слова → AI.
+        # Однозначные слова → LibreTranslate (AI как запасной).
         # Глоссарий пользователя НЕ передаём для самого переводимого слова:
         # это предотвращает навязывание ранее сохранённого смысла при другом контексте.
         lemma = text.strip().lower()

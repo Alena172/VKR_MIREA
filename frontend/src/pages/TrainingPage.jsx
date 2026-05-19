@@ -301,15 +301,15 @@ export default function TrainingPage({ onError }) {
 
   return (
     <section className="space-y-4">
-      {loadingCurrent ? <LoadingSpinner message="Готовлю первое упражнение..." estimatedSeconds="1-4" /> : null}
+      {loadingCurrent ? <LoadingSpinner message={isTrainingActive ? "Загружаю следующее задание..." : "Готовлю упражнения..."} estimatedSeconds="1-4" /> : null}
 
       <header className="surface p-4 md:p-5">
         <p className="kicker">Training</p>
         <h2 className="section-title">Тренировка</h2>
         <p className="muted mt-1 text-sm">Выбери тип и количество упражнений, затем нажми «Начать».</p>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <label className="text-sm">
+        <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-3">
+          <label className="text-sm col-span-1">
             Количество упражнений
             <input
               type="number"
@@ -321,7 +321,7 @@ export default function TrainingPage({ onError }) {
               disabled={isTrainingActive}
             />
           </label>
-          <label className="text-sm md:col-span-2">
+          <label className="text-sm col-span-1 md:col-span-2">
             Тип упражнений
             <select
               value={mode}

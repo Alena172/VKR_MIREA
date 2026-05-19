@@ -37,10 +37,16 @@ class VocabularyItemRead(BaseModel):
 
 
 class VocabularyItemUpdateMe(BaseModel):
-    """Запрос обновления контекста словарной записи пользователя."""
+    """Запрос обновления словарной записи пользователя.
+
+    Для слов: source_sentence, source_url.
+    Для фраз: дополнительно phrase_en и phrase_ru.
+    """
 
     source_sentence: str | None = Field(default=None, max_length=2000)
     source_url: str | None = Field(default=None, max_length=2000)
+    phrase_en: str | None = Field(default=None, max_length=500)
+    phrase_ru: str | None = Field(default=None, max_length=500)
 
 
 class SenseRead(BaseModel):
@@ -104,6 +110,7 @@ class VocabularyItemDTO:
     source_url: str | None
     added_at: datetime
     is_phrase: bool = False
+    topic_cluster_key: str | None = None
 
     @staticmethod
     def from_model(uv: UserVocabularyModel, entry: DictionaryEntryModel | None) -> VocabularyItemDTO:
@@ -120,6 +127,7 @@ class VocabularyItemDTO:
                 source_url=uv.source_url,
                 added_at=uv.added_at,
                 is_phrase=True,
+                topic_cluster_key=None,
             )
         return VocabularyItemDTO(
             id=uv.id,
@@ -132,6 +140,7 @@ class VocabularyItemDTO:
             source_url=uv.source_url,
             added_at=uv.added_at,
             is_phrase=False,
+            topic_cluster_key=entry.topic_cluster_key,
         )
 
 

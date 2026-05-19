@@ -7,6 +7,7 @@ from fastapi import Depends
 from app.celery_app import enqueue_task
 from app.core.application import AsyncTaskResponse
 from app.modules.ai.schemas import ExerciseSeed
+from app.modules.graph.repository import GraphRepository
 from app.modules.graph.service.graph import GraphService
 from app.modules.identity.service import IdentityService
 from app.modules.training.schemas import (
@@ -80,11 +81,34 @@ class TrainingService:
         prefetched: list[ExerciseDTO] = []
         if use_prefetch and prefetch_service.has_prefetch(user_id, mode):
             prefetched = prefetch_service.get_prefetched(user_id, mode, size)
-            if len(prefetched) >= size:
-                return ExerciseGenerateResultDTO(
-                    exercises=prefetched[:size],
-                    note="Prefetched exercises used",
+
+        # Incremental: отдаём буфер немедленно, генерацию запускаем в фоне через Celery
+        if incremental and prefetched:
+            missing = size - len(prefetched)
+            if missing > 0:
+                from app.tasks.exercise_tasks import generate_exercises_for_user
+                enqueue_task(
+                    generate_exercises_for_user,
+                    owner_user_id=user_id,
+                    kwargs={
+                        "user_id": user_id,
+                        "vocabulary_ids": [],
+                        "size": missing + _PREFETCH_EXTRA,
+                        "mode": mode,
+                        "fast_start": False,
+                        "incremental": False,
+                    },
                 )
+            return ExerciseGenerateResultDTO(
+                exercises=prefetched,
+                note="incremental_partial; buffer_used",
+            )
+
+        if len(prefetched) >= size:
+            return ExerciseGenerateResultDTO(
+                exercises=prefetched[:size],
+                note="prefetched_full",
+            )
 
         vocabulary_items = self._resolve_vocabulary_items(
             user_id=user_id,
@@ -92,7 +116,7 @@ class TrainingService:
             mode=mode,
         )
         required_count = size - len(prefetched)
-        server_prefetch_extra = _PREFETCH_EXTRA if use_prefetch and not fast_start and not incremental else 0
+        server_prefetch_extra = _PREFETCH_EXTRA if use_prefetch and not fast_start else 0
         generation_target = required_count + server_prefetch_extra
         seeds = self._build_seeds(user_id=user_id, vocabulary_items=vocabulary_items)
         generated_items, provider_note = await exercise_builder.build_items(
@@ -109,12 +133,11 @@ class TrainingService:
             if extra_items:
                 prefetch_service.store_prefetch(user_id, mode, extra_items)
 
-        note_prefix = "Prefetched + " if prefetched else ""
+        note_prefix = "prefetched_partial + " if prefetched else ""
         fast_start_note = "fast_start; " if fast_start else ""
-        incremental_note = "incremental; " if incremental else ""
         return ExerciseGenerateResultDTO(
             exercises=immediate_items[:size],
-            note=f"{note_prefix}{fast_start_note}{incremental_note}{provider_note}",
+            note=f"{note_prefix}{fast_start_note}{provider_note}",
         )
 
     def _resolve_vocabulary_items(
@@ -148,31 +171,40 @@ class TrainingService:
     def _build_seeds(self, *, user_id: int, vocabulary_items) -> list[ExerciseSeed]:
         saved_lemmas = {item.english_lemma.strip().lower() for item in vocabulary_items if item.english_lemma}
         interest_words = self._graph_service.get_interest_words(
-            limit=10,
+            limit=30,
             current_user_id=user_id,
             saved_lemmas=saved_lemmas,
         )
-        interest_hint = (
-            "Thematically related words to weave in: "
-            + ", ".join(f"{w.english_lemma} ({w.russian_translation})" for w in interest_words.items[:5])
-            + "."
-        ) if interest_words.items else None
+        # Индекс: display_name кластера → слова из общего словаря в этом кластере
+        by_signal: dict[str, list] = {}
+        for w in interest_words.items:
+            by_signal.setdefault(w.primary_signal, []).append(w)
 
-        seeds = [
-            ExerciseSeed(
+        rng = secrets.SystemRandom()
+        seeds = []
+        for item in vocabulary_items:
+            cluster_hint: str | None = None
+            # Ищем hint из того же кластера (по display_name кластера)
+            # topic_cluster_key → display_name берём из GraphRepository._TOPIC_MARKERS,
+            # но проще — ищем по ключу напрямую через interest_words
+            if item.topic_cluster_key:
+                display_name = GraphRepository._TOPIC_MARKERS.get(item.topic_cluster_key, (item.topic_cluster_key,))[0]
+                candidates = by_signal.get(display_name, [])
+                if candidates:
+                    chosen = rng.choice(candidates)
+                    cluster_hint = f"{chosen.english_lemma} ({chosen.russian_translation})"
+
+            seeds.append(ExerciseSeed(
                 english_lemma=item.english_lemma,
                 russian_translation=item.russian_translation,
                 context_definition_ru=item.context_definition_ru,
-                source_sentence=(
-                    f"{item.source_sentence} {interest_hint}".strip()
-                    if interest_hint and item.source_sentence
-                    else item.source_sentence or interest_hint
-                ),
-            )
-            for item in vocabulary_items
-        ]
+                source_sentence=item.source_sentence,
+                topic_cluster_key=item.topic_cluster_key,
+                cluster_word_hint=cluster_hint,
+            ))
+
         if len(seeds) > 1:
-            secrets.SystemRandom().shuffle(seeds)
+            rng.shuffle(seeds)
         return seeds
 
 

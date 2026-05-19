@@ -33,6 +33,8 @@ class ExerciseSeed(BaseModel):
     russian_translation: str = Field(min_length=1, max_length=200)
     context_definition_ru: str | None = Field(default=None, max_length=4000)
     source_sentence: str | None = Field(default=None, max_length=2000)
+    topic_cluster_key: str | None = Field(default=None, max_length=64)
+    cluster_word_hint: str | None = Field(default=None, max_length=200)
 
 
 class GenerateExercisesRequest(BaseModel):

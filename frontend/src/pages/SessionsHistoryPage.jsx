@@ -370,31 +370,33 @@ function accuracyColor(avgAccuracy) {
 
 function HeatmapGrid({ weeks, colorFn, tooltipFn, hasDataFn }) {
   return (
-    <div className="overflow-x-auto">
-      <div className="flex gap-1.5 min-w-max">
-        <div className="flex flex-col gap-1.5 mr-1">
+    <div className="w-full overflow-hidden">
+      <div className="flex gap-[3px] sm:gap-1.5 w-full">
+        <div className="flex flex-col gap-[3px] sm:gap-1.5 mr-0.5 sm:mr-1 shrink-0">
           {DAY_LABELS.map((label, i) => (
-            <div key={i} className="h-4 w-6 flex items-center justify-end">
-              <span className="text-[9px] text-slate-400 font-medium">{label}</span>
+            <div key={i} className="h-[10px] sm:h-4 w-4 sm:w-6 flex items-center justify-end">
+              <span className="text-[7px] sm:text-[9px] text-slate-400 font-medium">{label}</span>
             </div>
           ))}
         </div>
-        {weeks.map((week, wi) => (
-          <div key={wi} className="flex flex-col gap-1.5">
-            {week.map((day, di) => (
-              <div
-                key={di}
-                className={`group relative h-4 w-4 rounded-sm ${day.isFuture ? "bg-transparent" : colorFn(day)}`}
-              >
-                {!day.isFuture && hasDataFn(day) && (
-                  <div className="pointer-events-none absolute top-full left-1/2 z-10 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-[10px] text-white group-hover:block">
-                    {tooltipFn(day)}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ))}
+        <div className="flex gap-[3px] sm:gap-1.5 flex-1 min-w-0">
+          {weeks.map((week, wi) => (
+            <div key={wi} className="flex flex-col gap-[3px] sm:gap-1.5 flex-1">
+              {week.map((day, di) => (
+                <div
+                  key={di}
+                  className={`group relative rounded-sm w-full aspect-square ${day.isFuture ? "bg-transparent" : colorFn(day)}`}
+                >
+                  {!day.isFuture && hasDataFn(day) && (
+                    <div className="pointer-events-none absolute top-full left-1/2 z-10 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-[10px] text-white group-hover:block">
+                      {tooltipFn(day)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -404,7 +406,7 @@ function HeatmapsBlock({ activityWeeks, accuracyWeeks }) {
   if (!activityWeeks?.length && !accuracyWeeks?.length) return null;
   return (
     <section className="surface p-4 md:p-5">
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <div className="min-w-0">
           <h3 className="text-sm font-extrabold text-gray-900 mb-3">Активность за 16 недель</h3>
           <HeatmapGrid
@@ -413,9 +415,9 @@ function HeatmapsBlock({ activityWeeks, accuracyWeeks }) {
             hasDataFn={(day) => day.count > 0}
             tooltipFn={(day) => `${day.date}: ${day.count} ${day.count === 1 ? "сессия" : day.count < 5 ? "сессии" : "сессий"}`}
           />
-          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+          <div className="mt-2 flex items-center gap-1 sm:gap-1.5 text-[10px] text-slate-400">
             <span>Меньше</span>
-            {HEATMAP_COLORS.map((c, i) => <div key={i} className={`h-4 w-4 rounded-sm ${c}`} />)}
+            {HEATMAP_COLORS.map((c, i) => <div key={i} className={`h-3 w-3 sm:h-4 sm:w-4 rounded-sm ${c}`} />)}
             <span>Больше</span>
           </div>
         </div>
@@ -427,9 +429,9 @@ function HeatmapsBlock({ activityWeeks, accuracyWeeks }) {
             hasDataFn={(day) => day.avgAccuracy !== null}
             tooltipFn={(day) => `${day.date}: ${Math.round(day.avgAccuracy * 100)}%`}
           />
-          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
+          <div className="mt-2 flex items-center gap-1 sm:gap-1.5 text-[10px] text-slate-400">
             <span>Хуже</span>
-            {ACCURACY_COLORS.slice(1).map((c, i) => <div key={i} className={`h-4 w-4 rounded-sm ${c}`} />)}
+            {ACCURACY_COLORS.slice(1).map((c, i) => <div key={i} className={`h-3 w-3 sm:h-4 sm:w-4 rounded-sm ${c}`} />)}
             <span>Лучше</span>
           </div>
         </div>
@@ -667,7 +669,7 @@ export default function SessionsHistoryPage({ onError }) {
         </div>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <AnalyticsCard title="Точность по недавним сессиям">
           {loadingAnalytics ? (
             <p className="muted text-sm">Собираю аналитику...</p>
@@ -739,7 +741,7 @@ export default function SessionsHistoryPage({ onError }) {
       )}
 
       <section className="surface p-4 md:p-5">
-        <div className="grid gap-3 md:grid-cols-5">
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
           <label className="text-sm">
             Мин. точность
             <input

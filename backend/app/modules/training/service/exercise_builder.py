@@ -10,6 +10,16 @@ from app.modules.ai.schemas import ExerciseSeed
 from app.modules.training.schemas import ExerciseDTO
 
 
+def _is_valid_sentence_answer(sentence_ru: str | None) -> bool:
+    if not sentence_ru:
+        return False
+    all_words = re.findall(r"[А-Яа-яЁёA-Za-z]+", sentence_ru)
+    if len(all_words) < 3:
+        return False
+    ru_words = [w for w in all_words if re.search(r"[А-Яа-яЁё]", w)]
+    return len(ru_words) / len(all_words) >= 0.7
+
+
 class ExerciseBuilder:
     _FAST_START_EN_TEMPLATES = (
         "The key word is {word}.",
@@ -56,14 +66,18 @@ class ExerciseBuilder:
                     return self._build_word_definition_match_exercise(seed, rotated_pool)
                 return await self._build_sentence_translation_exercise(seed, cefr_level=cefr_level)
 
-        items = await asyncio.gather(*(_build_exercise(seed, idx) for seed, idx in scheduled_seeds))
+        results = await asyncio.gather(
+            *(_build_exercise(seed, idx) for seed, idx in scheduled_seeds),
+            return_exceptions=True,
+        )
+        items = [r for r in results if isinstance(r, ExerciseDTO)]
         level_note = f" CEFR={cefr_level}." if cefr_level else ""
         provider_note = (
             f"remote_sentence_pipeline{level_note}"
             if mode == "sentence_translation_full"
             else f"local_heuristic exercise_generation.{level_note}"
         )
-        return list(items), provider_note
+        return items, provider_note
 
     def _is_word_scramble_suitable(self, word: str) -> bool:
         clean_word = re.sub(r"[^a-z]", "", word.strip().lower())
@@ -130,18 +144,11 @@ class ExerciseBuilder:
     ) -> ExerciseDTO:
         level = (cefr_level or "A2").upper()
         pair = await ai_service.generate_sentence_pair_async(seed=seed, cefr_level=level)
-        if pair is not None:
-            sentence_en, sentence_ru = pair
-            return ExerciseDTO(
-                prompt=f"Translate sentence into Russian: {sentence_en}",
-                answer=sentence_ru,
-                exercise_type="sentence_translation_full",
-                target_word=seed.english_lemma.strip().lower(),
-                options=[],
-            )
-
-        sentence_en = await ai_service.build_sentence_for_word_async(seed=seed, cefr_level=level)
-        sentence_ru = await ai_service.translate_sentence_for_seed_async(sentence_en=sentence_en, seed=seed)
+        if pair is None:
+            raise ValueError(f"Failed to generate sentence pair for '{seed.english_lemma}'")
+        sentence_en, sentence_ru = pair
+        if not _is_valid_sentence_answer(sentence_ru):
+            raise ValueError(f"Invalid answer generated for '{seed.english_lemma}': {sentence_ru!r}")
         return ExerciseDTO(
             prompt=f"Translate sentence into Russian: {sentence_en}",
             answer=sentence_ru,

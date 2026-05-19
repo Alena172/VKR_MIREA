@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, getErrorMessage, isAbortError } from "../lib/api";
 import { useAbortControllers } from "./useAbortControllers";
 
@@ -18,10 +18,19 @@ export function useTrainingSession({ onError }) {
   const [sessionResult, setSessionResult] = useState(null);
   const [isTrainingActive, setIsTrainingActive] = useState(false);
   const { abortAllRequests, registerController, releaseController } = useAbortControllers();
+  const bgFetchControllerRef = useRef(null);
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
+  function cancelBgFetch() {
+    if (bgFetchControllerRef.current) {
+      bgFetchControllerRef.current.abort();
+      bgFetchControllerRef.current = null;
+    }
+  }
+
   function resetSessionState() {
+    cancelBgFetch();
     abortAllRequests();
     setCurrentExercise(null);
     setCurrentIndex(0);
@@ -39,13 +48,38 @@ export function useTrainingSession({ onError }) {
     setSessionResult(result);
   }
 
-  /** Загружает все упражнения одним запросом — бэкенд отдаёт из серверного буфера. */
+  /** Фоновая догрузка недостающих упражнений в буфер пока пользователь решает. */
+  const fetchMissingInBackground = useCallback((missing, nextMode, nextVocabularyIds) => {
+    cancelBgFetch();
+    const controller = new AbortController();
+    bgFetchControllerRef.current = controller;
+
+    api
+      .generateExercisesMe(
+        { size: missing, mode: nextMode, vocabulary_ids: nextVocabularyIds || [], fast_start: false, incremental: false },
+        { signal: controller.signal },
+      )
+      .then((result) => {
+        if (result?.exercises?.length) {
+          setBufferExercises((prev) => [...prev, ...result.exercises]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (bgFetchControllerRef.current === controller) {
+          bgFetchControllerRef.current = null;
+        }
+      });
+  }, []);
+
+  /** Запускает тренировку: сначала берёт из буфера (incremental), остаток догружает в фоне. */
   async function startTraining(options = {}) {
     const nextMode = options.overrideMode || mode;
     const nextSize = options.overrideSize || size;
     const nextVocabularyIds = options.overrideVocabularyIds || selectedVocabularyIds;
     const nextFocusLabel = options.focusLabel || focusLabel;
 
+    cancelBgFetch();
     abortAllRequests();
     onError("");
     setLoadingCurrent(true);
@@ -53,18 +87,24 @@ export function useTrainingSession({ onError }) {
     try {
       const controller = registerController();
       try {
-        const result = await api.generateExercisesMe(
-          {
-            size: nextSize,
-            mode: nextMode,
-            vocabulary_ids: nextVocabularyIds || [],
-            fast_start: false,
-            incremental: false,
-          },
+        // Сначала пробуем взять из серверного буфера (incremental=true — отдаёт сразу)
+        const incrementalResult = await api.generateExercisesMe(
+          { size: nextSize, mode: nextMode, vocabulary_ids: nextVocabularyIds || [], fast_start: false, incremental: true },
           { signal: controller.signal },
         );
-        if (!result?.exercises?.length) throw new Error("Не удалось получить задание.");
-        const allExercises = result.exercises;
+
+        let allExercises = incrementalResult?.exercises || [];
+
+        // Если буфер был пуст или дал меньше одного — ждём синхронной генерации
+        if (allExercises.length === 0) {
+          const fullResult = await api.generateExercisesMe(
+            { size: nextSize, mode: nextMode, vocabulary_ids: nextVocabularyIds || [], fast_start: false, incremental: false },
+            { signal: controller.signal },
+          );
+          allExercises = fullResult?.exercises || [];
+        }
+
+        if (!allExercises.length) throw new Error("Не удалось получить задание.");
 
         setMode(nextMode);
         setSize(nextSize);
@@ -77,6 +117,12 @@ export function useTrainingSession({ onError }) {
         setBufferExercises(allExercises.slice(1));
         setSessionResult(null);
         setIsTrainingActive(true);
+
+        // Если получили меньше запрошенного — догружаем остаток в фоне
+        const missing = nextSize - allExercises.length;
+        if (missing > 0) {
+          fetchMissingInBackground(missing, nextMode, nextVocabularyIds);
+        }
       } finally {
         releaseController(controller);
       }
@@ -115,6 +161,7 @@ export function useTrainingSession({ onError }) {
 
     const nextIndex = currentIndex + 1;
     if (nextIndex >= size) {
+      cancelBgFetch();
       const controller = registerController();
       try {
         await submitSession(nextAnswers, controller.signal);
@@ -133,12 +180,31 @@ export function useTrainingSession({ onError }) {
     }
 
     const [nextExercise, ...rest] = bufferExercises;
+    if (!nextExercise) {
+      // Буфер ещё не догрузился — показываем лоадер и ждём
+      setCurrentExercise(null);
+      setLoadingCurrent(true);
+      setSubmittingCurrent(false);
+      setCurrentIndex(nextIndex);
+      setCurrentAnswer("");
+      return;
+    }
     setCurrentExercise(nextExercise);
     setBufferExercises(rest);
     setCurrentIndex(nextIndex);
     setCurrentAnswer("");
     setSubmittingCurrent(false);
   }
+
+  // Когда фоновый запрос догрузил упражнения и мы ждали — берём следующее из буфера
+  useEffect(() => {
+    if (loadingCurrent && isTrainingActive && !currentExercise && bufferExercises.length > 0) {
+      const [next, ...rest] = bufferExercises;
+      setCurrentExercise(next);
+      setBufferExercises(rest);
+      setLoadingCurrent(false);
+    }
+  }, [bufferExercises, loadingCurrent, isTrainingActive, currentExercise]);
 
   const answerReady = useMemo(() => {
     if (!currentExercise) return false;

@@ -88,16 +88,29 @@ class ExerciseMaterialService:
         candidate = candidate.replace("**", "").replace("__", "").replace("`", "")
         return re.sub(r"\s+", " ", candidate).strip()
 
+    def _is_sentence_ru_valid(self, sentence_ru: str) -> bool:
+        """Проверяет, что русский перевод — полное предложение, а не обрывок."""
+        cleaned = sentence_ru.strip()
+        if not cleaned:
+            return False
+        all_words = re.findall(r"[А-Яа-яЁёA-Za-z]+", cleaned)
+        if len(all_words) < 3:
+            return False
+        ru_words = [w for w in all_words if re.search(r"[А-Яа-яЁё]", w)]
+        return len(ru_words) / len(all_words) >= 0.7
+
     def _parse_sentence_translation_payload(self, raw: str) -> tuple[str, str] | None:
         payload = _extract_json_payload(raw)
         if not isinstance(payload, dict):
             return None
 
         sentence_en = str(payload.get("sentence_en", "")).strip()
-        sentence_ru = str(payload.get("sentence_ru", "")).strip()
+        sentence_ru = str(payload.get("sentence_ru", "")).strip().strip('"')
         if not sentence_en or not sentence_ru:
             return None
-        return self._sanitize_generated_sentence(sentence_en), sentence_ru.strip().strip('"')
+        if not self._is_sentence_ru_valid(sentence_ru):
+            return None
+        return self._sanitize_generated_sentence(sentence_en), sentence_ru
 
     def _translation_contains_target(self, translated_text: str, target_translation: str) -> bool:
         target_norm = target_translation.strip().lower().replace("ё", "е")
@@ -120,41 +133,56 @@ class ExerciseMaterialService:
         cefr_level: str,
     ) -> tuple[str, str] | None:
         history = self._recent_sentences.setdefault(seed.english_lemma.strip().lower(), deque(maxlen=8))
+        cluster_hint_line = (
+            f"- you may naturally include this related word from the same topic: {seed.cluster_word_hint}\n"
+            if seed.cluster_word_hint
+            else ""
+        )
+        system_prompt = (
+            "You are an English teacher creating translation exercises for Russian-speaking learners. "
+            "Your task: generate one English sentence and its accurate, grammatically correct Russian translation. "
+            "Rules for sentence_ru:\n"
+            "- must be a complete, natural Russian sentence\n"
+            "- all words must be in correct grammatical form (case, gender, number, tense)\n"
+            "- no English words in the translation\n"
+            "- do not transliterate\n"
+            "Return only JSON with keys sentence_en and sentence_ru. No markdown."
+        )
         prompts = [
             (
-                "You are an English teacher for a Russian-speaking learner. "
-                "Return only JSON with keys sentence_en and sentence_ru.",
-                (
-                    f"Target word: {seed.english_lemma}\n"
-                    f"Target translation in Russian: {seed.russian_translation}\n"
-                    f"CEFR level: {cefr_level}\n"
-                    f"Avoid repeating these recent sentences: {json.dumps(list(history), ensure_ascii=False)}\n"
-                    f"User context hint: {seed.source_sentence or 'none'}\n"
-                    "Generate exactly one natural English sentence and its Russian translation.\n"
-                    "Constraints:\n"
-                    "- everyday context only\n"
-                    "- include the target word exactly once in sentence_en\n"
-                    "- preserve meaning exactly in sentence_ru\n"
-                    "- sentence_ru must use the provided Russian translation or its correct inflected form\n"
-                    "- no markdown\n"
-                    'Format: {"sentence_en":"...","sentence_ru":"..."}'
-                ),
+                f"Target word: {seed.english_lemma}\n"
+                f"Russian translation of the target word: {seed.russian_translation}\n"
+                f"CEFR level: {cefr_level}\n"
+                f"Avoid repeating these recent sentences: {json.dumps(list(history), ensure_ascii=False)}\n"
+                f"User context hint: {seed.source_sentence or 'none'}\n"
+                "Generate exactly one natural English sentence and its Russian translation.\n"
+                "Constraints:\n"
+                "- everyday context only\n"
+                "- include the target word exactly once in sentence_en\n"
+                "- the sentence must be built around the target word; do not include other study vocabulary words as key concepts\n"
+                f"{cluster_hint_line}"
+                "- sentence_ru must preserve the full meaning of sentence_en\n"
+                "- sentence_ru must use the provided Russian translation or its correct inflected form\n"
+                'Format: {"sentence_en":"...","sentence_ru":"..."}'
             ),
             (
-                "You are an English teacher for a Russian-speaking learner. "
-                "Return only JSON with keys sentence_en and sentence_ru.",
-                (
-                    f"Target word: {seed.english_lemma}\n"
-                    f"Mandatory Russian translation for the target word: {seed.russian_translation}\n"
-                    f"CEFR level: {cefr_level}\n"
-                    "The translation must not replace the target word with a different object or concept.\n"
-                    "Generate exactly one sentence pair.\n"
-                    'Format: {"sentence_en":"...","sentence_ru":"..."}'
-                ),
+                f"Target word: {seed.english_lemma}\n"
+                f"Russian translation: {seed.russian_translation}\n"
+                f"CEFR level: {cefr_level}\n"
+                "Generate one sentence pair. The Russian translation must be fully grammatical — "
+                "correct gender agreement, correct case endings, correct verb conjugation.\n"
+                'Format: {"sentence_en":"...","sentence_ru":"..."}'
+            ),
+            (
+                f"Word: {seed.english_lemma} = {seed.russian_translation}\n"
+                f"CEFR: {cefr_level}\n"
+                "Write one simple English sentence using this word and translate it into Russian. "
+                "The Russian sentence must be completely in Russian with correct grammar.\n"
+                'Format: {"sentence_en":"...","sentence_ru":"..."}'
             ),
         ]
 
-        for system_prompt, user_prompt in prompts:
+        for user_prompt in prompts:
             content = await self._chat_complete_async(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
@@ -266,7 +294,10 @@ class ExerciseMaterialService:
                 if not content:
                     continue
                 translated = content.strip().strip('"')
-                if self._translation_contains_target(translated, seed.russian_translation):
+                if (
+                    self._is_sentence_ru_valid(translated)
+                    and self._translation_contains_target(translated, seed.russian_translation)
+                ):
                     return translated
 
         translated = self._translation_service.heuristic_translate(

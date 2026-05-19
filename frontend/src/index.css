@@ -13,11 +13,16 @@
 
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     margin: 0;
     @apply bg-gray-50 text-gray-900;
+  }
+
+  button, a, input, select, textarea {
+    touch-action: manipulation;
   }
 }
 

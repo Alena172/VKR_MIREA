@@ -48,7 +48,7 @@ function AuthPage({ onAuth }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 sm:p-6">
       <div className="card w-full max-w-sm">
         <div className="card-header text-center">
           <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
@@ -202,6 +202,17 @@ function AppShell({ userEmail, userName, userCefr, setUserCefr, error, setError,
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .generateExercisesMe(
+        { size: 5, mode: "sentence_translation_full", vocabulary_ids: [], fast_start: false, incremental: false },
+        { signal: controller.signal },
+      )
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
   async function updateCefr(level) {
     try {
       const data = await api.updateMe({ cefr_level: level });
@@ -214,9 +225,10 @@ function AppShell({ userEmail, userName, userCefr, setUserCefr, error, setError,
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <aside className="w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col h-screen sticky top-0">
-        <div className="p-6 border-b border-gray-200">
-          <h1 className="text-2xl font-bold text-primary-600">Учебная система</h1>
+      {/* Боковая навигация — только на планшете и десктопе */}
+      <aside className="hidden md:flex w-56 lg:w-64 bg-white shadow-lg border-r border-gray-200 flex-col h-screen sticky top-0 shrink-0">
+        <div className="p-4 lg:p-6 border-b border-gray-200">
+          <h1 className="text-xl lg:text-2xl font-bold text-primary-600">Учебная система</h1>
           <p className="text-sm text-gray-600 mt-1">Умный словарь</p>
 
           <div className="mt-4 relative" ref={profileRef}>
@@ -262,7 +274,7 @@ function AppShell({ userEmail, userName, userCefr, setUserCefr, error, setError,
           </div>
         </div>
 
-        <nav className="p-4 flex-1 overflow-y-auto">
+        <nav className="p-3 lg:p-4 flex-1 overflow-y-auto">
           {NAVIGATION.map((item) => {
             const Icon = item.icon;
             return (
@@ -271,43 +283,109 @@ function AppShell({ userEmail, userName, userCefr, setUserCefr, error, setError,
                 to={item.href}
                 end={item.href === "/"}
                 className={({ isActive }) =>
-                  `flex items-center px-4 py-3 mb-2 rounded-lg transition-colors ${
+                  `flex items-center px-3 lg:px-4 py-3 mb-1 rounded-lg transition-colors ${
                     isActive
                       ? "bg-primary-50 text-primary-600 border-r-2 border-primary-600"
                       : "text-gray-600 hover:bg-gray-100"
                   }`
                 }
               >
-                <Icon className="h-5 w-5 mr-3" />
-                <span className="font-medium">{item.name}</span>
+                <Icon className="h-5 w-5 mr-3 shrink-0" />
+                <span className="font-medium text-sm lg:text-base truncate">{item.name}</span>
               </NavLink>
             );
           })}
         </nav>
 
-        <div className="px-4 pb-4 border-t border-gray-200 pt-4">
-          <button type="button" onClick={logout} className="btn-secondary w-full">
+        <div className="px-3 lg:px-4 pb-4 border-t border-gray-200 pt-4">
+          <button type="button" onClick={logout} className="btn-secondary w-full text-sm">
             Выйти
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">
-          <Routes>
-            <Route path="/" element={<HomePage onError={setError} />} />
-            <Route path="/vocabulary" element={<VocabularyPage onError={setError} />} />
-            <Route path="/exercises" element={<TrainingPage onError={setError} />} />
-            <Route path="/review" element={<ReviewPage onError={setError} />} />
-            <Route path="/history" element={<SessionsHistoryPage onError={setError} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Верхняя шапка — только на мобильном */}
+        <header className="md:hidden sticky top-0 z-30 flex items-center justify-between bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
+          <h1 className="text-lg font-bold text-primary-600">Учебная система</h1>
+          <div className="relative" ref={profileRef}>
+            <button
+              type="button"
+              onClick={() => setProfileOpen((v) => !v)}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-bold text-sm">
+                {(userName || userEmail)?.[0]?.toUpperCase() ?? "?"}
+              </div>
+              <span className="text-xs text-gray-500">{userCefr}</span>
+              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${profileOpen ? "rotate-180" : ""}`} />
+            </button>
+            {profileOpen && (
+              <div className="absolute right-0 z-50 mt-1 w-48 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+                <div className="px-3 py-2 border-b border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Уровень языка</p>
+                </div>
+                <div className="p-1">
+                  {["A1", "A2", "B1", "B2", "C1", "C2"].map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => updateCefr(level)}
+                      className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        level === userCefr ? "bg-primary-50 text-primary-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {level}{level === userCefr && <span className="ml-2 text-primary-400">✓</span>}
+                    </button>
+                  ))}
+                </div>
+                <div className="p-2 border-t border-gray-100">
+                  <button type="button" onClick={logout} className="btn-secondary w-full text-sm">Выйти</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </header>
 
-          {error ? (
-            <div className="mt-6 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">{error}</div>
-          ) : null}
-        </div>
-      </main>
+        <main className="flex-1 overflow-auto pb-20 md:pb-0">
+          <div className="p-4 md:p-6 lg:p-8">
+            <Routes>
+              <Route path="/" element={<HomePage onError={setError} />} />
+              <Route path="/vocabulary" element={<VocabularyPage onError={setError} />} />
+              <Route path="/exercises" element={<TrainingPage onError={setError} />} />
+              <Route path="/review" element={<ReviewPage onError={setError} />} />
+              <Route path="/history" element={<SessionsHistoryPage onError={setError} />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+
+            {error ? (
+              <div className="mt-6 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">{error}</div>
+            ) : null}
+          </div>
+        </main>
+
+        {/* Нижняя навигация — только на мобильном */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around border-t border-gray-200 bg-white px-1 py-2 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+          {NAVIGATION.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.href}
+                to={item.href}
+                end={item.href === "/"}
+                className={({ isActive }) =>
+                  `flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-colors min-w-0 flex-1 ${
+                    isActive ? "text-primary-600" : "text-gray-500"
+                  }`
+                }
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                <span className="text-[10px] font-medium leading-tight truncate max-w-full">{item.name}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+      </div>
     </div>
   );
 }
@@ -484,37 +562,37 @@ function HomePage({ onError }) {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <header>
-        <h1 className="text-3xl font-bold text-gray-900">Добро пожаловать!</h1>
-        <p className="text-gray-600 mt-2">Начните изучать английские слова с умным подходом</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Добро пожаловать!</h1>
+        <p className="text-gray-600 mt-1 text-sm md:mt-2 md:text-base">Начните изучать английские слова с умным подходом</p>
       </header>
 
       {!loading && (
-        <section className="grid gap-4 sm:grid-cols-2">
+        <section className="grid gap-3 sm:grid-cols-2 md:gap-4">
           <StreakBlock streak={stats.streak} sessionsTotal={stats.sessions_total} />
           <VocabLevelBlock mastered={stats.mastered} total={stats.total_words} />
         </section>
       )}
 
       <section>
-        <h2 className="text-2xl font-semibold text-gray-900 mb-6">Ваша статистика</h2>
+        <h2 className="text-xl md:text-2xl font-semibold text-gray-900 mb-4 md:mb-6">Ваша статистика</h2>
         {loading ? (
           <div className="card p-6 text-gray-600">Загрузка...</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
             {statsCards.map((stat, index) => {
               const Icon = stat.icon;
               return (
-                <div key={stat.name} className="card p-6 animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
+                <div key={stat.name} className="card p-4 md:p-6 animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
                   <div className="flex items-center">
-                    <div className={`p-3 rounded-lg ${stat.iconWrap}`}>
-                      <Icon className={`h-6 w-6 ${stat.iconColor}`} />
+                    <div className={`p-2 md:p-3 rounded-lg ${stat.iconWrap}`}>
+                      <Icon className={`h-5 w-5 md:h-6 md:w-6 ${stat.iconColor}`} />
                     </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                      <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                      <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
+                    <div className="ml-3 md:ml-4 min-w-0">
+                      <p className="text-xs md:text-sm font-medium text-gray-600 truncate">{stat.name}</p>
+                      <p className="text-xl md:text-2xl font-bold text-gray-900">{stat.value}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 hidden sm:block">{stat.description}</p>
                     </div>
                   </div>
                 </div>
@@ -525,24 +603,24 @@ function HomePage({ onError }) {
       </section>
 
       <section className="actions-section">
-        <h2 className="text-2xl font-semibold text-gray-900 mb-6">Быстрые действия</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <h2 className="text-xl md:text-2xl font-semibold text-gray-900 mb-4 md:mb-6">Быстрые действия</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6">
           {quickActions.map((action, index) => {
             const Icon = action.icon;
             return (
               <Link
                 key={action.label}
                 to={action.path}
-                className="card p-6 hover:shadow-md transition-shadow duration-200 animate-slide-up block"
+                className="card p-4 md:p-6 hover:shadow-md transition-shadow duration-200 animate-slide-up block"
                 style={{ animationDelay: `${index * 100}ms` }}
               >
-                <div className="flex items-center mb-4">
+                <div className="flex items-center mb-2 md:mb-4">
                   <div className="p-2 rounded-lg bg-primary-100">
                     <Icon className="h-5 w-5 text-primary-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 ml-3">{action.label}</h3>
+                  <h3 className="text-base md:text-lg font-semibold text-gray-900 ml-3">{action.label}</h3>
                 </div>
-                <p className="text-gray-600 text-sm">{action.description}</p>
+                <p className="text-gray-600 text-sm hidden sm:block">{action.description}</p>
               </Link>
             );
           })}

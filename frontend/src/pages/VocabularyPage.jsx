@@ -7,11 +7,11 @@ import { saveReviewFocus, saveTrainingPreset } from "../lib/studyPresets";
 
 const FILTER_OPTIONS = [
   { value: "all", label: "Все слова" },
+  { value: "phrases", label: "Фразы" },
   { value: "due", label: "К повторению" },
   { value: "troubled", label: "Трудные" },
   { value: "mastered", label: "Закрепленные" },
   { value: "new", label: "Новые" },
-  { value: "no_definition", label: "Без определения" },
   { value: "no_context", label: "Без контекста" },
 ];
 
@@ -69,16 +69,10 @@ function getVocabularyState(item, progress) {
 }
 
 function matchesFilter(item, progress, filterValue) {
+  if (filterValue === "all") return true;
+  if (filterValue === "phrases") return item.is_phrase === true;
+  if (filterValue === "no_context") return !item.source_sentence;
   const state = getVocabularyState(item, progress);
-  if (filterValue === "all") {
-    return true;
-  }
-  if (filterValue === "no_definition") {
-    return !item.context_definition_ru;
-  }
-  if (filterValue === "no_context") {
-    return !item.source_sentence;
-  }
   return state.key === filterValue;
 }
 
@@ -123,6 +117,8 @@ export default function VocabularyPage({ onError }) {
   const [editingId, setEditingId] = useState(null);
   const [editSentence, setEditSentence] = useState("");
   const [editUrl, setEditUrl] = useState("");
+  const [editPhraseEn, setEditPhraseEn] = useState("");
+  const [editPhraseRu, setEditPhraseRu] = useState("");
   const [sensesItemId, setSensesItemId] = useState(null);
   const [senses, setSenses] = useState([]);
   const [sensesLoading, setSensesLoading] = useState(false);
@@ -208,24 +204,26 @@ export default function VocabularyPage({ onError }) {
     setEditingId(item.id);
     setEditSentence(item.source_sentence || "");
     setEditUrl(item.source_url || "");
+    setEditPhraseEn(item.is_phrase ? item.english_lemma : "");
+    setEditPhraseRu(item.is_phrase ? item.russian_translation : "");
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditSentence("");
     setEditUrl("");
+    setEditPhraseEn("");
+    setEditPhraseRu("");
   }
 
-  async function saveEdit(event) {
+  async function saveEdit(event, item) {
     event.preventDefault();
-    if (!editingId) {
-      return;
-    }
+    if (!editingId) return;
+    const payload = item.is_phrase
+      ? { phrase_en: editPhraseEn || null, phrase_ru: editPhraseRu || null, source_sentence: editSentence || null, source_url: editUrl || null }
+      : { source_sentence: editSentence || null, source_url: editUrl || null };
     try {
-      await api.updateVocabularyMe(editingId, {
-        source_sentence: editSentence || null,
-        source_url: editUrl || null,
-      });
+      await api.updateVocabularyMe(editingId, payload);
       cancelEdit();
       await loadVocabulary();
     } catch (error) {
@@ -417,19 +415,17 @@ export default function VocabularyPage({ onError }) {
           {recommendationsLoading ? (
             <p className="muted text-sm">Загружаю рекомендации...</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
               {recommendations.map((rec) => {
                 const isAdding = addingLemmas.has(rec.english_lemma);
                 const isAdded = addedLemmas.has(rec.english_lemma);
                 return (
                   <div
                     key={rec.english_lemma}
-                    className={`flex flex-col gap-1.5 rounded-2xl border px-5 py-4 transition-colors ${isAdded ? "border-green-200 bg-green-50" : "border-blue-100 bg-blue-50"}`}
+                    className={`flex flex-col gap-1 rounded-2xl border px-3 py-3 sm:px-5 sm:py-4 transition-colors ${isAdded ? "border-green-200 bg-green-50" : "border-blue-100 bg-blue-50"}`}
                   >
-                    <div className="flex items-baseline gap-2">
-                      <span className={`text-lg font-extrabold ${isAdded ? "text-green-900" : "text-blue-900"}`}>{rec.english_lemma}</span>
-                      <span className={`text-sm ${isAdded ? "text-green-700" : "text-blue-700"}`}>{rec.russian_translation}</span>
-                    </div>
+                    <span className={`text-base font-extrabold leading-tight ${isAdded ? "text-green-900" : "text-blue-900"}`}>{rec.english_lemma}</span>
+                    <span className={`text-xs leading-tight ${isAdded ? "text-green-700" : "text-blue-700"}`}>{rec.russian_translation}</span>
                     <button
                       type="button"
                       disabled={isAdding || isAdded}
@@ -483,12 +479,12 @@ export default function VocabularyPage({ onError }) {
       </div>
 
       <section className="surface p-4 md:p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div>
             <h3 className="text-base font-extrabold text-gray-900">Слова пользователя</h3>
             <p className="muted mt-1 text-sm">Фильтруй словарь по состоянию изучения и быстро находи проблемные карточки.</p>
           </div>
-          <input className="field max-w-xs" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Поиск EN/RU/определение" />
+          <input className="field w-full sm:max-w-xs" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Поиск EN/RU/определение" />
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -506,7 +502,7 @@ export default function VocabularyPage({ onError }) {
               {option.label}
             </button>
           ))}
-          <select className="field ml-auto max-w-xs" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+          <select className="field w-full sm:w-auto sm:ml-auto sm:max-w-xs mt-1 sm:mt-0" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -521,8 +517,8 @@ export default function VocabularyPage({ onError }) {
             const state = getVocabularyState(item, progress);
             return (
               <li key={item.id} className="surface p-4 md:p-5">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
-                  <div className="min-w-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                  <div className="min-w-0 flex-1">
                     <div className="text-base font-extrabold text-gray-900">{item.english_lemma} <span className="font-medium text-[var(--text)]">- {item.russian_translation}</span></div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${state.toneClass}`}>
@@ -544,14 +540,20 @@ export default function VocabularyPage({ onError }) {
                     ) : null}
                     {item.source_sentence ? <div className="muted mt-2 text-sm">{item.source_sentence}</div> : null}
                   </div>
-                  <div className="flex shrink-0 flex-col gap-2 self-start">
-                    <button className="btn-primary !px-3.5 !py-2 !text-sm" type="button" onClick={() => startEdit(item)}>Изменить контекст</button>
-                    <button className="btn-secondary !px-3.5 !py-2 !text-sm" type="button" onClick={() => openSenses(item)}>Другие значения</button>
-                    <button className="btn-danger !px-3.5 !py-2 !text-sm" type="button" onClick={() => deleteItem(item.id)}>Удалить</button>
+                  <div className="flex shrink-0 flex-row gap-2 sm:w-44 sm:flex-col">
+                    <button className="btn-primary flex-1 sm:flex-none sm:w-full !px-3 !py-2 !text-sm" type="button" onClick={() => startEdit(item)}>{item.is_phrase ? "Редактировать" : "Изменить контекст"}</button>
+                    {!item.is_phrase && <button className="btn-secondary flex-1 sm:flex-none sm:w-full !px-3 !py-2 !text-sm" type="button" onClick={() => openSenses(item)}>Другие значения</button>}
+                    <button className="btn-danger flex-1 sm:flex-none sm:w-full !px-3 !py-2 !text-sm" type="button" onClick={() => deleteItem(item.id)}>Удалить</button>
                   </div>
                 </div>
                 {editingId === item.id && (
-                  <form className="mt-3 grid gap-2 border-t border-gray-100 pt-3" onSubmit={saveEdit}>
+                  <form className="mt-3 grid gap-2 border-t border-gray-100 pt-3" onSubmit={(e) => saveEdit(e, item)}>
+                    {item.is_phrase && (
+                      <>
+                        <input className="field" value={editPhraseEn} onChange={(e) => setEditPhraseEn(e.target.value)} placeholder="Фраза (EN)" />
+                        <input className="field" value={editPhraseRu} onChange={(e) => setEditPhraseRu(e.target.value)} placeholder="Перевод (RU)" />
+                      </>
+                    )}
                     <textarea className="field" rows={2} value={editSentence} onChange={(e) => setEditSentence(e.target.value)} placeholder="Контекстное предложение" />
                     <input className="field" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="URL источника" />
                     <div className="flex gap-2">
