@@ -43,6 +43,8 @@ async def generate_me(
                 exercise_type=e.exercise_type,
                 target_word=e.target_word,
                 options=e.options,
+                topic_cluster_key=e.topic_cluster_key,
+                topic_display_name=e.topic_display_name,
             )
             for e in result.exercises
         ],

@@ -238,6 +238,90 @@ class ExerciseMaterialService:
                 return sentence_en, sentence_ru
         return None
 
+    async def generate_sentence_batch(
+        self,
+        *,
+        seeds: list[ExerciseSeed],
+        cefr_level: str,
+    ) -> list[tuple[str, str] | None]:
+        """Генерирует пары (sentence_en, sentence_ru) для списка seeds одним LLM-запросом.
+        Возвращает список той же длины: None на месте провалившихся слов."""
+        import random
+
+        situation = random.choice(self._SITUATION_POOL)
+        words_block = "\n".join(
+            f'{i + 1}. word="{s.english_lemma}" meaning="{s.russian_translation}"'
+            for i, s in enumerate(seeds)
+        )
+
+        system_prompt = (
+            "You are an English teacher creating translation exercises for Russian-speaking learners.\n"
+            "For each word, write ONE English sentence using it, then translate it to Russian.\n"
+            "\n"
+            "Requirements for sentence_en:\n"
+            "- sounds like something a real person says in everyday life\n"
+            "- uses the word in its MOST COMMON, NATURAL collocation\n"
+            "- fits the given situation\n"
+            "- ask yourself: 'Would a native English speaker say this?' If no — rewrite\n"
+            "- do NOT copy the word's original context — invent a fresh sentence\n"
+            "\n"
+            "CRITICAL — reject if sentence_en:\n"
+            "- uses word in an impossible collocation (e.g. 'booking a book', 'discover a skill')\n"
+            "- uses word in a meaning that doesn't match the Russian translation\n"
+            "\n"
+            "Requirements for sentence_ru:\n"
+            "- complete, grammatically correct Russian sentence\n"
+            "- natural Russian, no English words\n"
+            "\n"
+            'Return ONLY a JSON array with one object per word: [{"sentence_en":"...","sentence_ru":"..."}, ...]'
+            "\nNo markdown, no comments, no extra fields."
+        )
+
+        user_prompt = (
+            f"CEFR level: {cefr_level}\n"
+            f"Situation: {situation}\n\n"
+            f"Words:\n{words_block}\n\n"
+            f'Return a JSON array of {len(seeds)} objects in the same order as the words above.'
+        )
+
+        content = await self._chat_complete_async(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.7,
+            max_tokens=200 * len(seeds),
+        )
+
+        if not content:
+            return [None] * len(seeds)
+
+        parsed = _extract_json_payload(content)
+        if not isinstance(parsed, list) or len(parsed) != len(seeds):
+            return [None] * len(seeds)
+
+        results: list[tuple[str, str] | None] = []
+        for item, seed in zip(parsed, seeds):
+            if not isinstance(item, dict):
+                results.append(None)
+                continue
+            sentence_en = self._sanitize_generated_sentence(str(item.get("sentence_en", "")))
+            sentence_ru = str(item.get("sentence_ru", "")).strip().strip('"')
+            word = seed.english_lemma.strip().lower()
+            if (
+                sentence_en
+                and sentence_ru
+                and self._is_sentence_suitable(sentence_en, word, cefr_level)
+                and self._is_sentence_ru_valid(sentence_ru)
+                and self._translation_contains_target(sentence_ru, seed.russian_translation)
+            ):
+                history = self._recent_sentences.setdefault(word, deque(maxlen=8))
+                if sentence_en not in history:
+                    history.append(sentence_en)
+                results.append((sentence_en, sentence_ru))
+            else:
+                results.append(None)
+
+        return results
+
     async def generate_sentence_with_word(
         self,
         *,

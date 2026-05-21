@@ -239,6 +239,13 @@ class AIFacade:
     ) -> tuple[str, str] | None:
         return await self._exercise_materials.generate_sentence_pair(seed=seed, cefr_level=cefr_level)
 
+    async def generate_sentence_batch_async(
+        self,
+        seeds: list,
+        cefr_level: str,
+    ) -> list:
+        return await self._exercise_materials.generate_sentence_batch(seeds=seeds, cefr_level=cefr_level)
+
     async def build_sentence_for_word_async(
         self,
         *,

@@ -1,13 +1,26 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import random
 import re
 
+import logging
+
 from app.modules.ai.facade import ai_facade as ai_service
 from app.modules.ai.schemas import ExerciseSeed
 from app.modules.training.schemas import ExerciseDTO
+
+logger = logging.getLogger(__name__)
+
+
+def _topic_display_name(topic_cluster_key: str | None) -> str | None:
+    if not topic_cluster_key:
+        return None
+    from app.modules.graph.repository import GraphRepository
+    entry = GraphRepository._TOPIC_MARKERS.get(topic_cluster_key)
+    if entry:
+        return entry[0]
+    return topic_cluster_key.replace("-", " ").title()
 
 
 def _is_valid_sentence_answer(sentence_ru: str | None) -> bool:
@@ -53,24 +66,29 @@ class ExerciseBuilder:
             return items, f"local_fast_start_template{level_note}"
 
         effective_size = min(size, len(seeds))
-        scheduled_seeds = [(seeds[idx], idx) for idx in range(effective_size)]
-        semaphore = asyncio.Semaphore(4)
+        scheduled_seeds = seeds[:effective_size]
 
-        async def _build_exercise(seed: ExerciseSeed, idx: int) -> ExerciseDTO:
-            async with semaphore:
-                if mode == "word_scramble":
-                    return self._build_word_scramble_exercise(seed)
-                if mode == "word_definition_match":
+        if mode == "word_scramble":
+            items = []
+            for seed in scheduled_seeds:
+                try:
+                    items.append(self._build_word_scramble_exercise(seed))
+                except Exception:
+                    pass
+        elif mode == "word_definition_match":
+            items = []
+            for idx, seed in enumerate(scheduled_seeds):
+                try:
                     start = idx % len(seeds)
                     rotated_pool = seeds[start:] + seeds[:start]
-                    return self._build_word_definition_match_exercise(seed, rotated_pool)
-                return await self._build_sentence_translation_exercise(seed, cefr_level=cefr_level)
-
-        results = await asyncio.gather(
-            *(_build_exercise(seed, idx) for seed, idx in scheduled_seeds),
-            return_exceptions=True,
-        )
-        items = [r for r in results if isinstance(r, ExerciseDTO)]
+                    items.append(self._build_word_definition_match_exercise(seed, rotated_pool))
+                except Exception:
+                    pass
+        else:
+            items = await self._build_sentence_translation_batch(
+                seeds=scheduled_seeds,
+                cefr_level=cefr_level,
+            )
         level_note = f" CEFR={cefr_level}." if cefr_level else ""
         provider_note = (
             f"remote_sentence_pipeline{level_note}"
@@ -122,6 +140,54 @@ class ExerciseBuilder:
             cleaned = f"{cleaned}."
         return cleaned
 
+    async def _build_sentence_translation_batch(
+        self,
+        seeds: list[ExerciseSeed],
+        cefr_level: str,
+    ) -> list[ExerciseDTO]:
+        """Генерирует упражнения батчами по 5: один LLM-запрос на 5 слов.
+        Для слов, где батч вернул None, делает одиночный повторный запрос."""
+        BATCH_SIZE = 5
+        items: list[ExerciseDTO] = []
+        fallback_seeds: list[ExerciseSeed] = []
+
+        for batch_start in range(0, len(seeds), BATCH_SIZE):
+            batch = seeds[batch_start: batch_start + BATCH_SIZE]
+            pairs = await ai_service.generate_sentence_batch_async(batch, cefr_level=cefr_level)
+            ok = sum(1 for p in pairs if p is not None)
+            logger.info("batch generation: %d/%d succeeded for batch starting at %d", ok, len(batch), batch_start)
+            for seed, pair in zip(batch, pairs):
+                if pair is not None:
+                    sentence_en, sentence_ru = pair
+                    items.append(ExerciseDTO(
+                        prompt=f"Translate sentence into Russian: {sentence_en}",
+                        answer=sentence_ru,
+                        exercise_type="sentence_translation_full",
+                        target_word=seed.english_lemma.strip().lower(),
+                        options=[],
+                        topic_cluster_key=seed.topic_cluster_key,
+                        topic_display_name=_topic_display_name(seed.topic_cluster_key),
+                    ))
+                else:
+                    fallback_seeds.append(seed)
+
+        # Одиночный фолбэк для слов, где батч не сработал
+        import asyncio
+        semaphore = asyncio.Semaphore(4)
+
+        async def _single(seed: ExerciseSeed) -> ExerciseDTO | None:
+            async with semaphore:
+                try:
+                    return await self._build_sentence_translation_exercise(seed, cefr_level=cefr_level)
+                except Exception:
+                    return None
+
+        if fallback_seeds:
+            fallback_results = await asyncio.gather(*(_single(s) for s in fallback_seeds))
+            items.extend(r for r in fallback_results if r is not None)
+
+        return items
+
     def _build_fast_start_sentence_translation_exercise(self, seed: ExerciseSeed) -> ExerciseDTO:
         normalized_word = seed.english_lemma.strip().lower()
         translation = seed.russian_translation.strip()
@@ -134,6 +200,8 @@ class ExerciseBuilder:
             exercise_type="sentence_translation_full",
             target_word=normalized_word,
             options=[],
+            topic_cluster_key=seed.topic_cluster_key,
+            topic_display_name=_topic_display_name(seed.topic_cluster_key),
         )
 
     async def _build_sentence_translation_exercise(
@@ -155,6 +223,8 @@ class ExerciseBuilder:
             exercise_type="sentence_translation_full",
             target_word=seed.english_lemma.strip().lower(),
             options=[],
+            topic_cluster_key=seed.topic_cluster_key,
+            topic_display_name=_topic_display_name(seed.topic_cluster_key),
         )
 
     def _build_word_definition_match_exercise(
@@ -195,6 +265,8 @@ class ExerciseBuilder:
             exercise_type="word_definition_match",
             target_word=None,
             options=definitions,
+            topic_cluster_key=seed.topic_cluster_key,
+            topic_display_name=_topic_display_name(seed.topic_cluster_key),
         )
 
     def _build_word_scramble_exercise(self, seed: ExerciseSeed) -> ExerciseDTO:
@@ -208,6 +280,8 @@ class ExerciseBuilder:
             exercise_type="word_scramble",
             target_word=normalized_answer,
             options=letters,
+            topic_cluster_key=seed.topic_cluster_key,
+            topic_display_name=_topic_display_name(seed.topic_cluster_key),
         )
 
 

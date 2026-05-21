@@ -107,6 +107,9 @@ class VocabularyService:
         )
         return [_to_dto(uv, entry) for uv, entry in self._repo.list_user_vocabulary(user_id=target_user_id)]
 
+    def count_user_items(self, *, user_id: int) -> int:
+        return self._repo.count_user_vocabulary(user_id=user_id)
+
     def list_user_items(self, *, user_id: int) -> list[VocabularyItemDTO]:
         return [_to_dto(uv, entry) for uv, entry in self._repo.list_user_vocabulary(user_id=user_id)]
 

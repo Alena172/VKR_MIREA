@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, getErrorMessage, isAbortError } from "../lib/api";
 import { useAbortControllers } from "./useAbortControllers";
 import { usePendingReview } from "../context/PendingReviewContext";
@@ -21,7 +21,7 @@ export function useTrainingSession({ onError }) {
   const [isTrainingActive, setIsTrainingActive] = useState(false);
   const { abortAllRequests, registerController, releaseController } = useAbortControllers();
   const bgFetchControllerRef = useRef(null);
-  const { registerPendingSession, getResolvedResult, isPending } = usePendingReview();
+  const { registerPendingSession, getResolvedResult } = usePendingReview();
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
@@ -41,7 +41,7 @@ export function useTrainingSession({ onError }) {
     setBufferExercises([]);
     setSubmittedAnswers([]);
     setSessionResult(null);
-    setLlmPending(false);
+    setLlmPending(false); // локальный флаг — сбрасываем, polling в PendingReviewContext продолжается независимо
     setIsTrainingActive(false);
     setLoadingCurrent(false);
     setSubmittingCurrent(false);
@@ -56,31 +56,28 @@ export function useTrainingSession({ onError }) {
     }
   }
 
-  /** Фоновая догрузка недостающих упражнений в буфер пока пользователь решает. */
-  const fetchMissingInBackground = useCallback((missing, nextMode, nextVocabularyIds) => {
-    cancelBgFetch();
-    const controller = new AbortController();
-    bgFetchControllerRef.current = controller;
 
-    api
-      .generateExercisesMe(
-        { size: missing, mode: nextMode, vocabulary_ids: nextVocabularyIds || [], fast_start: false, incremental: false },
-        { signal: controller.signal },
-      )
-      .then((result) => {
-        if (result?.exercises?.length) {
-          setBufferExercises((prev) => [...prev, ...result.exercises]);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (bgFetchControllerRef.current === controller) {
-          bgFetchControllerRef.current = null;
-        }
+  /** Поллит буфер раз в 2 секунды пока не появятся упражнения (буфер заполняется Celery в фоне). */
+  async function pollUntilBufferReady(nextMode, nextVocabularyIds, nextSize, signal) {
+    const POLL_INTERVAL = 2000;
+    const MAX_ATTEMPTS = 30; // до 60 секунд
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(resolve, POLL_INTERVAL);
+        signal.addEventListener("abort", () => { clearTimeout(t); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
       });
-  }, []);
+      const result = await api.generateExercisesMe(
+        { size: nextSize, mode: nextMode, vocabulary_ids: nextVocabularyIds || [], fast_start: false, incremental: true },
+        { signal },
+      );
+      const exercises = result?.exercises || [];
+      if (exercises.length > 0) return exercises;
+    }
+    return [];
+  }
 
-  /** Запускает тренировку: сначала берёт из буфера (incremental), остаток догружает в фоне. */
+  /** Запускает тренировку: берёт из буфера мгновенно, при пустом буфере поллит пока Celery не заполнит. */
   async function startTraining(options = {}) {
     const nextMode = options.overrideMode || mode;
     const nextSize = options.overrideSize || size;
@@ -95,24 +92,29 @@ export function useTrainingSession({ onError }) {
     try {
       const controller = registerController();
       try {
-        // Сначала пробуем взять из серверного буфера (incremental=true — отдаёт сразу)
-        const incrementalResult = await api.generateExercisesMe(
-          { size: nextSize, mode: nextMode, vocabulary_ids: nextVocabularyIds || [], fast_start: false, incremental: true },
-          { signal: controller.signal },
-        );
+        const useBuffer = nextMode === "sentence_translation_full" && !(nextVocabularyIds?.length);
+        let allExercises = [];
 
-        let allExercises = incrementalResult?.exercises || [];
-
-        // Если буфер был пуст или дал меньше одного — ждём синхронной генерации
-        if (allExercises.length === 0) {
-          const fullResult = await api.generateExercisesMe(
+        if (useBuffer) {
+          // Буферный режим: берём из серверного буфера мгновенно, поллим если пуст
+          const incrementalResult = await api.generateExercisesMe(
+            { size: nextSize, mode: nextMode, vocabulary_ids: [], fast_start: false, incremental: true },
+            { signal: controller.signal },
+          );
+          allExercises = incrementalResult?.exercises || [];
+          if (allExercises.length === 0) {
+            allExercises = await pollUntilBufferReady(nextMode, [], nextSize, controller.signal);
+          }
+        } else {
+          // Быстрые режимы: синхронная генерация без буфера
+          const result = await api.generateExercisesMe(
             { size: nextSize, mode: nextMode, vocabulary_ids: nextVocabularyIds || [], fast_start: false, incremental: false },
             { signal: controller.signal },
           );
-          allExercises = fullResult?.exercises || [];
+          allExercises = result?.exercises || [];
         }
 
-        if (!allExercises.length) throw new Error("Не удалось получить задание.");
+        if (!allExercises.length) throw new Error("Не удалось получить задание. Попробуйте позже.");
 
         setMode(nextMode);
         setSize(nextSize);
@@ -125,12 +127,6 @@ export function useTrainingSession({ onError }) {
         setBufferExercises(allExercises.slice(1));
         setSessionResult(null);
         setIsTrainingActive(true);
-
-        // Если получили меньше запрошенного — догружаем остаток в фоне
-        const missing = nextSize - allExercises.length;
-        if (missing > 0) {
-          fetchMissingInBackground(missing, nextMode, nextVocabularyIds);
-        }
       } finally {
         releaseController(controller);
       }
@@ -188,31 +184,51 @@ export function useTrainingSession({ onError }) {
     }
 
     const [nextExercise, ...rest] = bufferExercises;
-    if (!nextExercise) {
-      // Буфер ещё не догрузился — показываем лоадер и ждём
-      setCurrentExercise(null);
-      setLoadingCurrent(true);
-      setSubmittingCurrent(false);
+    if (nextExercise) {
+      setCurrentExercise(nextExercise);
+      setBufferExercises(rest);
       setCurrentIndex(nextIndex);
       setCurrentAnswer("");
+      setSubmittingCurrent(false);
       return;
     }
-    setCurrentExercise(nextExercise);
-    setBufferExercises(rest);
+
+    // Локальный буфер пуст — догружаем следующее упражнение
+    setCurrentExercise(null);
+    setLoadingCurrent(true);
     setCurrentIndex(nextIndex);
     setCurrentAnswer("");
     setSubmittingCurrent(false);
+
+    const useBuffer = mode === "sentence_translation_full" && !selectedVocabularyIds?.length;
+    const controller = registerController();
+    (async () => {
+      try {
+        let exercises = [];
+        if (useBuffer) {
+          exercises = await pollUntilBufferReady(mode, [], size, controller.signal);
+        } else {
+          const result = await api.generateExercisesMe(
+            { size: size - nextIndex, mode, vocabulary_ids: selectedVocabularyIds || [], fast_start: false, incremental: false },
+            { signal: controller.signal },
+          );
+          exercises = result?.exercises || [];
+        }
+        if (exercises.length > 0) {
+          setCurrentExercise(exercises[0]);
+          setBufferExercises(exercises.slice(1));
+        } else {
+          onError("Не удалось загрузить следующее задание. Попробуйте позже.");
+        }
+      } catch (error) {
+        if (!isAbortError(error)) onError(getErrorMessage(error));
+      } finally {
+        releaseController(controller);
+        setLoadingCurrent(false);
+      }
+    })();
   }
 
-  // Когда фоновый запрос догрузил упражнения и мы ждали — берём следующее из буфера
-  useEffect(() => {
-    if (loadingCurrent && isTrainingActive && !currentExercise && bufferExercises.length > 0) {
-      const [next, ...rest] = bufferExercises;
-      setCurrentExercise(next);
-      setBufferExercises(rest);
-      setLoadingCurrent(false);
-    }
-  }, [bufferExercises, loadingCurrent, isTrainingActive, currentExercise]);
 
   // Когда LLM завершила проверку — обновляем sessionResult актуальными данными
   useEffect(() => {

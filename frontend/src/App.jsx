@@ -202,15 +202,28 @@ function AppShell({ userEmail, userName, userCefr, setUserCefr, error, setError,
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Прогреваем буфер переводов при логине и каждые 90 секунд.
+  // Только sentence_translation_full — остальные режимы генерируются быстро без буфера.
   useEffect(() => {
-    const controller = new AbortController();
-    api
-      .generateExercisesMe(
-        { size: 5, mode: "sentence_translation_full", vocabulary_ids: [], fast_start: false, incremental: false },
-        { signal: controller.signal },
-      )
-      .catch(() => {});
-    return () => controller.abort();
+    let controller = new AbortController();
+
+    function ping() {
+      controller.abort();
+      controller = new AbortController();
+      api
+        .generateExercisesMe(
+          { size: 10, mode: "sentence_translation_full", vocabulary_ids: [], fast_start: false, incremental: true },
+          { signal: controller.signal },
+        )
+        .catch(() => {});
+    }
+
+    ping();
+    const interval = setInterval(ping, 90_000);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
   }, []);
 
   async function updateCefr(level) {

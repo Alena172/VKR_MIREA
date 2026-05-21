@@ -19,7 +19,7 @@ from app.modules.training.service.exercise_builder import exercise_builder
 from app.modules.training.service.prefetch import prefetch_service
 from app.modules.vocabulary.service.items import VocabularyService
 
-_PREFETCH_EXTRA = 5
+_PREFETCH_EXTRA = 3  # сколько лишних упражнений генерировать сверх запроса при синхронном пути
 
 
 class TrainingService:
@@ -76,35 +76,28 @@ class TrainingService:
         incremental: bool = False,
     ) -> ExerciseGenerateResultDTO:
         user = self._get_user_or_404(user_id)
-        use_prefetch = not vocabulary_ids
+        use_prefetch = not vocabulary_ids and mode == "sentence_translation_full"
 
         prefetched: list[ExerciseDTO] = []
         if use_prefetch and prefetch_service.has_prefetch(user_id, mode):
             prefetched = prefetch_service.get_prefetched(user_id, mode, size)
 
-        # Incremental: отдаём буфер немедленно, генерацию запускаем в фоне через Celery
-        if incremental and prefetched:
-            missing = size - len(prefetched)
-            if missing > 0:
-                from app.tasks.exercise_tasks import generate_exercises_for_user
-                enqueue_task(
-                    generate_exercises_for_user,
-                    owner_user_id=user_id,
-                    kwargs={
-                        "user_id": user_id,
-                        "vocabulary_ids": [],
-                        "size": missing + _PREFETCH_EXTRA,
-                        "mode": mode,
-                        "fast_start": False,
-                        "incremental": False,
-                    },
-                )
+        # Проверяем есть ли слова в словаре — без них Celery-задача упадёт с ValueError
+        vocab_size = self._vocab_service.count_user_items(user_id=user_id) if use_prefetch else 0
+
+        # Incremental: отдаём буфер немедленно, пополнение запускается автоматически через watermark
+        if incremental:
+            if use_prefetch:
+                prefetch_service.trigger_refill_if_needed(user_id, mode, vocab_size=vocab_size)
             return ExerciseGenerateResultDTO(
                 exercises=prefetched,
-                note="incremental_partial; buffer_used",
+                note=f"incremental; buffer_used={len(prefetched)}",
             )
 
         if len(prefetched) >= size:
+            # Буфер выдан — запускаем пополнение если нужно
+            if use_prefetch:
+                prefetch_service.trigger_refill_if_needed(user_id, mode, vocab_size=vocab_size)
             return ExerciseGenerateResultDTO(
                 exercises=prefetched[:size],
                 note="prefetched_full",
@@ -116,6 +109,7 @@ class TrainingService:
             mode=mode,
         )
         required_count = size - len(prefetched)
+        # При синхронной генерации сразу кладём немного лишнего в буфер
         server_prefetch_extra = _PREFETCH_EXTRA if use_prefetch and not fast_start else 0
         generation_target = required_count + server_prefetch_extra
         seeds = self._build_seeds(user_id=user_id, vocabulary_items=vocabulary_items)
@@ -132,6 +126,8 @@ class TrainingService:
             extra_items = generated_items[required_count:]
             if extra_items:
                 prefetch_service.store_prefetch(user_id, mode, extra_items)
+            # После сохранения — проверяем нужно ли ещё пополнять
+            prefetch_service.trigger_refill_if_needed(user_id, mode, vocab_size=len(vocabulary_items))
 
         note_prefix = "prefetched_partial + " if prefetched else ""
         fast_start_note = "fast_start; " if fast_start else ""

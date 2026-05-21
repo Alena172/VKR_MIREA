@@ -185,6 +185,12 @@ class VocabularyRepository:
         self._db.refresh(item)
         return item, True
 
+    def count_user_vocabulary(self, *, user_id: int) -> int:
+        return int(self._db.scalar(
+            select(func.count(UserVocabularyModel.id))
+            .where(UserVocabularyModel.user_id == user_id)
+        ) or 0)
+
     def list_user_vocabulary(self, *, user_id: int) -> list[tuple[UserVocabularyModel, DictionaryEntryModel | None]]:
         word_rows = self._db.execute(
             select(UserVocabularyModel, DictionaryEntryModel)

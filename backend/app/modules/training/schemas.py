@@ -42,6 +42,8 @@ class ExerciseItem(BaseModel):
     exercise_type: str
     target_word: str | None = None
     options: list[str] = Field(default_factory=list)
+    topic_cluster_key: str | None = None
+    topic_display_name: str | None = None
 
 
 class ExerciseGenerateResponse(BaseModel):
@@ -123,6 +125,8 @@ class ExerciseDTO:
     exercise_type: str
     target_word: str | None
     options: list[str]
+    topic_cluster_key: str | None = None
+    topic_display_name: str | None = None
 
 
 @dataclass(frozen=True)
