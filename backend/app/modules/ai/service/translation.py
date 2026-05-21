@@ -61,7 +61,7 @@ class TranslationService:
     _AMBIGUOUS_MAP = {
         "right": {"left": "право", "correct": "правильный", "answer": "правильный"},
         "light": {"lamp": "свет", "dark": "свет", "weight": "легкий"},
-        "book": {"read": "книга", "page": "книга", "ticket": "забронировать", "hotel": "забронировать"},
+        "book": {"read": "книга", "page": "книга", "ticket": "забронировать", "hotel": "забронировать", "table": "забронировать", "restaurant": "забронировать", "reservation": "забронировать", "room": "забронировать", "seat": "забронировать"},
         "watch": {"movie": "смотреть", "video": "смотреть", "time": "часы"},
     }
     _PHRASE_MAP = {

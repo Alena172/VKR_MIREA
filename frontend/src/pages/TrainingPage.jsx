@@ -405,23 +405,6 @@ export default function TrainingPage({ onError }) {
             }
           }}
         >
-          {(currentExercise.topic_display_name || currentExercise.topic_cluster_key) ? (
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              {currentExercise.topic_display_name ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-0.5 text-xs font-semibold text-indigo-700">
-                  <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M2 4a2 2 0 012-2h8a2 2 0 012 2v1H2V4zm0 3h12v5a2 2 0 01-2 2H4a2 2 0 01-2-2V7z" />
-                  </svg>
-                  {currentExercise.topic_display_name}
-                </span>
-              ) : null}
-              {currentExercise.topic_cluster_key ? (
-                <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-3 py-0.5 text-xs text-slate-500 font-mono">
-                  {currentExercise.topic_cluster_key}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
           <p className="text-base font-semibold">{currentExercise.prompt}</p>
           {renderExercise()}
 

@@ -5,6 +5,44 @@ import re
 from collections.abc import Awaitable, Callable
 from difflib import SequenceMatcher
 
+# Пары слов, считающихся взаимозаменяемыми при проверке перевода.
+# Каждая запись: (форма_A, форма_B) — оба направления применяются автоматически.
+_SYNONYM_PAIRS: list[tuple[str, str]] = [
+    ("забронировать", "заказать"),
+    ("приобрести", "купить"),
+    ("получить", "взять"),
+    ("произнести", "сказать"),
+    ("отправиться", "пойти"),
+    ("начать", "приступить"),
+    ("завершить", "закончить"),
+    ("помочь", "оказать помощь"),
+]
+
+# Строим плоский маппинг токен→канонический для быстрой замены
+_SYNONYM_MAP: dict[str, str] = {}
+for _a, _b in _SYNONYM_PAIRS:
+    _SYNONYM_MAP[_a] = _b
+    _SYNONYM_MAP[_b] = _a
+
+
+def _apply_synonyms(text: str) -> str:
+    """Заменяет синонимы на каноническую форму пары, чтобы сравнение не зависело от выбора слова."""
+    words = text.split()
+    result = []
+    i = 0
+    while i < len(words):
+        # сначала пробуем двухсловные сочетания
+        if i + 1 < len(words):
+            bigram = words[i] + " " + words[i + 1]
+            if bigram in _SYNONYM_MAP:
+                result.append(_SYNONYM_MAP[bigram])
+                i += 2
+                continue
+        result.append(_SYNONYM_MAP.get(words[i], words[i]))
+        i += 1
+    return " ".join(result)
+
+
 _RUSSIAN_STOPWORDS = {
     "и", "в", "во", "на", "с", "со", "к", "ко", "по", "под", "над", "от", "до", "из", "у",
     "за", "для", "о", "об", "про", "без", "после", "перед", "при", "через", "не", "ни", "же",
@@ -22,6 +60,7 @@ def normalize_answer(value: str | None) -> str:
     text = text.replace("ё", "е")
     text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
+    text = _apply_synonyms(text)
     return text
 
 

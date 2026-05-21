@@ -34,6 +34,7 @@ class VocabularyItemRead(BaseModel):
     source_url: str | None = None
     added_at: datetime
     is_phrase: bool = False
+    topic_cluster_key: str | None = None
 
 
 class VocabularyItemUpdateMe(BaseModel):
