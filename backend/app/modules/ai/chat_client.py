@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 import httpx
+
+_log = logging.getLogger(__name__)
 
 
 class AIChatClient:
@@ -71,7 +75,7 @@ class AIChatClient:
         client = self._get_async_client()
         url = f"{self._base_url}/chat/completions"
 
-        for _ in range(self._max_retries + 1):
+        for attempt in range(self._max_retries + 1):
             try:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
@@ -82,6 +86,14 @@ class AIChatClient:
                     .get("content", "")
                     .strip()
                 ) or None
-            except Exception:
-                continue
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                _log.warning("AI request HTTP %d on attempt %d: %s", status, attempt + 1, url)
+                if status < 500:
+                    # 4xx — не повторяем, модель/ключ/запрос некорректны
+                    break
+            except httpx.TimeoutException:
+                _log.warning("AI request timed out on attempt %d: %s", attempt + 1, url)
+            except Exception as exc:
+                _log.warning("AI request failed on attempt %d: %s — %s", attempt + 1, url, exc)
         return None

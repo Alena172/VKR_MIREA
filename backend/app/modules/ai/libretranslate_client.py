@@ -21,6 +21,15 @@ class LibreTranslateClient:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._timeout = timeout_seconds
+        self._async_client: httpx.AsyncClient | None = None
+
+    def _get_async_client(self) -> httpx.AsyncClient:
+        if self._async_client is None:
+            self._async_client = httpx.AsyncClient(
+                timeout=self._timeout,
+                limits=httpx.Limits(max_connections=5, max_keepalive_connections=3),
+            )
+        return self._async_client
 
     def _build_payload(self, text: str) -> dict:
         payload: dict = {"q": text, "source": "en", "target": "ru", "format": "text"}
@@ -30,11 +39,11 @@ class LibreTranslateClient:
 
     async def _post(self, text: str) -> str | None:
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(
-                    f"{self._base_url}/translate",
-                    json=self._build_payload(text),
-                )
+            client = self._get_async_client()
+            response = await client.post(
+                f"{self._base_url}/translate",
+                json=self._build_payload(text),
+            )
             if response.status_code != 200:
                 return None
             data = response.json()

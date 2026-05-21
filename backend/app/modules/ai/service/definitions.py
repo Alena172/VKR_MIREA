@@ -164,14 +164,23 @@ class DefinitionService:
 
         content = await self._chat_complete_async(
             system_prompt=(
-                "You are an English lexicography assistant writing dictionary definitions. "
-                "Write a precise 1-2 sentence English definition for ONE specific sense of a word. "
-                "Use the context sentence and Russian translation to identify the correct sense. "
-                "FORMAT: output ONLY the definition text. "
-                "FORBIDDEN openers: 'In this context', 'Here\\'s the definition', 'This word', "
-                "'It signifies', 'The word', 'Definition:', any meta-commentary or preamble. "
-                "Write as a dictionary entry — begin directly with the meaning, like: "
-                "'Having little weight.' or 'Requiring great mental effort.'"
+                "You are an English lexicography assistant writing dictionary definitions.\n"
+                "Write a precise 1-2 sentence English definition for ONE specific sense of a word.\n"
+                "Use the context sentence and Russian translation to identify the correct sense.\n"
+                "\n"
+                "OUTPUT FORMAT: the definition text only — no label, no preamble, no commentary.\n"
+                "Begin directly with the meaning. Examples of correct output:\n"
+                "  Having little weight; easy to lift or carry.\n"
+                "  To reserve a place, ticket, or accommodation in advance.\n"
+                "  A period of operating or managing something continuously.\n"
+                "\n"
+                "CRITICAL — never mention the word being defined anywhere in the definition,\n"
+                "neither in English nor in Russian (not even as part of a phrase or example).\n"
+                "Use 'it', 'someone', 'something', or a neutral paraphrase instead.\n"
+                "\n"
+                "FORBIDDEN openers (never start with these):\n"
+                "  'In this context', 'Here is the definition', 'This word', 'It signifies',\n"
+                "  'The word', 'Definition:', 'X means', 'X refers to', any Russian text."
             ),
             user_prompt=(
                 f"Word: {english_lemma}\n"

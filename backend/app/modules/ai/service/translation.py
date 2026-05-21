@@ -361,6 +361,16 @@ class TranslationService:
                             provider_note="libretranslate:phrase",
                         )
 
+        # Отбираем до 15 записей глоссария: сначала точное совпадение леммы,
+        # затем записи с контекстными предложениями (они полезнее для disambig),
+        # остальные — по порядку. Ограничение снижает размер промпта без потери качества.
+        target_lemma = self._normalize_english_text(payload.text)
+        def _glossary_sort_key(item: TranslateGlossaryItem) -> int:
+            if self._normalize_english_text(item.english_term) == target_lemma:
+                return 0
+            return 1 if item.source_sentence else 2
+
+        trimmed_glossary = sorted(payload.glossary, key=_glossary_sort_key)[:15]
         glossary_json = json.dumps(
             [
                 {
@@ -368,7 +378,7 @@ class TranslationService:
                     "russian_translation": item.russian_translation,
                     "source_sentence": item.source_sentence,
                 }
-                for item in payload.glossary[:200]
+                for item in trimmed_glossary
             ],
             ensure_ascii=False,
         )
