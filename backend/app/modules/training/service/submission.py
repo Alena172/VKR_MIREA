@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from dataclasses import dataclass
 
 from fastapi import Depends
 
-from app.core.db import transaction
+from app.core.db import SessionLocal, transaction
 from app.modules.ai.facade import AIFacade, ai_facade
 from app.modules.graph.service.graph import GraphService
 from app.modules.review.service.srs import SRSService, WordProgressUpdate
@@ -16,8 +18,11 @@ from app.modules.training.schemas import (
 from app.modules.training.service.evaluation import (
     detect_simple_exercise_type,
     evaluate_simple_exercise,
-    is_answer_correct_async,
+    is_answer_correct,
+    is_semantic_override_candidate,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -39,7 +44,8 @@ def _dedupe_answers(answers: list[SessionAnswer]) -> list[SessionAnswer]:
     return list(deduped.values())
 
 
-async def _evaluate_answer(answer: SessionAnswer, facade: AIFacade) -> EvaluatedAnswer:
+def _evaluate_answer_fast(answer: SessionAnswer) -> EvaluatedAnswer:
+    """Мгновенная локальная проверка без LLM."""
     simple_exercise_type = detect_simple_exercise_type(
         exercise_type=answer.exercise_type,
         prompt=answer.prompt,
@@ -51,28 +57,12 @@ async def _evaluate_answer(answer: SessionAnswer, facade: AIFacade) -> Evaluated
             user_answer=answer.user_answer,
             exercise_type=simple_exercise_type,
         )
-        return EvaluatedAnswer(
-            exercise_id=answer.exercise_id,
-            exercise_type=answer.exercise_type or simple_exercise_type,
-            target_word=answer.target_word,
-            vocabulary_id=answer.vocabulary_id,
-            prompt=answer.prompt,
-            expected_answer=answer.expected_answer,
-            user_answer=answer.user_answer,
-            is_correct=is_correct,
-        )
+    else:
+        is_correct = is_answer_correct(answer.expected_answer, answer.user_answer)
 
-    llm_check = facade.is_translation_semantically_correct_async if facade.is_remote_enabled() else None
-    is_correct = await is_answer_correct_async(
-        answer.expected_answer,
-        answer.user_answer,
-        exercise_type=answer.exercise_type,
-        english_prompt=answer.prompt,
-        llm_check=llm_check,
-    )
     return EvaluatedAnswer(
         exercise_id=answer.exercise_id,
-        exercise_type=answer.exercise_type,
+        exercise_type=answer.exercise_type or simple_exercise_type,
         target_word=answer.target_word,
         vocabulary_id=answer.vocabulary_id,
         prompt=answer.prompt,
@@ -82,9 +72,68 @@ async def _evaluate_answer(answer: SessionAnswer, facade: AIFacade) -> Evaluated
     )
 
 
-async def _evaluate_answers(answers: list[SessionAnswer], facade: AIFacade) -> list[EvaluatedAnswer]:
-    import asyncio
-    return list(await asyncio.gather(*[_evaluate_answer(a, facade) for a in answers]))
+async def _llm_recheck_in_background(
+    *,
+    session_id: int,
+    answers: list[SessionAnswer],
+    fast_results: list[EvaluatedAnswer],
+    facade: AIFacade,
+) -> None:
+    """Перепроверяет через LLM ответы, которые локально помечены как неверные,
+    но могут быть семантически правильными. Обновляет БД если оценка изменилась."""
+    if not facade.is_remote_enabled():
+        return
+
+    candidates = [
+        (answer, ev)
+        for answer, ev in zip(answers, fast_results)
+        if not ev.is_correct
+        and (answer.exercise_type or "").startswith("sentence_translation")
+        and is_semantic_override_candidate(answer.expected_answer, answer.user_answer)
+    ]
+    if not candidates:
+        return
+
+    async def _check_one(answer: SessionAnswer, ev: EvaluatedAnswer) -> tuple[EvaluatedAnswer, bool]:
+        try:
+            result = await facade.is_translation_semantically_correct_async(
+                english_prompt=answer.prompt or "",
+                expected_answer=answer.expected_answer or "",
+                user_answer=answer.user_answer,
+            )
+            return ev, result
+        except Exception:
+            return ev, False
+
+    results = await asyncio.gather(*[_check_one(a, ev) for a, ev in candidates])
+
+    changed = [(ev, llm_correct) for ev, llm_correct in results if llm_correct and not ev.is_correct]
+    if not changed:
+        return
+
+    try:
+        with SessionLocal() as db:
+            from app.modules.training.repository import TrainingRepository
+            repo = TrainingRepository(db)
+            for ev, _ in changed:
+                repo.update_answer_correctness(
+                    session_id=session_id,
+                    exercise_id=ev.exercise_id,
+                    is_correct=True,
+                )
+            # Пересчитываем статистику сессии
+            total_correct = sum(
+                1 for ev_orig in fast_results
+                if ev_orig.is_correct or any(ev_orig.exercise_id == ev.exercise_id for ev, _ in changed)
+            )
+            total = len(fast_results)
+            repo.update_session_stats(
+                session_id=session_id,
+                correct=total_correct,
+                accuracy=round(total_correct / total, 4) if total else 0.0,
+            )
+    except Exception:
+        logger.exception("Failed to apply LLM re-check results for session %s", session_id)
 
 
 class SubmissionService:
@@ -175,11 +224,35 @@ class SubmissionService:
         answers: list[SessionAnswer],
     ) -> SessionSubmitResultDTO:
         normalized_answers = _dedupe_answers(answers)
-        evaluated_answers = await _evaluate_answers(normalized_answers, self._ai_facade)
+
+        # Быстрая локальная проверка — без LLM, мгновенно
+        evaluated_answers = [_evaluate_answer_fast(a) for a in normalized_answers]
+
         with transaction(self._training_repo._db):
             self._update_progress(user_id=user_id, evaluated_answers=evaluated_answers)
             session_row = self._persist_session(user_id=user_id, evaluated_answers=evaluated_answers)
+
+        # Считаем, сколько sentence_translation ответов пойдут на LLM-перепроверку
+        llm_pending_count = sum(
+            1
+            for answer, ev in zip(normalized_answers, evaluated_answers)
+            if not ev.is_correct
+            and (answer.exercise_type or "").startswith("sentence_translation")
+            and is_semantic_override_candidate(answer.expected_answer, answer.user_answer)
+        ) if self._ai_facade.is_remote_enabled() else 0
+
+        # LLM-перепроверка в фоне — не блокирует ответ клиенту
+        asyncio.create_task(
+            _llm_recheck_in_background(
+                session_id=session_row.id,
+                answers=normalized_answers,
+                fast_results=evaluated_answers,
+                facade=self._ai_facade,
+            )
+        )
+
         return SessionSubmitResultDTO(
             session=session_row,
             evaluated_answers=evaluated_answers,
+            llm_pending_count=llm_pending_count,
         )

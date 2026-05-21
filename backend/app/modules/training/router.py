@@ -88,6 +88,33 @@ def list_my_sessions(
     return SessionHistoryResponse(total=total, limit=limit, offset=offset, items=items)
 
 
+@router.get("/sessions/me/{session_id}", response_model=SessionSubmitResponse)
+def get_my_session(
+    session_id: int,
+    current_user_id: int = Depends(get_current_user_id),
+    repo: TrainingRepository = Depends(),
+) -> SessionSubmitResponse:
+    session_row = repo.get_session_by_id(session_id=session_id, user_id=current_user_id)
+    if session_row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    answers = repo.list_answers_for_session(session_id=session_id)
+    return SessionSubmitResponse(
+        session=session_row,
+        answers=[
+            SubmittedAnswerResult(
+                exercise_id=a.exercise_id,
+                exercise_type=a.exercise_type,
+                prompt=a.prompt,
+                expected_answer=a.expected_answer,
+                user_answer=a.user_answer,
+                is_correct=a.is_correct,
+            )
+            for a in answers
+        ],
+        llm_pending_count=0,
+    )
+
+
 @router.get("/sessions/me/{session_id}/answers", response_model=list[SessionAnswerRead])
 def list_my_session_answers(
     session_id: int,
@@ -127,4 +154,5 @@ async def submit_session(
             )
             for a in result.evaluated_answers
         ],
+        llm_pending_count=result.llm_pending_count,
     )

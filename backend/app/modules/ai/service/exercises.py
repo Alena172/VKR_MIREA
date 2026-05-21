@@ -127,58 +127,91 @@ class ExerciseMaterialService:
                 return True
         return False
 
+    # Ситуации для случайного выбора — чтобы предложения не повторяли контекст добавления слова
+    _SITUATION_POOL = [
+        "at home in the evening",
+        "at work during a meeting",
+        "in a café with a friend",
+        "while shopping at a store",
+        "on public transport",
+        "during a phone call",
+        "at university or school",
+        "while cooking dinner",
+        "on a weekend trip",
+        "while watching a film",
+        "at a gym or sports class",
+        "while reading the news",
+        "at a doctor's appointment",
+        "while planning a holiday",
+        "at a family dinner",
+    ]
+
     async def generate_sentence_pair(
         self,
         seed: ExerciseSeed,
         cefr_level: str,
     ) -> tuple[str, str] | None:
+        import random
         history = self._recent_sentences.setdefault(seed.english_lemma.strip().lower(), deque(maxlen=8))
-        cluster_hint_line = (
-            f"- you may naturally include this related word from the same topic: {seed.cluster_word_hint}\n"
-            if seed.cluster_word_hint
-            else ""
-        )
+
+        # Берём случайную ситуацию — НЕ связанную с исходным контекстом слова
+        situation = random.choice(self._SITUATION_POOL)
+
         system_prompt = (
-            "You are an English teacher creating translation exercises for Russian-speaking learners. "
-            "Your task: generate one English sentence and its accurate, grammatically correct Russian translation. "
-            "Rules for sentence_ru:\n"
-            "- must be a complete, natural Russian sentence\n"
-            "- all words must be in correct grammatical form (case, gender, number, tense)\n"
-            "- no English words in the translation\n"
-            "- do not transliterate\n"
-            "Return only JSON with keys sentence_en and sentence_ru. No markdown."
+            "You are an English teacher creating translation exercises for Russian-speaking learners.\n"
+            "Your task: write ONE English sentence using the target word, then translate it into Russian.\n"
+            "\n"
+            "Requirements for sentence_en:\n"
+            "- sounds like something a real person would say in everyday life\n"
+            "- uses the target word in a NATURAL, COMMON collocation — the word must fit its typical usage\n"
+            "- before finalising, ask yourself: 'Would a native English speaker say this?' If no — rewrite\n"
+            "- must fit the given situation\n"
+            "- do NOT copy or paraphrase the word's original context — invent a fresh sentence\n"
+            "- no literary or bookish phrasing\n"
+            "\n"
+            "CRITICAL — reject and rewrite if sentence_en:\n"
+            "- uses the word in an unusual or impossible collocation (e.g. 'booking a book', 'discover a skill')\n"
+            "- sounds like a textbook drill sentence\n"
+            "- uses the word in a meaning that doesn't match the Russian translation provided\n"
+            "\n"
+            "Requirements for sentence_ru:\n"
+            "- complete, grammatically correct Russian sentence\n"
+            "- correct case, gender, number and tense agreement throughout\n"
+            "- no English words, no transliteration\n"
+            "- natural Russian — how a native speaker would actually say it\n"
+            "\n"
+            "Return ONLY JSON: {\"sentence_en\":\"...\",\"sentence_ru\":\"...\"}. No markdown, no comments."
         )
+
         prompts = [
             (
                 f"Target word: {seed.english_lemma}\n"
-                f"Russian translation of the target word: {seed.russian_translation}\n"
+                f"Russian meaning: {seed.russian_translation}\n"
                 f"CEFR level: {cefr_level}\n"
-                f"Avoid repeating these recent sentences: {json.dumps(list(history), ensure_ascii=False)}\n"
-                f"User context hint: {seed.source_sentence or 'none'}\n"
-                "Generate exactly one natural English sentence and its Russian translation.\n"
-                "Constraints:\n"
-                "- everyday context only\n"
-                "- include the target word exactly once in sentence_en\n"
-                "- the sentence must be built around the target word; do not include other study vocabulary words as key concepts\n"
-                f"{cluster_hint_line}"
-                "- sentence_ru must preserve the full meaning of sentence_en\n"
-                "- sentence_ru must use the provided Russian translation or its correct inflected form\n"
-                'Format: {"sentence_en":"...","sentence_ru":"..."}'
+                f"Situation: {situation}\n"
+                f"Already used sentences (do not repeat): {json.dumps(list(history), ensure_ascii=False)}\n"
+                "\n"
+                f"Think about how '{seed.english_lemma}' is typically used by native speakers in everyday English.\n"
+                "Write a sentence where this word appears in a natural, common collocation for the given situation.\n"
+                "Check: would a native speaker say this? If not, choose a different situation.\n"
+                'Return: {"sentence_en":"...","sentence_ru":"..."}'
             ),
             (
-                f"Target word: {seed.english_lemma}\n"
-                f"Russian translation: {seed.russian_translation}\n"
-                f"CEFR level: {cefr_level}\n"
-                "Generate one sentence pair. The Russian translation must be fully grammatical — "
-                "correct gender agreement, correct case endings, correct verb conjugation.\n"
-                'Format: {"sentence_en":"...","sentence_ru":"..."}'
+                f"Target word: {seed.english_lemma} (Russian: {seed.russian_translation})\n"
+                f"CEFR: {cefr_level}, setting: {situation}\n"
+                "\n"
+                f"Write a short natural English sentence using '{seed.english_lemma}' in its most common everyday meaning.\n"
+                "The collocation must be normal and natural — something natives actually say.\n"
+                "Translate to Russian with correct grammar.\n"
+                'Return: {"sentence_en":"...","sentence_ru":"..."}'
             ),
             (
                 f"Word: {seed.english_lemma} = {seed.russian_translation}\n"
-                f"CEFR: {cefr_level}\n"
-                "Write one simple English sentence using this word and translate it into Russian. "
-                "The Russian sentence must be completely in Russian with correct grammar.\n"
-                'Format: {"sentence_en":"...","sentence_ru":"..."}'
+                f"Level: {cefr_level}\n"
+                "\n"
+                f"Use '{seed.english_lemma}' in a simple, natural English sentence. Pick the most typical way this word is used.\n"
+                "Translate to Russian. Grammar must be correct.\n"
+                'Return: {"sentence_en":"...","sentence_ru":"..."}'
             ),
         ]
 
@@ -186,7 +219,7 @@ class ExerciseMaterialService:
             content = await self._chat_complete_async(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=0.15,
+                temperature=0.7,
                 max_tokens=180,
             )
             if not content:
@@ -211,29 +244,30 @@ class ExerciseMaterialService:
         word: str,
         cefr_level: str,
     ) -> str | None:
+        import random
         history = self._recent_sentences.setdefault(word, deque(maxlen=8))
         for _ in range(self._max_retries + 2):
+            situation = random.choice(self._SITUATION_POOL)
             content = await self._chat_complete_async(
                 system_prompt=(
-                    "You are an English teacher. Generate one natural, high-frequency, grammatically correct "
-                    "English sentence for a Russian-speaking learner. "
-                    "Use plain modern spoken/written English and avoid bookish phrasing."
+                    "You are an English teacher. Write one natural English sentence for a Russian-speaking learner.\n"
+                    "The sentence must sound like something a real person would actually say — not a textbook drill.\n"
+                    "Use the target word in its most typical, natural collocation.\n"
+                    "Before writing, ask yourself: 'Would a native speaker say this?' If not — choose differently.\n"
+                    "Use plain modern English. No literary phrasing. Output the sentence only, no markdown."
                 ),
                 user_prompt=(
                     f"Target word: {word}\n"
                     f"CEFR level: {cefr_level}\n"
-                    f"Avoid repeating these recent sentences: {json.dumps(list(history), ensure_ascii=False)}\n"
-                    "Constraints:\n"
+                    f"Situation: {situation}\n"
+                    f"Avoid repeating: {json.dumps(list(history), ensure_ascii=False)}\n"
+                    "Rules:\n"
                     "- one sentence only\n"
-                    "- everyday context (home, study, work, shopping, transport)\n"
-                    "- avoid fantasy, rare names, unusual locations\n"
-                    "- include the target word exactly once\n"
-                    "- prefer short natural collocations used by natives\n"
-                    "- avoid stiff phrases like 'during the quiet hours' and similar literary wording\n"
-                    "- do not use markdown, quotes, bullets, numbering\n"
-                    "- output sentence only"
+                    "- use the target word exactly once in a natural, common collocation\n"
+                    "- must fit the given situation\n"
+                    "- output the sentence only, no quotes or bullets"
                 ),
-                temperature=0.2,
+                temperature=0.75,
                 max_tokens=80,
             )
             if not content:

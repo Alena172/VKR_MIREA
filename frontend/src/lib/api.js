@@ -261,6 +261,7 @@ export const api = {
   generateExercisesMe: (payload, options = {}) =>
     request("/exercises/me/generate", { method: "POST", body: JSON.stringify(payload), ...options }),
   listSessionsMe: (params = {}, options = {}) => request(`/sessions/me${toQuery(params)}`, options),
+  getSessionMe: (sessionId, options = {}) => request(`/sessions/me/${sessionId}`, options),
   listSessionAnswersMe: (sessionId, options = {}) => request(`/sessions/me/${sessionId}/answers`, options),
   submitSession: (payload, options = {}) => request("/sessions/submit", { method: "POST", body: JSON.stringify(payload), ...options }),
 

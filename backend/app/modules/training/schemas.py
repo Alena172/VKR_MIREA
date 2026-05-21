@@ -97,6 +97,7 @@ class SubmittedAnswerResult(BaseModel):
 class SessionSubmitResponse(BaseModel):
     session: SessionSummary
     answers: list[SubmittedAnswerResult] = Field(default_factory=list)
+    llm_pending_count: int = 0
 
 
 class SessionAnswerRead(BaseModel):
@@ -138,6 +139,7 @@ class SessionSubmitResultDTO:
 
     session: Any
     evaluated_answers: list[Any]
+    llm_pending_count: int = 0
 
 
 @dataclass(frozen=True)

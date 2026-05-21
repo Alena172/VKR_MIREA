@@ -229,6 +229,7 @@ export default function TrainingPage({ onError }) {
     currentIndex,
     focusLabel,
     isTrainingActive,
+    llmPending,
     loadingCurrent,
     mode,
     progressPercent,
@@ -340,11 +341,6 @@ export default function TrainingPage({ onError }) {
           <button onClick={startTraining} className="btn-primary disabled:opacity-50" type="button" disabled={loadingCurrent || isTrainingActive}>
             {loadingCurrent ? "Подготовка..." : "Начать тренировку"}
           </button>
-          {sessionResult ? (
-            <button className="btn-secondary" type="button" onClick={resetSessionState}>
-              Новая сессия
-            </button>
-          ) : null}
           {isTrainingActive ? <span className="chip">Задание {currentIndex + 1} из {size}</span> : null}
           {focusLabel ? <span className="chip">Фокус: {focusLabel}</span> : null}
           {selectedVocabularyIds.length ? (
@@ -402,12 +398,44 @@ export default function TrainingPage({ onError }) {
 
       {sessionResult ? (
         <section className="surface p-4 md:p-5">
-          <p className="text-lg font-extrabold text-gray-900">
-            Результат: {sessionResult.session.correct}/{sessionResult.session.total}
-          </p>
-          <p className="muted mt-1 text-sm">Разбор завершён. Ниже видно, что получилось хорошо и что стоит повторить следующим шагом.</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              {!llmPending ? (
+                <p className="text-lg font-extrabold text-gray-900">
+                  Результат: {sessionResult.session.correct}/{sessionResult.session.total}
+                </p>
+              ) : (
+                <p className="text-lg font-extrabold text-gray-900">Сессия завершена</p>
+              )}
+              <p className="muted mt-1 text-sm">
+                {llmPending
+                  ? "Результат будет готов после проверки."
+                  : "Разбор завершён. Ниже видно, что получилось хорошо и что стоит повторить следующим шагом."}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-primary shrink-0"
+              onClick={resetSessionState}
+            >
+              Новая сессия
+            </button>
+          </div>
 
-          {trainingInsights ? (
+          {llmPending ? (
+            <div className="mt-4 flex flex-col items-center gap-4 py-6 text-center">
+              <svg className="h-10 w-10 animate-spin text-amber-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Идёт семантическая проверка переводов</p>
+                <p className="mt-1 text-xs text-slate-500">Можно перейти на другую страницу — результат обновится автоматически.</p>
+              </div>
+            </div>
+          ) : null}
+
+          {!llmPending && trainingInsights ? (
             <>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <ResultStatCard title="Точность" value={`${trainingInsights.accuracyPercent}%`} tone={trainingInsights.accuracyPercent >= 80 ? "good" : trainingInsights.accuracyPercent >= 50 ? "warn" : "default"} />

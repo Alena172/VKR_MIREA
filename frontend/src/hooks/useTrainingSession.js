@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, getErrorMessage, isAbortError } from "../lib/api";
 import { useAbortControllers } from "./useAbortControllers";
+import { usePendingReview } from "../context/PendingReviewContext";
 
 /** Управляет тренировкой: генерацией батча, буфером и отправкой ответов. */
 export function useTrainingSession({ onError }) {
@@ -16,9 +17,11 @@ export function useTrainingSession({ onError }) {
   const [loadingCurrent, setLoadingCurrent] = useState(false);
   const [submittingCurrent, setSubmittingCurrent] = useState(false);
   const [sessionResult, setSessionResult] = useState(null);
+  const [llmPending, setLlmPending] = useState(false);
   const [isTrainingActive, setIsTrainingActive] = useState(false);
   const { abortAllRequests, registerController, releaseController } = useAbortControllers();
   const bgFetchControllerRef = useRef(null);
+  const { registerPendingSession, getResolvedResult, isPending } = usePendingReview();
 
   const progressPercent = size > 0 ? Math.round((currentIndex / size) * 100) : 0;
 
@@ -38,6 +41,7 @@ export function useTrainingSession({ onError }) {
     setBufferExercises([]);
     setSubmittedAnswers([]);
     setSessionResult(null);
+    setLlmPending(false);
     setIsTrainingActive(false);
     setLoadingCurrent(false);
     setSubmittingCurrent(false);
@@ -46,6 +50,10 @@ export function useTrainingSession({ onError }) {
   async function submitSession(answersPayload, signal) {
     const result = await api.submitSession({ answers: answersPayload }, { signal });
     setSessionResult(result);
+    if (result.llm_pending_count > 0) {
+      setLlmPending(true);
+      registerPendingSession(result.session.id, result, result.llm_pending_count);
+    }
   }
 
   /** Фоновая догрузка недостающих упражнений в буфер пока пользователь решает. */
@@ -206,6 +214,34 @@ export function useTrainingSession({ onError }) {
     }
   }, [bufferExercises, loadingCurrent, isTrainingActive, currentExercise]);
 
+  // Когда LLM завершила проверку — обновляем sessionResult актуальными данными
+  useEffect(() => {
+    if (!sessionResult || !llmPending) return;
+    const resolved = getResolvedResult(sessionResult.session.id);
+    if (resolved) {
+      setSessionResult((prev) => ({
+        ...prev,
+        session: resolved.session,
+        answers: resolved.answers,
+      }));
+      setLlmPending(false);
+      return;
+    }
+    // Проверяем каждые 2с пока pending
+    const timer = setInterval(() => {
+      const r = getResolvedResult(sessionResult.session.id);
+      if (r) {
+        setSessionResult((prev) => ({
+          ...prev,
+          session: r.session,
+          answers: r.answers,
+        }));
+        setLlmPending(false);
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [sessionResult?.session?.id, llmPending, getResolvedResult]);
+
   const answerReady = useMemo(() => {
     if (!currentExercise) return false;
     return currentAnswer.trim().length > 0;
@@ -218,6 +254,7 @@ export function useTrainingSession({ onError }) {
     currentIndex,
     focusLabel,
     isTrainingActive,
+    llmPending,
     loadingCurrent,
     loadingPrefetch: false,
     mode,

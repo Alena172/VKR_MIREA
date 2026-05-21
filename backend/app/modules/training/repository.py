@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from fastapi import Depends
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -91,6 +91,21 @@ class TrainingRepository:
         )
         return int(self._db.scalar(query) or 0)
 
+    def get_session_by_id(self, session_id: int, user_id: int) -> LearningSessionModel | None:
+        return self._db.scalar(
+            select(LearningSessionModel).where(
+                LearningSessionModel.id == session_id,
+                LearningSessionModel.user_id == user_id,
+            )
+        )
+
+    def list_answers_for_session(self, session_id: int) -> list[AnswerModel]:
+        return list(self._db.scalars(
+            select(AnswerModel)
+            .where(AnswerModel.session_id == session_id)
+            .order_by(AnswerModel.id.asc())
+        ))
+
     def list_answers_by_session(self, session_id: int, user_id: int) -> list[AnswerModel] | None:
         session_row = self._db.scalar(
             select(LearningSessionModel).where(
@@ -145,6 +160,33 @@ class TrainingRepository:
             self._db.flush()
         self._db.refresh(session_row)
         return session_row
+
+    def update_answer_correctness(
+        self,
+        *,
+        session_id: int,
+        exercise_id: int,
+        is_correct: bool,
+    ) -> None:
+        self._db.execute(
+            update(AnswerModel)
+            .where(AnswerModel.session_id == session_id, AnswerModel.exercise_id == exercise_id)
+            .values(is_correct=is_correct)
+        )
+
+    def update_session_stats(
+        self,
+        *,
+        session_id: int,
+        correct: int,
+        accuracy: float,
+    ) -> None:
+        self._db.execute(
+            update(LearningSessionModel)
+            .where(LearningSessionModel.id == session_id)
+            .values(correct=correct, accuracy=accuracy)
+        )
+        self._db.commit()
 
     def list_recent_incorrect_answer_data(
         self,
