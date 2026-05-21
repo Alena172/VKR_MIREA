@@ -6,7 +6,7 @@ import ReviewPage from "./pages/ReviewPage";
 import TrainingPage from "./pages/TrainingPage";
 import SessionsHistoryPage from "./pages/SessionsHistoryPage";
 import { useAbortControllers } from "./hooks/useAbortControllers";
-import { api, clearAuthToken, getErrorMessage, isAbortError, setAuthToken } from "./lib/api";
+import { api, clearAuthToken, getErrorMessage, isAbortError, setAuthToken, setUnauthorizedHandler } from "./lib/api";
 
 const USER_ID_KEY = "vkr_user_id";
 const AUTH_TOKEN_KEY = "vkr_auth_token";
@@ -133,6 +133,11 @@ export default function App() {
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
   const [userCefr, setUserCefr] = useState("A1");
+  // true пока идёт проверка сохранённого токена при старте
+  const [verifying, setVerifying] = useState(() => {
+    const stored = localStorage.getItem(USER_ID_KEY);
+    return Boolean(stored);
+  });
 
   function handleAuth(authData) {
     setAuthTokenState(authData.access_token);
@@ -155,7 +160,11 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (authToken && userId && !userEmail) {
+    setUnauthorizedHandler(logout);
+  }, []);
+
+  useEffect(() => {
+    if (authToken && userId) {
       api
         .authMe()
         .then((data) => {
@@ -163,9 +172,22 @@ export default function App() {
           setUserName(data.full_name || "");
           setUserCefr(data.cefr_level);
         })
-        .catch(() => {});
+        .catch((e) => {
+          if (e?.status === 401) {
+            logout();
+          }
+        })
+        .finally(() => {
+          setVerifying(false);
+        });
+    } else {
+      setVerifying(false);
     }
-  }, [authToken, userId, userEmail]);
+  }, []);
+
+  if (verifying) {
+    return null;
+  }
 
   if (!userId) {
     return (

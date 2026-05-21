@@ -18,7 +18,7 @@ from app.modules.ai.schemas import (
 )
 
 if TYPE_CHECKING:
-    from app.modules.ai.libretranslate_client import LibreTranslateClient
+    from app.modules.vocabulary.clients.libretranslate_client import LibreTranslateClient
 
 _morph = pymorphy2.MorphAnalyzer()
 
@@ -219,7 +219,7 @@ class TranslationService:
         return None
 
     def _looks_ambiguous(self, text: str) -> bool:
-        from app.modules.ai.free_dictionary_client import _FORCE_AI_WORDS
+        from app.modules.vocabulary.clients.free_dictionary_client import _FORCE_AI_WORDS
         lowered = self._normalize_english_text(text)
         if lowered in self._PHRASE_MAP:
             return False

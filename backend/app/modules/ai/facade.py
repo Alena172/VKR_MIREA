@@ -5,7 +5,6 @@ from collections import deque
 
 from app.core.config import get_settings
 from app.modules.ai.chat_client import AIChatClient
-from app.modules.ai.libretranslate_client import LibreTranslateClient
 from app.modules.ai.schemas import (
     AIStatusResponse,
     ExerciseSeed,
@@ -25,6 +24,7 @@ class AIFacade:
     """Единая точка входа к AI для всех доменных модулей."""
 
     def __init__(self) -> None:
+        from app.modules.vocabulary.clients.libretranslate_client import LibreTranslateClient
         settings = get_settings()
         self._chat_client = AIChatClient(
             base_url=settings.ai_base_url,

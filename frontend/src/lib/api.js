@@ -1,6 +1,12 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const AUTH_TOKEN_KEY = "vkr_auth_token";
 
+// Глобальный обработчик 401: при невалидном токене принудительно разлогиниваем.
+let _onUnauthorized = null;
+export function setUnauthorizedHandler(fn) {
+  _onUnauthorized = fn;
+}
+
 /** Сохраняет JWT, который будет автоматически добавляться к API-запросам. */
 export function setAuthToken(token) {
   localStorage.setItem(AUTH_TOKEN_KEY, token);
@@ -146,11 +152,15 @@ async function request(path, options = {}) {
       text = "";
     }
 
-    throw createApiError({
+    const apiError = createApiError({
       status: response.status,
       detail: getErrorDetail(payload, text),
       raw,
     });
+    if (response.status === 401 && _onUnauthorized) {
+      _onUnauthorized();
+    }
+    throw apiError;
   }
 
   if (response.status === 204) {

@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 from app.modules.ai.facade import ai_facade as ai_service
-from app.modules.ai.free_dictionary_client import lookup_definition
+from app.modules.vocabulary.clients.free_dictionary_client import lookup_definition
 from app.modules.vocabulary.repository import VocabularyRepository
 
 _GENERIC_TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'-]*")
