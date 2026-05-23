@@ -36,4 +36,9 @@ if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
     UVICORN_RELOAD_FLAG="--reload"
 fi
 
-exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 $UVICORN_RELOAD_FLAG
+WORKERS=${UVICORN_WORKERS:-4}
+if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
+    WORKERS=1
+fi
+
+exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $WORKERS $UVICORN_RELOAD_FLAG

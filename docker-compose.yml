@@ -62,6 +62,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       LIBRETRANSLATE_URL: http://libretranslate:5000
       LIBRETRANSLATE_ENABLED: "true"
+      BOOTSTRAP_SCHEMA_ON_STARTUP: "false"
+      SCRYPT_N: "4096"
     ports:
       - "8000:8000"
 

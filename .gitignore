@@ -41,6 +41,10 @@ dist/
 build/
 coverage/
 
+# Reports / exports
+*.csv
+*.html
+
 # draw.io
 *.drawio
 *.drawio.bkp
