@@ -6,7 +6,7 @@ import hmac
 import os
 
 
-_SCRYPT_N = 2**14
+_SCRYPT_N = int(os.environ.get("SCRYPT_N", 2**14))
 _SCRYPT_R = 8
 _SCRYPT_P = 1
 _SALT_BYTES = 16
