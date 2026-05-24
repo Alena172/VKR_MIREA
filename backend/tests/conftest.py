@@ -1,7 +1,18 @@
 import os
 from collections.abc import Generator
 
-os.environ.setdefault("TRUSTED_HOSTS", "localhost,127.0.0.1,backend,gateway,testserver,*.ngrok-free.dev")
+os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+os.environ.setdefault("AI_PROVIDER", "stub")
+os.environ.setdefault("AI_BASE_URL", "https://api.openai.com/v1")
+os.environ.setdefault("AI_MODEL", "gpt-4o-mini")
+os.environ.setdefault("JWT_SECRET", "test_secret_key_that_is_long_enough_12345")
+os.environ.setdefault("JWT_ISSUER", "vkr-test")
+os.environ.setdefault("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://localhost:8080")
+os.environ.setdefault("TRUSTED_HOSTS", "localhost,127.0.0.1,backend,gateway,testserver")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/0")
+os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+os.environ.setdefault("LIBRETRANSLATE_URL", "http://localhost:5000")
 os.environ.setdefault("BOOTSTRAP_SCHEMA_ON_STARTUP", "false")
 
 import pytest

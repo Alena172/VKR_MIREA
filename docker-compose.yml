@@ -3,15 +3,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: vkr_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "15432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d vkr_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -20,7 +20,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -36,6 +36,7 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env
+      - ./backend/.env.docker
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,23 +50,8 @@ services:
       timeout: 5s
       retries: 20
       start_period: 15s
-    environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/vkr_db
-      JWT_SECRET: change_me_dev_secret_please_replace_32b
-      JWT_ISSUER: vkr
-      JWT_ACCESS_TTL_MINUTES: "1440"
-      CORS_ALLOW_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080
-      CORS_ALLOW_ORIGIN_REGEX: ^(https://.*\.ngrok-free\.dev|chrome-extension://[a-p]{32}|moz-extension://.+)$
-      TRUSTED_HOSTS: localhost,127.0.0.1,backend,gateway,*.ngrok-free.dev
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-      REDIS_URL: redis://redis:6379/0
-      LIBRETRANSLATE_URL: http://libretranslate:5000
-      LIBRETRANSLATE_ENABLED: "true"
-      BOOTSTRAP_SCHEMA_ON_STARTUP: "false"
-      SCRYPT_N: "4096"
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT}:8000"
 
   celery_worker:
     build:
@@ -77,6 +63,7 @@ services:
       --loglevel=info --concurrency=4 -Q celery"
     env_file:
       - ./backend/.env
+      - ./backend/.env.docker
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,12 +71,6 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/vkr_db
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-      REDIS_URL: redis://redis:6379/0
-
   flower:
     build:
       context: ./backend
@@ -97,30 +78,26 @@ services:
     restart: unless-stopped
     command: >
       sh -c "python -m celery -A app.celery_app:celery_app flower
-      --port=5555 --broker=redis://redis:6379/0"
+      --port=5555"
     env_file:
       - ./backend/.env
+      - ./backend/.env.docker
     depends_on:
       redis:
         condition: service_healthy
       backend:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/vkr_db
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-      REDIS_URL: redis://redis:6379/0
     ports:
-      - "5555:5555"
+      - "${FLOWER_PORT}:5555"
 
   libretranslate:
     image: libretranslate/libretranslate:latest
     restart: unless-stopped
     environment:
-      LT_LOAD_ONLY: "en,ru"
-      LT_DISABLE_WEB_UI: "true"
+      LT_LOAD_ONLY: ${LT_LOAD_ONLY}
+      LT_DISABLE_WEB_UI: ${LT_DISABLE_WEB_UI}
     ports:
-      - "5000:5000"
+      - "${LIBRETRANSLATE_PORT}:5000"
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/languages')\" || exit 1"]
       interval: 15s
@@ -136,11 +113,10 @@ services:
     depends_on:
       backend:
         condition: service_started
-    environment:
-      VITE_API_BASE_URL: /api/v1
-      VITE_DEV_PROXY_TARGET: http://backend:8000
+    env_file:
+      - ./frontend/.env.docker
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT}:5173"
 
   gateway:
     image: nginx:1.27-alpine
@@ -153,7 +129,7 @@ services:
     volumes:
       - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "8080:80"
+      - "${GATEWAY_PORT}:80"
 
 volumes:
   postgres_data:

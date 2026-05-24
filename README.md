@@ -28,12 +28,13 @@ docs/       Дополнительные заметки по проекту
 
 ### Полный запуск через Docker
 
-1. Скопируй файл окружения серверной части:
+1. Подготовь env-файлы:
 
 ```bash
-cd backend
 copy .env.example .env
-cd ..
+copy backend\.env.example backend\.env
+copy backend\.env.docker.example backend\.env.docker
+copy frontend\.env.docker.example frontend\.env.docker
 ```
 
 2. Подними стек:
@@ -50,6 +51,13 @@ docker compose up -d --build
 - Flower: `http://localhost:5555`
 
 ### Режим разработки с автоматической перезагрузкой
+
+Перед первым запуском добавь dev-env файлы:
+
+```bash
+copy backend\.env.dev.docker.example backend\.env.dev.docker
+copy frontend\.env.dev.docker.example frontend\.env.dev.docker
+```
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build

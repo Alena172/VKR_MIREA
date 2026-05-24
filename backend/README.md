@@ -45,6 +45,12 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/1
 
 Шаблон хранится в [`.env.example`](/d:/VKR/VKR_V3_Curs/backend/.env.example).
 
+Для Docker-режима используй отдельный шаблон с адресами контейнерной сети:
+
+```bash
+copy .env.docker.example .env.docker
+```
+
 ### 3. Поднять инфраструктуру
 
 Из корня репозитория:
@@ -82,6 +88,10 @@ uv run uvicorn app.main:app --reload
 Из корня репозитория:
 
 ```bash
+copy .env.example .env
+copy backend\.env.example backend\.env
+copy backend\.env.docker.example backend\.env.docker
+copy frontend\.env.docker.example frontend\.env.docker
 docker compose up -d --build
 ```
 
@@ -99,6 +109,8 @@ docker compose up -d --build
 Для автоматической перезагрузки и подключения локального кода в контейнер:
 
 ```bash
+copy backend\.env.dev.docker.example backend\.env.dev.docker
+copy frontend\.env.dev.docker.example frontend\.env.dev.docker
 docker compose -f ../docker-compose.yml -f ../docker-compose.dev.yml up --build
 ```
 

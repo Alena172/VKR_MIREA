@@ -130,6 +130,10 @@ npm run dev
 Из корня репозитория:
 
 ```bash
+copy .env.example .env
+copy backend\.env.example backend\.env
+copy backend\.env.docker.example backend\.env.docker
+copy frontend\.env.docker.example frontend\.env.docker
 docker compose up -d --build
 ```
 

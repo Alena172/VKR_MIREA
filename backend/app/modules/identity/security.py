@@ -7,8 +7,7 @@ import hashlib
 import hmac
 import os
 
-
-_SCRYPT_N = int(os.environ.get("SCRYPT_N", 2**14))
+from app.core.config import get_settings
 _SCRYPT_R = 8
 _SCRYPT_P = 1
 _SALT_BYTES = 16
@@ -26,20 +25,26 @@ def make_unusable_password_hash() -> str:
     return f"{_UNUSABLE_PASSWORD_PREFIX}{base64.urlsafe_b64encode(os.urandom(24)).decode('ascii')}"
 
 
+def _scrypt_n() -> int:
+    """Берёт параметр CPU/memory cost из централизованного runtime-конфига."""
+    return get_settings().scrypt_n
+
+
 def hash_password(password: str) -> str:
     """Хеширует пароль через `scrypt` и сериализует параметры рядом с солью."""
+    scrypt_n = _scrypt_n()
     salt = os.urandom(_SALT_BYTES)
     derived = hashlib.scrypt(
         password.encode("utf-8"),
         salt=salt,
-        n=_SCRYPT_N,
+        n=scrypt_n,
         r=_SCRYPT_R,
         p=_SCRYPT_P,
         dklen=_KEY_BYTES,
     )
     salt_encoded = base64.urlsafe_b64encode(salt).decode("ascii")
     derived_encoded = base64.urlsafe_b64encode(derived).decode("ascii")
-    return f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}${salt_encoded}${derived_encoded}"
+    return f"scrypt${scrypt_n}${_SCRYPT_R}${_SCRYPT_P}${salt_encoded}${derived_encoded}"
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
