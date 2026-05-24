@@ -1,3 +1,5 @@
+"""Celery-задачи для словаря и capture-пайплайна."""
+
 from __future__ import annotations
 
 import asyncio
@@ -23,6 +25,7 @@ def add_word_with_ai(
     source_sentence: str | None,
     source_url: str | None,
 ) -> dict:
+    """Асинхронно добавляет слово в словарь через тот же сервисный слой, что и HTTP API."""
     from app.core.db import SessionLocal
     from app.modules.vocabulary.repository import VocabularyRepository
     from app.modules.vocabulary.schemas import VocabularyItemRead
@@ -61,6 +64,7 @@ def capture_to_vocabulary_task(
     source_sentence: str | None,
     force_new_vocabulary_item: bool,
 ) -> dict:
+    """Асинхронно сохраняет выделенный текст в словарь пользователя."""
     from app.core.db import SessionLocal
     from app.modules.vocabulary.repository import VocabularyRepository
     from app.modules.vocabulary.schemas import VocabularyFromCaptureResponse, VocabularyItemRead

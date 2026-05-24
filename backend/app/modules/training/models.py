@@ -1,3 +1,5 @@
+"""SQLAlchemy-модели учебных сессий и ответов на упражнения."""
+
 from datetime import datetime
 
 from sqlalchemy import (

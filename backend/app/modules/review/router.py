@@ -1,3 +1,5 @@
+"""Эндпоинты интервального повторения и очереди повторения слов."""
+
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -27,6 +29,7 @@ router = APIRouter(tags=["review"])
 
 
 def _progress_to_read(progress: WordProgressModel, vocab_map: dict, user_id: int) -> WordProgressRead:
+    """Соединяет прогресс повторения с данными словаря для ответа API."""
     vocab_item = vocab_map.get(progress.vocabulary_id) if progress.vocabulary_id is not None else None
     return WordProgressRead(
         user_id=user_id,
@@ -51,6 +54,7 @@ def get_review_queue_me(
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ReviewQueueResponse:
+    """Возвращает слова, которые пора повторить прямо сейчас."""
     result = service.get_review_queue(user_id=current_user_id, current_user_id=current_user_id, limit=limit)
     return ReviewQueueResponse(
         user_id=result["user_id"],
@@ -66,6 +70,7 @@ def submit_review_queue_item_me(
     srs_service: SRSService = Depends(get_srs_service),
     vocab_service: VocabularyService = Depends(),
 ) -> WordProgressRead:
+    """Сохраняет результат повторения одного слова."""
     progress = srs_service.submit_review_queue_item(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
     vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=current_user_id)}
     return _progress_to_read(progress, vocab_map, current_user_id)
@@ -78,6 +83,7 @@ def submit_review_queue_bulk_me(
     srs_service: SRSService = Depends(get_srs_service),
     vocab_service: VocabularyService = Depends(),
 ) -> ReviewQueueBulkSubmitResponse:
+    """Сохраняет результаты пачки повторений одним запросом."""
     result = srs_service.submit_review_queue_bulk(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
     vocab_map = {item.id: item for item in vocab_service.list_user_items(user_id=current_user_id)}
     updated = [_progress_to_read(r, vocab_map, current_user_id) for r in result["updated"]]
@@ -90,6 +96,7 @@ def start_review_session_me(
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ReviewSessionStartResponse:
+    """Формирует отдельную сессию повторения для выбранного режима."""
     from app.modules.review.schemas import ReviewSessionItem
     result = service.start_review_session(user_id=current_user_id, current_user_id=current_user_id, payload=payload)
     return ReviewSessionStartResponse(
@@ -113,6 +120,7 @@ def list_word_progress_me(
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> WordProgressListResponse:
+    """Показывает состояние прогресса по словам с фильтрами и сортировкой."""
     result = service.list_word_progress(
         user_id=current_user_id, current_user_id=current_user_id,
         limit=limit, offset=offset, status=status, q=q,
@@ -133,6 +141,7 @@ def delete_word_progress_me(
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> WordProgressDeleteResponse:
+    """Удаляет SRS-прогресс по слову, не затрагивая сам словарь."""
     result = service.delete_word_progress(user_id=current_user_id, current_user_id=current_user_id, word=word)
     return WordProgressDeleteResponse(**result)
 
@@ -144,6 +153,7 @@ def get_review_plan_me(
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ReviewPlanResponse:
+    """Строит короткий план повторения на ближайший временной горизонт."""
     result = service.get_review_plan(
         user_id=current_user_id, current_user_id=current_user_id,
         limit=limit, horizon_hours=horizon_hours,
@@ -163,6 +173,7 @@ def progress_me(
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ProgressSnapshot:
+    """Возвращает сводный снимок текущего прогресса пользователя."""
     result = service.get_progress_snapshot(user_id=None, current_user_id=current_user_id)
     return ProgressSnapshot(**result)
 
@@ -173,6 +184,7 @@ def review_summary_me(
     current_user_id: int = Depends(get_current_user_id),
     service: SRSService = Depends(get_srs_service),
 ) -> ReviewSummary:
+    """Считает агрегированную сводку по повторению и устойчивости запоминания."""
     result = service.get_review_summary(
         user_id=current_user_id, current_user_id=current_user_id,
         min_streak=min_streak,

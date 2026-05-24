@@ -1,3 +1,5 @@
+"""SQLAlchemy-модели graph-модуля: интересы пользователей и тематические кластеры."""
+
 from datetime import datetime
 
 from sqlalchemy import (

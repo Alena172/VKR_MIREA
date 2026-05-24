@@ -1,3 +1,5 @@
+"""SQLAlchemy-модели identity-модуля."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Integer, String

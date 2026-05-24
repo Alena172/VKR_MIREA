@@ -1,3 +1,5 @@
+"""Эндпоинт опроса статуса фоновых задач Celery и локального fallback-режима."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +11,8 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 class TaskStatusResponse(BaseModel):
+    """Состояние фоновой задачи в формате, удобном для polling на клиенте."""
+
     task_id: str
     status: str  # PENDING | STARTED | SUCCESS | FAILURE | RETRY | REVOKED
     result: dict | list | None = None

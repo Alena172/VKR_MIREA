@@ -1,3 +1,5 @@
+"""Репозиторий graph-модуля: интересы, кластеры и подбор слов по темам."""
+
 from __future__ import annotations
 
 import re
@@ -172,19 +174,23 @@ class GraphRepository:
         self._db = db
 
     def _normalize_lemma(self, value: str) -> str:
+        """Оставляет только латинские буквы для грубой нормализации леммы."""
         return self._WORD_RE.sub("", (value or "").strip().lower())
 
     def _normalize_interest_key(self, value: str) -> str:
+        """Строит стабильный slug для пользовательского интереса или topic hint."""
         tokens = [token.lower() for token in self._TAG_WORD_RE.findall(value or "")]
         return "-".join(tokens[:3])[:64] if tokens else ""
 
     def _display_name(self, key: str) -> str:
+        """Преобразует системный ключ темы в человекочитаемое имя."""
         for marker_key, (display_name, _) in self._TOPIC_MARKERS.items():
             if marker_key == key:
                 return display_name
         return key.replace("-", " ").title()
 
     def _tokens(self, value: str | None) -> set[str]:
+        """Выделяет набор информативных токенов из текста для грубой тематической эвристики."""
         tokens = {
             token.lower()
             for token in self._TAG_WORD_RE.findall(value or "")
@@ -204,7 +210,7 @@ class GraphRepository:
         source_sentence: str | None,
         topic_hint: str | None = None,
     ) -> tuple[str, str]:
-        """Возвращает (cluster_key, display_name) для слова."""
+        """Определяет тему слова по контексту, переводу и встроенным маркерам."""
         if topic_hint:
             key = self._normalize_interest_key(topic_hint)
             if key:
@@ -237,6 +243,7 @@ class GraphRepository:
         return row
 
     def increase_interest(self, *, user_id: int, cluster_key: str, display_name: str, confidence: float) -> None:
+        """Увеличивает вес интереса пользователя к кластеру или создаёт новый интерес."""
         row = self._db.scalar(
             select(UserInterestModel).where(
                 UserInterestModel.user_id == user_id,
@@ -258,6 +265,7 @@ class GraphRepository:
         self._db.flush()
 
     def list_interests(self, user_id: int) -> list[InterestItem]:
+        """Возвращает интересы пользователя в порядке убывания веса."""
         rows = list(self._db.scalars(
             select(UserInterestModel)
             .where(UserInterestModel.user_id == user_id)
@@ -266,6 +274,7 @@ class GraphRepository:
         return [InterestItem(interest=row.display_name, weight=row.weight) for row in rows]
 
     def upsert_interests(self, user_id: int, interests: list[InterestItem]) -> list[InterestItem]:
+        """Полностью заменяет список интересов пользователя новым набором."""
         self._db.query(UserInterestModel).filter(UserInterestModel.user_id == user_id).delete()
         for interest in interests:
             key = self._normalize_interest_key(interest.interest)
@@ -287,6 +296,7 @@ class GraphRepository:
         limit: int,
         saved_lemmas: set[str] | None = None,
     ) -> list[InterestWordItem]:
+        """Подбирает слова из общего словаря по интересам пользователя."""
         from app.modules.vocabulary.models import DictionaryEntryModel
 
         interests = {
@@ -333,7 +343,7 @@ class GraphRepository:
         candidates = list(best_by_lemma.values())
         if not candidates:
             return []
-        # general получает 30% от своего веса если есть слова из других категорий
+        # `general` специально ослаблен, если доступны слова из более точных тематик.
         has_non_general = any(item.primary_signal != "General" for item in candidates)
         weights = [
             item.score * 0.3 if (has_non_general and item.primary_signal == "General") else item.score

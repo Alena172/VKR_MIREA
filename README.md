@@ -85,6 +85,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ## Куда читать дальше
 
 - [docs/project_documentation.md](/d:/VKR/VKR_V3_Curs/docs/project_documentation.md)
+- [docs/backend_code_guide.md](/d:/VKR/VKR_V3_Curs/docs/backend_code_guide.md)
 - [ARCHITECTURE.md](/d:/VKR/VKR_V3_Curs/ARCHITECTURE.md)
 - [docs/module_structure.md](/d:/VKR/VKR_V3_Curs/docs/module_structure.md)
 - [backend/README.md](/d:/VKR/VKR_V3_Curs/backend/README.md)

@@ -1,3 +1,5 @@
+"""Собирает единый API-роутер из доменных модулей проекта."""
+
 from fastapi import APIRouter
 
 from app.modules.ai.router import router as ai_router
@@ -10,6 +12,7 @@ from app.platform.tasks.router import router as tasks_router
 
 api_router = APIRouter(prefix="/api/v1")
 
+# Порядок подключения здесь задаёт итоговую структуру OpenAPI/Swagger.
 api_router.include_router(identity_router)
 api_router.include_router(vocabulary_router)
 api_router.include_router(training_router)

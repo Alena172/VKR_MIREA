@@ -1,3 +1,5 @@
+"""Репозиторий общего и пользовательского словаря."""
+
 from __future__ import annotations
 
 from fastapi import Depends
@@ -12,6 +14,8 @@ from app.modules.vocabulary.models import (
 
 
 class VocabularyRepository:
+    """Содержит SQLAlchemy-запросы vocabulary-модуля и соседних сценариев."""
+
     def __init__(self, db: Session = Depends(get_db)) -> None:
         self._db = db
 
@@ -27,6 +31,7 @@ class VocabularyRepository:
         context_definition_ru: str | None,
         topic_cluster_key: str | None = None,
     ) -> tuple[DictionaryEntryModel, bool]:
+        """Находит или создаёт запись в общем словаре по лемме и переводу."""
         normalized_lemma = english_lemma.strip().lower()
         normalized_translation = russian_translation.strip()
 
@@ -60,6 +65,7 @@ class VocabularyRepository:
         return entry, True
 
     def count_shared_translations(self, *, english_lemma: str) -> int:
+        """Считает, сколько переводов уже есть у данной леммы в общем словаре."""
         normalized = english_lemma.strip().lower()
         if not normalized:
             return 0
@@ -69,6 +75,7 @@ class VocabularyRepository:
         ) or 0
 
     def find_shared_translation(self, *, english_lemma: str) -> str | None:
+        """Возвращает самый распространённый перевод леммы среди пользовательских словарей."""
         normalized = english_lemma.strip().lower()
         if not normalized:
             return None
@@ -92,6 +99,7 @@ class VocabularyRepository:
         english_lemma: str,
         limit: int = 20,
     ) -> list[DictionaryEntryModel]:
+        """Возвращает кандидаты со смысловыми определениями для AI-дизамбигуации."""
         normalized = english_lemma.strip().lower()
         if not normalized:
             return []
@@ -115,6 +123,7 @@ class VocabularyRepository:
         user_id: int,
         item_id: int,
     ) -> tuple[UserVocabularyModel, DictionaryEntryModel] | None:
+        """Возвращает пользовательский элемент словаря вместе с записью общего словаря."""
         row = self._db.execute(
             select(UserVocabularyModel, DictionaryEntryModel)
             .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
@@ -133,6 +142,7 @@ class VocabularyRepository:
         source_sentence: str | None,
         source_url: str | None,
     ) -> tuple[UserVocabularyModel, bool]:
+        """Добавляет слово в личный словарь, если такой пары user+entry ещё нет."""
         existing = self._db.scalar(
             select(UserVocabularyModel).where(
                 UserVocabularyModel.user_id == user_id,
@@ -162,6 +172,7 @@ class VocabularyRepository:
         source_sentence: str | None,
         source_url: str | None,
     ) -> tuple[UserVocabularyModel, bool]:
+        """Добавляет фразу в словарь пользователя без привязки к общему словарю лемм."""
         normalized = phrase_en.strip().lower()
         existing = self._db.scalar(
             select(UserVocabularyModel).where(
@@ -186,12 +197,14 @@ class VocabularyRepository:
         return item, True
 
     def count_user_vocabulary(self, *, user_id: int) -> int:
+        """Считает все слова и фразы в словаре пользователя."""
         return int(self._db.scalar(
             select(func.count(UserVocabularyModel.id))
             .where(UserVocabularyModel.user_id == user_id)
         ) or 0)
 
     def list_user_vocabulary(self, *, user_id: int) -> list[tuple[UserVocabularyModel, DictionaryEntryModel | None]]:
+        """Возвращает словарь пользователя в общем хронологическом порядке добавления."""
         word_rows = self._db.execute(
             select(UserVocabularyModel, DictionaryEntryModel)
             .join(DictionaryEntryModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)
@@ -220,12 +233,14 @@ class VocabularyRepository:
         source_sentence: str | None,
         source_url: str | None,
     ) -> UserVocabularyModel:
+        """Обновляет контекстные пользовательские поля словарного элемента."""
         item.source_sentence = source_sentence
         item.source_url = source_url
         self._db.flush()
         return item
 
     def delete_user_vocabulary_item(self, item: UserVocabularyModel) -> None:
+        """Удаляет элемент из личного словаря пользователя."""
         self._db.delete(item)
         self._db.flush()
 
@@ -235,6 +250,7 @@ class VocabularyRepository:
         user_id: int,
         english_lemma: str,
     ) -> tuple[UserVocabularyModel, DictionaryEntryModel] | None:
+        """Возвращает последнюю запись пользователя по указанной лемме."""
         normalized = english_lemma.strip().lower()
         if not normalized:
             return None
@@ -255,6 +271,7 @@ class VocabularyRepository:
     # ------------------------------------------------------------------
 
     def get_translation_map(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
+        """Строит карту `lemma -> translation` для подмножества слов пользователя."""
         normalized = [l.strip().lower() for l in english_lemmas if l and l.strip()]
         if not normalized:
             return {}
@@ -274,6 +291,7 @@ class VocabularyRepository:
         return result
 
     def get_definition_map(self, *, user_id: int, english_lemmas: list[str]) -> dict[str, str]:
+        """Строит карту `lemma -> context_definition_ru` для слов пользователя."""
         normalized = [l.strip().lower() for l in english_lemmas if l and l.strip()]
         if not normalized:
             return {}
@@ -294,6 +312,7 @@ class VocabularyRepository:
         return result
 
     def list_senses_for_lemma(self, *, english_lemma: str) -> list[DictionaryEntryModel]:
+        """Возвращает все сохранённые смыслы леммы из общего словаря."""
         normalized = english_lemma.strip().lower()
         return list(self._db.scalars(
             select(DictionaryEntryModel)
@@ -307,6 +326,7 @@ class VocabularyRepository:
         user_id: int,
         entry_id: int,
     ) -> UserVocabularyModel | None:
+        """Проверяет, есть ли у пользователя элемент, указывающий на конкретный `entry_id`."""
         return self._db.scalar(
             select(UserVocabularyModel).where(
                 UserVocabularyModel.user_id == user_id,
@@ -320,11 +340,13 @@ class VocabularyRepository:
         *,
         new_entry_id: int,
     ) -> UserVocabularyModel:
+        """Переключает пользовательский элемент на другую запись общего словаря."""
         item.entry_id = new_entry_id
         self._db.flush()
         return item
 
     def list_english_lemmas(self, *, user_id: int) -> list[str]:
+        """Возвращает уникальные леммы пользователя в порядке недавнего добавления."""
         rows = list(self._db.scalars(
             select(DictionaryEntryModel.english_lemma)
             .join(UserVocabularyModel, UserVocabularyModel.entry_id == DictionaryEntryModel.id)

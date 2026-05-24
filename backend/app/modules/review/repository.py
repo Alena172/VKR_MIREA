@@ -1,3 +1,5 @@
+"""Репозиторий review-модуля для хранения и выборки SRS-прогресса."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -56,6 +58,7 @@ class ReviewRepository:
         last_reviewed_at: datetime,
         next_review_at: datetime,
     ) -> WordProgressModel:
+        """Сохраняет пересчитанные поля SRS-карточки и возвращает ту же ORM-строку."""
         row.error_count = error_count
         row.correct_streak = correct_streak
         row.ease_factor = ease_factor
@@ -69,6 +72,7 @@ class ReviewRepository:
         self,
         vocabulary_id: int,
     ) -> WordProgressModel | None:
+        """Гарантирует наличие карточки прогресса для словарного элемента."""
         return self.get_or_create_word_progress(
             vocabulary_id, now=datetime.utcnow()
         )
@@ -76,6 +80,7 @@ class ReviewRepository:
     def get_word_progress_by_vocabulary_id(
         self, vocabulary_id: int
     ) -> WordProgressModel | None:
+        """Возвращает карточку прогресса по `vocabulary_id`, если она уже есть."""
         return self._db.scalar(
             select(WordProgressModel).where(
                 WordProgressModel.vocabulary_id == vocabulary_id,
@@ -85,6 +90,7 @@ class ReviewRepository:
     def get_progress_map_by_vocabulary_ids(
         self, vocabulary_ids: list[int]
     ) -> dict[int, WordProgressModel]:
+        """Строит карту `vocabulary_id -> progress` для набора словарных элементов."""
         if not vocabulary_ids:
             return {}
         rows = list(self._db.scalars(
@@ -95,6 +101,7 @@ class ReviewRepository:
         return {row.vocabulary_id: row for row in rows}
 
     def list_due_word_progress(self, user_id: int, limit: int) -> list[WordProgressModel]:
+        """Возвращает слова пользователя, срок повторения которых уже наступил."""
         now = datetime.utcnow()
         return list(self._db.scalars(
             select(WordProgressModel)
@@ -108,6 +115,7 @@ class ReviewRepository:
         ))
 
     def count_due_word_progress(self, user_id: int) -> int:
+        """Считает количество просроченных карточек повторения у пользователя."""
         now = datetime.utcnow()
         return int(self._db.scalar(
             select(func.count(WordProgressModel.id))
@@ -124,6 +132,7 @@ class ReviewRepository:
         horizon: timedelta,
         limit: int,
     ) -> list[WordProgressModel]:
+        """Возвращает карточки, которые станут актуальны в ближайшем временном окне."""
         now = datetime.utcnow()
         end = now + horizon
         return list(self._db.scalars(
@@ -147,6 +156,7 @@ class ReviewRepository:
         sort_by: Literal["next_review_at", "error_count", "correct_streak"] = "next_review_at",
         sort_order: Literal["asc", "desc"] = "asc",
     ) -> list[WordProgressModel]:
+        """Возвращает список SRS-карточек пользователя с сортировкой для UI."""
         query = (
             select(WordProgressModel)
             .join(UserVocabularyModel, UserVocabularyModel.id == WordProgressModel.vocabulary_id)
@@ -165,6 +175,7 @@ class ReviewRepository:
         return list(self._db.scalars(query))
 
     def delete_word_progress_by_vocabulary_id(self, vocabulary_id: int) -> bool:
+        """Удаляет карточку прогресса по `vocabulary_id`, если она существует."""
         row = self._db.scalar(
             select(WordProgressModel).where(
                 WordProgressModel.vocabulary_id == vocabulary_id,

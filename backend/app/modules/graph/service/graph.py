@@ -1,3 +1,5 @@
+"""Сервис graph-модуля: профиль интересов и тематическая привязка слов."""
+
 from __future__ import annotations
 
 from fastapi import Depends
@@ -26,9 +28,11 @@ class GraphService:
         self._identity_service = identity_service
 
     def _get_user_or_404(self, user_id: int):
+        """Проверяет существование пользователя перед работой с его профилем интересов."""
         return self._identity_service.get_user_or_404(user_id=user_id)
 
     def list_interests(self, *, current_user_id: int) -> UserInterestsResponse:
+        """Возвращает текущий набор интересов пользователя."""
         self._get_user_or_404(current_user_id)
         interests = self._repo.list_interests(current_user_id)
         return UserInterestsResponse(
@@ -42,6 +46,7 @@ class GraphService:
         payload: InterestUpsertRequest,
         current_user_id: int,
     ) -> UserInterestsResponse:
+        """Перезаписывает интересы пользователя новым списком с весами."""
         self._get_user_or_404(current_user_id)
         with transaction(self._repo._db):
             updated = self._repo.upsert_interests(current_user_id, payload.interests)
@@ -57,6 +62,7 @@ class GraphService:
         current_user_id: int,
         saved_lemmas: set[str],
     ) -> InterestWordsResponse:
+        """Подбирает слова по интересам, исключая уже сохранённые леммы."""
         self._get_user_or_404(current_user_id)
         items = self._repo.list_interest_words(
             user_id=current_user_id,
@@ -87,10 +93,7 @@ class GraphService:
         context_definition_ru: str | None,
         source_sentence: str | None,
     ) -> str | None:
-        """Инферирует тему слова, создаёт кластер если нужно, обновляет интересы.
-
-        Возвращает cluster_key для записи в dictionary_entries.
-        """
+        """Определяет тему слова и возвращает `cluster_key` для записи в общий словарь."""
         cluster_key, display_name = self._repo.infer_topic(
             english_lemma=english_lemma,
             russian_translation=russian_translation,

@@ -1,3 +1,5 @@
+"""Локальные helper-функции для нормализации email и работы с паролями."""
+
 from __future__ import annotations
 
 import base64
@@ -15,14 +17,17 @@ _UNUSABLE_PASSWORD_PREFIX = "!"
 
 
 def normalize_email(email: str) -> str:
+    """Приводит email к каноничному виду для хранения и поиска."""
     return email.strip().lower()
 
 
 def make_unusable_password_hash() -> str:
+    """Создаёт маркер, которым нельзя успешно аутентифицироваться."""
     return f"{_UNUSABLE_PASSWORD_PREFIX}{base64.urlsafe_b64encode(os.urandom(24)).decode('ascii')}"
 
 
 def hash_password(password: str) -> str:
+    """Хеширует пароль через `scrypt` и сериализует параметры рядом с солью."""
     salt = os.urandom(_SALT_BYTES)
     derived = hashlib.scrypt(
         password.encode("utf-8"),
@@ -38,6 +43,7 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
+    """Проверяет пароль против сериализованного scrypt-хеша."""
     if not password_hash or password_hash.startswith(_UNUSABLE_PASSWORD_PREFIX):
         return False
 

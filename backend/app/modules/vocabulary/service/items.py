@@ -1,3 +1,5 @@
+"""Основной сервис словаря: CRUD, capture-пайплайн и перевод с учётом контекста."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -23,10 +25,12 @@ if TYPE_CHECKING:
 
 
 def _to_dto(uv, entry) -> VocabularyItemDTO:
+    """Склеивает пользовательскую запись и запись общего словаря в единый DTO."""
     return VocabularyItemDTO.from_model(uv, entry)
 
 
 def _normalize_english_lemma(text: str) -> str:
+    """Нормализует выбранное слово или фразу для хранения и поиска дублей."""
     stripped = text.strip()
     tokens = stripped.split()
     if len(tokens) > 1:
@@ -35,6 +39,7 @@ def _normalize_english_lemma(text: str) -> str:
 
 
 def _normalize_translation(text: str) -> str:
+    """Очищает технические префиксы и подставляет fallback для пустого перевода."""
     value = text.strip()
     if value.startswith("[RU]"):
         value = value.replace("[RU]", "", 1).strip()
@@ -42,6 +47,7 @@ def _normalize_translation(text: str) -> str:
 
 
 def _build_translation_note(provider_note: str) -> str:
+    """Преобразует техническую заметку провайдера в понятный текст для клиента."""
     normalized = provider_note.strip().lower()
     if normalized.startswith("local_heuristic"):
         return f"Использован локальный эвристический перевод ({provider_note})"
@@ -55,6 +61,8 @@ def _build_translation_note(provider_note: str) -> str:
 
 
 class VocabularyService:
+    """Управляет пользовательским словарём и связанными AI/SRS-сценариями."""
+
     def __init__(
         self,
         repo: VocabularyRepository = Depends(),
@@ -64,6 +72,7 @@ class VocabularyService:
         self._srs_service: SRSService | None = None
 
     def _graph(self) -> GraphService:
+        """Лениво поднимает graph-сервис, чтобы избежать тяжёлой инициализации без необходимости."""
         if self._graph_service is None:
             from app.modules.graph.repository import GraphRepository
             from app.modules.graph.service.graph import GraphService
@@ -76,6 +85,7 @@ class VocabularyService:
         return self._graph_service
 
     def _srs(self) -> SRSService:
+        """Лениво поднимает SRS-сервис для сценариев, где нужно обновить прогресс повторения."""
         if self._srs_service is None:
             from app.modules.identity.repository import IdentityRepository
             from app.modules.identity.service import IdentityService
@@ -101,6 +111,7 @@ class VocabularyService:
         requested_user_id: int | None,
         current_user_id: int,
     ) -> list[VocabularyItemDTO]:
+        """Возвращает словарь пользователя с проверкой доступа к целевому `user_id`."""
         target_user_id = application_access.resolve_target_user_id(
             requested_user_id=requested_user_id,
             current_user_id=current_user_id,
@@ -108,9 +119,11 @@ class VocabularyService:
         return [_to_dto(uv, entry) for uv, entry in self._repo.list_user_vocabulary(user_id=target_user_id)]
 
     def count_user_items(self, *, user_id: int) -> int:
+        """Считает количество словарных элементов пользователя."""
         return self._repo.count_user_vocabulary(user_id=user_id)
 
     def list_user_items(self, *, user_id: int) -> list[VocabularyItemDTO]:
+        """Возвращает словарь без дополнительной access-проверки."""
         return [_to_dto(uv, entry) for uv, entry in self._repo.list_user_vocabulary(user_id=user_id)]
 
     async def create_item_with_ai(
@@ -122,6 +135,7 @@ class VocabularyService:
         source_sentence: str | None,
         source_url: str | None,
     ) -> VocabularyItemDTO:
+        """Создаёт словарный элемент и при необходимости достраивает данные о смысле через AI."""
         application_access.get_user_or_404(user_id=user_id, db=self._repo._db)
 
         normalized_lemma = english_lemma.strip().lower()
@@ -167,6 +181,7 @@ class VocabularyService:
         payload: VocabularyItemUpdateMe,
         current_user_id: int,
     ) -> VocabularyItemDTO:
+        """Обновляет редактируемые пользовательские поля словарного элемента."""
         row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
         if row is None:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")
@@ -191,6 +206,7 @@ class VocabularyService:
         return _to_dto(uv, entry)
 
     def list_senses(self, *, item_id: int, current_user_id: int) -> list:
+        """Показывает доступные значения леммы, сохранённые в общем словаре."""
         from app.modules.vocabulary.schemas import SenseRead
         row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
         if row is None:
@@ -214,6 +230,7 @@ class VocabularyService:
         entry_id: int | None,
         russian_translation: str | None,
     ) -> VocabularyItemDTO:
+        """Переключает слово на другой `entry` или создаёт новый по переводу пользователя."""
         from app.modules.vocabulary.schemas import ChangeSenseRequest
         row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
         if row is None:
@@ -263,6 +280,7 @@ class VocabularyService:
         raise HTTPException(status_code=400, detail="Provide either entry_id or russian_translation")
 
     def delete_item(self, *, item_id: int, current_user_id: int) -> dict[str, bool]:
+        """Удаляет элемент из словаря пользователя."""
         row = self._repo.get_user_vocabulary_item(user_id=current_user_id, item_id=item_id)
         if row is None:
             raise HTTPException(status_code=404, detail="Vocabulary item not found")
@@ -282,6 +300,7 @@ class VocabularyService:
         english_lemma: str,
         cefr_level: str,
     ) -> tuple[str, str, str | None]:
+        """Получает перевод и провайдерскую заметку для захваченного слова или фразы."""
         is_phrase = " " in english_lemma.strip()
         # Фразы → LibreTranslate (force_ai=False, AI идёт только как запасной если LibreTranslate недоступен).
         # Многозначные одиночные слова → AI (LibreTranslate не учитывает контекст для омонимов).
@@ -307,6 +326,7 @@ class VocabularyService:
         source_sentence: str | None,
         force_new_vocabulary_item: bool,
     ) -> tuple[VocabularyItemDTO, bool]:
+        """Преобразует текст, выбранный на странице, в словарную запись пользователя."""
         user = application_access.get_user_or_404(user_id=user_id, db=self._repo._db)
         normalized_url = source_url.strip() if source_url else None
         normalized_sentence = source_sentence.strip() if source_sentence else None
@@ -396,6 +416,7 @@ class VocabularyService:
         normalized_url: str | None,
         force_new_vocabulary_item: bool,
     ) -> tuple[VocabularyItemDTO, bool]:
+        """Обрабатывает отдельный сценарий для фраз, которые не ложатся в общий словарь лемм."""
         russian_translation = await ai_service.translate_phrase_async(english_lemma)
         with transaction(self._repo._db):
             uv, created = self._repo.add_phrase_to_user_vocabulary(
@@ -422,6 +443,7 @@ class VocabularyService:
         text: str,
         source_context: str | None,
     ) -> TranslationResultDTO:
+        """Переводит ввод пользователя с учётом контекста и накопленного словаря."""
         is_phrase = " " in text.strip()
 
         if is_phrase:

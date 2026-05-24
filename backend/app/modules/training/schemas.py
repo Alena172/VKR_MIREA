@@ -1,3 +1,5 @@
+"""HTTP-модели и DTO для генерации упражнений и учебных сессий."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -54,6 +56,8 @@ class ExerciseGenerateResponse(BaseModel):
 
 
 class SessionAnswer(BaseModel):
+    """Один ответ пользователя на упражнение перед сохранением сессии."""
+
     exercise_id: int = Field(ge=1)
     exercise_type: str | None = Field(default=None, max_length=64)
     target_word: str | None = Field(default=None, max_length=200)
@@ -65,11 +69,15 @@ class SessionAnswer(BaseModel):
 
 
 class SessionSubmitRequest(BaseModel):
+    """Пакет ответов, который клиент отправляет после прохождения упражнений."""
+
     user_id: int | None = Field(default=None, ge=1)
     answers: list[SessionAnswer] = Field(default_factory=list)
 
 
 class SessionSummary(BaseModel):
+    """Краткая сводка по сохранённой учебной сессии."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -81,6 +89,8 @@ class SessionSummary(BaseModel):
 
 
 class SessionHistoryResponse(BaseModel):
+    """Пагинированный список учебных сессий пользователя."""
+
     total: int
     limit: int
     offset: int
@@ -88,6 +98,8 @@ class SessionHistoryResponse(BaseModel):
 
 
 class SubmittedAnswerResult(BaseModel):
+    """Ответ после оценки: что ожидалось и был ли ответ засчитан."""
+
     exercise_id: int
     exercise_type: str | None = None
     prompt: str | None = None
@@ -97,12 +109,16 @@ class SubmittedAnswerResult(BaseModel):
 
 
 class SessionSubmitResponse(BaseModel):
+    """Результат сохранения сессии и оценки отправленных ответов."""
+
     session: SessionSummary
     answers: list[SubmittedAnswerResult] = Field(default_factory=list)
     llm_pending_count: int = 0
 
 
 class SessionAnswerRead(BaseModel):
+    """Один уже сохранённый ответ из истории учебной сессии."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int

@@ -1,3 +1,5 @@
+"""Сервис генерации предложений и переводов для exercise builder."""
+
 from __future__ import annotations
 
 import asyncio
@@ -12,6 +14,7 @@ from app.modules.ai.service.translation import TranslationService
 
 
 def _extract_json_payload(raw: str) -> dict | list | None:
+    """Пытается извлечь JSON из чистого ответа модели или fenced code блока."""
     text = raw.strip()
     if not text:
         return None
@@ -29,6 +32,8 @@ def _extract_json_payload(raw: str) -> dict | list | None:
 
 
 class ExerciseMaterialService:
+    """Генерирует упражнения на уровне языковых материалов: предложения и их переводы."""
+
     def __init__(
         self,
         *,
@@ -50,6 +55,7 @@ class ExerciseMaterialService:
         self,
         callback: Callable[..., Awaitable[str | None]] | Callable[..., str | None],
     ) -> Callable[..., Awaitable[str | None]]:
+        """Нормализует callback так, чтобы дальше с ним всегда работать как с async."""
         if inspect.iscoroutinefunction(callback):
             return callback
 
@@ -59,6 +65,7 @@ class ExerciseMaterialService:
         return _wrapped
 
     def _sentence_word_limits(self, cefr_level: str) -> tuple[int, int]:
+        """Возвращает допустимый диапазон длины предложения для уровня CEFR."""
         if cefr_level in {"A1", "A2"}:
             return (6, 18)
         if cefr_level in {"B1", "B2"}:
@@ -66,6 +73,7 @@ class ExerciseMaterialService:
         return (10, 28)
 
     def _is_sentence_suitable(self, sentence: str, target_word: str, cefr_level: str) -> bool:
+        """Отфильтровывает неестественные, слишком длинные или нерелевантные предложения."""
         text = re.sub(r"\s+", " ", sentence.strip())
         if not text:
             return False
@@ -84,6 +92,7 @@ class ExerciseMaterialService:
         return not bool(lowered.intersection(disallowed_tokens))
 
     def _sanitize_generated_sentence(self, text: str) -> str:
+        """Очищает предложение от markdown-артефактов и лишних пробелов."""
         candidate = text.strip().strip('"').strip("'")
         candidate = candidate.replace("**", "").replace("__", "").replace("`", "")
         return re.sub(r"\s+", " ", candidate).strip()
@@ -100,6 +109,7 @@ class ExerciseMaterialService:
         return len(ru_words) / len(all_words) >= 0.7
 
     def _parse_sentence_translation_payload(self, raw: str) -> tuple[str, str] | None:
+        """Разбирает JSON с английским предложением и русским переводом."""
         payload = _extract_json_payload(raw)
         if not isinstance(payload, dict):
             return None
@@ -113,6 +123,7 @@ class ExerciseMaterialService:
         return self._sanitize_generated_sentence(sentence_en), sentence_ru
 
     def _translation_contains_target(self, translated_text: str, target_translation: str) -> bool:
+        """Проверяет, что в русском переводе хотя бы грубо сохранён целевой перевод слова."""
         target_norm = target_translation.strip().lower().replace("ё", "е")
         target_norm = re.sub(r"[^а-яa-z]", "", target_norm)
         if not target_norm:
@@ -151,6 +162,7 @@ class ExerciseMaterialService:
         seed: ExerciseSeed,
         cefr_level: str,
     ) -> tuple[str, str] | None:
+        """Генерирует одну качественную пару `sentence_en`/`sentence_ru` для seed-слова."""
         import random
         history = self._recent_sentences.setdefault(seed.english_lemma.strip().lower(), deque(maxlen=8))
 
@@ -244,8 +256,7 @@ class ExerciseMaterialService:
         seeds: list[ExerciseSeed],
         cefr_level: str,
     ) -> list[tuple[str, str] | None]:
-        """Генерирует пары (sentence_en, sentence_ru) для списка seeds одним LLM-запросом.
-        Возвращает список той же длины: None на месте провалившихся слов."""
+        """Генерирует пары предложений пачкой и сохраняет порядок исходных seed-слов."""
         import random
 
         situation = random.choice(self._SITUATION_POOL)
@@ -328,6 +339,7 @@ class ExerciseMaterialService:
         word: str,
         cefr_level: str,
     ) -> str | None:
+        """Генерирует только английское предложение для одного слова."""
         import random
         history = self._recent_sentences.setdefault(word, deque(maxlen=8))
         for _ in range(self._max_retries + 2):
@@ -363,6 +375,7 @@ class ExerciseMaterialService:
         return None
 
     async def build_sentence_for_word(self, seed: ExerciseSeed, cefr_level: str | None = None) -> str:
+        """Строит английское предложение и требует доступности удалённого AI-провайдера."""
         if not self._remote_enabled():
             raise self._provider_unavailable_error(
                 "Sentence generation requires remote AI provider. "
@@ -380,6 +393,7 @@ class ExerciseMaterialService:
         )
 
     async def translate_sentence_for_seed(self, sentence_en: str, seed: ExerciseSeed) -> str:
+        """Переводит английское предложение так, чтобы сохранить нужный смысл seed-слова."""
         if self._remote_enabled():
             prompts = [
                 (

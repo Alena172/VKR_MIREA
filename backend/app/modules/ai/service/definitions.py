@@ -1,3 +1,5 @@
+"""Сервис генерации и очистки контекстных определений для словаря."""
+
 from __future__ import annotations
 
 import re
@@ -20,6 +22,7 @@ class DefinitionService:
         english_lemma: str,
         source_sentence: str | None,
     ) -> str | None:
+        """Пытается извлечь определение прямо из предложения вида `X is ...`."""
         raw = (source_sentence or "").strip()
         if not raw:
             return None
@@ -49,6 +52,7 @@ class DefinitionService:
         english_lemma: str,
         source_sentence: str | None,
     ) -> str | None:
+        """Fallback: если AI не помог, пробует вытащить определение из исходного предложения."""
         return self._extract_definition_from_source_sentence(
             english_lemma=english_lemma,
             source_sentence=source_sentence,
@@ -62,6 +66,7 @@ class DefinitionService:
         source_sentence: str | None,
         definition: str | None,
     ) -> str | None:
+        """Чистит AI-ответ от мета-фраз и приводит определение к словарному виду."""
         cleaned = (definition or "").strip().strip('"')
         if not cleaned:
             return self._fallback_context_definition(
@@ -133,6 +138,7 @@ class DefinitionService:
         russian_translation: str,
         source_sentence: str | None,
     ) -> str | None:
+        """Быстрый путь: использует исходное предложение как источник определения без AI."""
         return self.sanitize_context_definition(
             english_lemma=english_lemma,
             russian_translation=russian_translation,

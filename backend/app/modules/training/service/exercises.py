@@ -1,3 +1,5 @@
+"""Сервис генерации упражнений и управления предзагруженным буфером заданий."""
+
 from __future__ import annotations
 
 import secrets
@@ -23,6 +25,8 @@ _PREFETCH_EXTRA = 3  # сколько лишних упражнений гене
 
 
 class TrainingService:
+    """Оркестрирует генерацию упражнений из словаря, графа тем и AI-провайдера."""
+
     def __init__(
         self,
         identity_service: IdentityService = Depends(),
@@ -34,6 +38,7 @@ class TrainingService:
         self._graph_service = graph_service
 
     def _get_user_or_404(self, user_id: int):
+        """Короткий прокси к identity-сервису для единообразной обработки `404`."""
         return self._identity_service.get_user_or_404(user_id=user_id)
 
     def queue_generation(
@@ -42,6 +47,7 @@ class TrainingService:
         payload: ExerciseGenerateRequest,
         current_user_id: int,
     ) -> AsyncTaskResponse:
+        """Ставит генерацию упражнений в очередь и возвращает идентификатор задачи."""
         from app.core.application import application_access
         target_user_id = application_access.resolve_target_user_id(
             requested_user_id=payload.user_id,
@@ -75,6 +81,7 @@ class TrainingService:
         fast_start: bool = False,
         incremental: bool = False,
     ) -> ExerciseGenerateResultDTO:
+        """Генерирует упражнения синхронно, при необходимости используя и пополняя prefetch-буфер."""
         user = self._get_user_or_404(user_id)
         use_prefetch = not vocabulary_ids and mode == "sentence_translation_full"
 
@@ -143,6 +150,7 @@ class TrainingService:
         vocabulary_ids: list[int],
         mode: str,
     ):
+        """Подготавливает подходящий набор слов для выбранного режима упражнений."""
         vocabulary_items = self._vocab_service.list_user_items(user_id=user_id)
         if vocabulary_ids:
             allowed = set(vocabulary_ids)
@@ -165,6 +173,7 @@ class TrainingService:
         return vocabulary_items
 
     def _build_seeds(self, *, user_id: int, vocabulary_items) -> list[ExerciseSeed]:
+        """Преобразует словарные элементы в seed-объекты для exercise builder."""
         saved_lemmas = {item.english_lemma.strip().lower() for item in vocabulary_items if item.english_lemma}
         interest_words = self._graph_service.get_interest_words(
             limit=30,
@@ -205,6 +214,7 @@ class TrainingService:
 
 
 def _dedupe_vocabulary_by_lemma(vocabulary_items):
+    """Оставляет по одному словарному элементу на лемму для режимов без омонимии."""
     deduped: dict[str, object] = {}
     for item in vocabulary_items:
         key = item.english_lemma.strip().lower()

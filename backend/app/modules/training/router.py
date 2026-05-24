@@ -1,3 +1,5 @@
+"""Эндпоинты генерации упражнений и истории учебных сессий."""
+
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,7 +20,7 @@ from app.modules.training.schemas import (
 from app.modules.training.service.exercises import TrainingService
 from app.modules.training.service.submission import SubmissionService
 
-router = APIRouter()
+router = APIRouter(tags=["training"])
 
 
 @router.post("/exercises/me/generate", response_model=ExerciseGenerateResponse)
@@ -27,6 +29,7 @@ async def generate_me(
     current_user_id: int = Depends(get_current_user_id),
     service: TrainingService = Depends(),
 ) -> ExerciseGenerateResponse:
+    """Генерирует упражнения для текущего пользователя по его словарю."""
     result = await service.generate_for_user(
         user_id=current_user_id,
         vocabulary_ids=payload.vocabulary_ids,
@@ -63,6 +66,7 @@ def list_my_sessions(
     current_user_id: int = Depends(get_current_user_id),
     repo: TrainingRepository = Depends(),
 ) -> SessionHistoryResponse:
+    """Возвращает историю учебных сессий с фильтрами по дате и точности."""
     if min_accuracy is not None and max_accuracy is not None and min_accuracy > max_accuracy:
         raise HTTPException(status_code=400, detail="min_accuracy cannot be greater than max_accuracy")
     if date_from is not None and date_to is not None and date_from > date_to:
@@ -96,6 +100,7 @@ def get_my_session(
     current_user_id: int = Depends(get_current_user_id),
     repo: TrainingRepository = Depends(),
 ) -> SessionSubmitResponse:
+    """Показывает одну завершённую сессию вместе с ответами пользователя."""
     session_row = repo.get_session_by_id(session_id=session_id, user_id=current_user_id)
     if session_row is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -123,6 +128,7 @@ def list_my_session_answers(
     current_user_id: int = Depends(get_current_user_id),
     repo: TrainingRepository = Depends(),
 ) -> list[SessionAnswerRead]:
+    """Возвращает ответы пользователя для конкретной сессии."""
     answers = repo.list_answers_by_session(session_id=session_id, user_id=current_user_id)
     if answers is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -135,6 +141,7 @@ async def submit_session(
     current_user_id: int = Depends(get_current_user_id),
     service: SubmissionService = Depends(),
 ) -> SessionSubmitResponse:
+    """Проверяет ответы пользователя и сохраняет результат учебной сессии."""
     target_user_id = application_access.resolve_target_user_id(
         requested_user_id=payload.user_id,
         current_user_id=current_user_id,

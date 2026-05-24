@@ -46,6 +46,8 @@ app.include_router(api_router)
 
 @app.on_event("startup")
 def on_startup() -> None:
+    """Подготавливает окружение приложения перед обработкой первых запросов."""
+
     access_logger = logging.getLogger("uvicorn.access")
     if not any(isinstance(current_filter, _HealthcheckAccessLogFilter) for current_filter in access_logger.filters):
         access_logger.addFilter(_HealthcheckAccessLogFilter())
@@ -53,6 +55,7 @@ def on_startup() -> None:
     if not settings.bootstrap_schema_on_startup:
         return
 
+    # Локально и в контейнере можно включить безопасную инициализацию схемы без Alembic-команд вручную.
     ensure_database_schema_ready(engine=engine, database_url=settings.database_url)
 
 

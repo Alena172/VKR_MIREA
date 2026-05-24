@@ -1,3 +1,5 @@
+"""FastAPI-зависимости identity-модуля."""
+
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -10,7 +12,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 def get_current_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> int:
-    """Возвращает id пользователя из `Authorization: Bearer <token>`."""
+    """Извлекает `user_id` из bearer-токена и превращает ошибки авторизации в единый `401`."""
 
     if credentials is None or not credentials.credentials:
         raise HTTPException(status_code=401, detail="Missing token")

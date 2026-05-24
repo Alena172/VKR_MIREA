@@ -1,3 +1,5 @@
+"""Эндпоинты графа интересов и тематических подсказок пользователя."""
+
 from fastapi import APIRouter, Depends, Query
 
 from app.modules.graph.schemas import (
@@ -17,6 +19,7 @@ def list_interests_me(
     current_user_id: int = Depends(get_current_user_id),
     service: GraphService = Depends(),
 ) -> UserInterestsResponse:
+    """Возвращает текущие интересы пользователя в графе тем."""
     return service.list_interests(current_user_id=current_user_id)
 
 
@@ -26,6 +29,7 @@ def upsert_interests_me(
     current_user_id: int = Depends(get_current_user_id),
     service: GraphService = Depends(),
 ) -> UserInterestsResponse:
+    """Создаёт или обновляет список пользовательских интересов."""
     return service.upsert_interests(payload=payload, current_user_id=current_user_id)
 
 
@@ -36,6 +40,7 @@ def get_interest_words_me(
     graph_service: GraphService = Depends(),
     vocab_service: VocabularyService = Depends(),
 ) -> InterestWordsResponse:
+    """Подбирает слова по интересам, которых ещё нет в личном словаре."""
     saved_lemmas = {
         item.english_lemma.strip().lower()
         for item in vocab_service.list_user_items(user_id=current_user_id)

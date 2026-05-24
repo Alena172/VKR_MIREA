@@ -1,3 +1,5 @@
+"""SQLAlchemy-модели и helper-структуры review-модуля."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -41,6 +43,8 @@ ReviewStatusFilter = Literal["all", "due", "upcoming", "mastered", "troubled"]
 
 @dataclass(frozen=True)
 class ReviewStatusSnapshot:
+    """Снимок вычисленного статуса слова для UI и бизнес-логики review."""
+
     status: ReviewStatus
     priority: int
     is_due: bool
@@ -61,6 +65,7 @@ def build_review_status(
     min_streak: int = 4,
     now: datetime | None = None,
 ) -> ReviewStatusSnapshot:
+    """Классифицирует слово по статусу повторения на основе SRS-полей."""
     current_time = now or datetime.utcnow()
     is_due = next_review_at <= current_time
     is_troubled = ease_factor <= _TROUBLED_EASE_THRESHOLD
@@ -85,6 +90,7 @@ def matches_review_status_filter(
     min_streak: int = 4,
     now: datetime | None = None,
 ) -> bool:
+    """Проверяет, попадает ли слово под выбранный фильтр статуса для UI."""
     if status_filter == "all":
         return True
     snapshot = build_review_status(

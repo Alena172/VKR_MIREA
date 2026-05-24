@@ -1,3 +1,5 @@
+"""Pydantic-модели AI-модуля для перевода, генерации упражнений и диагностики."""
+
 from pydantic import BaseModel, Field
 
 

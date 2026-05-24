@@ -1,3 +1,5 @@
+"""Celery-задачи генерации упражнений и фонового пополнения prefetch-буфера."""
+
 from __future__ import annotations
 
 import asyncio
@@ -9,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def _exercise_result_to_dict(result) -> dict:
+    """Сериализует результат генерации в простой JSON-совместимый словарь."""
     return {
         "exercises": [
             {
@@ -40,6 +43,7 @@ def generate_exercises_for_user(
     fast_start: bool = False,
     incremental: bool = False,
 ) -> dict:
+    """Генерирует набор упражнений в фоне и возвращает результат для polling API."""
     from app.core.db import SessionLocal
     from app.modules.graph.repository import GraphRepository
     from app.modules.graph.service.graph import GraphService
@@ -95,8 +99,7 @@ def refill_exercise_buffer(
     mode: str,
     size: int,
 ) -> dict:
-    """Генерирует упражнения и сохраняет их напрямую в Redis-буфер.
-    Вызывается только из trigger_refill_if_needed."""
+    """Пополняет Redis-буфер упражнений, чтобы следующий запрос отвечал быстрее."""
     from app.core.db import SessionLocal
     from app.modules.graph.repository import GraphRepository
     from app.modules.graph.service.graph import GraphService

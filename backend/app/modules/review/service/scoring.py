@@ -1,3 +1,5 @@
+"""Скоринг рекомендаций для review-модуля."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,13 +13,18 @@ from app.modules.review.repository import ReviewRepository
 
 @dataclass
 class RecommendationScoreSnapshot:
+    """Снимок скоринга слов, который можно отсортировать в рекомендации."""
+
     scores: dict[str, float] = field(default_factory=dict)
 
     def ranked_words(self, limit: int) -> list[str]:
+        """Возвращает слова или идентификаторы слов в порядке убывания приоритета."""
         return [k for k, _ in sorted(self.scores.items(), key=lambda x: x[1], reverse=True)[:limit]]
 
 
 class RecommendationScoringService:
+    """Собирает сигналы ошибок и SRS-проблем в единый рейтинг повторения."""
+
     def __init__(
         self,
         review_repo: ReviewRepository = Depends(),
@@ -26,9 +33,11 @@ class RecommendationScoringService:
         self._submission_service = None
 
     def set_submission_service(self, submission_service) -> None:
+        """Подключает сервис учебных сессий как источник недавних ошибок пользователя."""
         self._submission_service = submission_service
 
     def build_snapshot(self, *, user_id: int, limit: int) -> RecommendationScoreSnapshot:
+        """Строит рейтинг слов, которые полезно повторить в ближайшее время."""
         recent_errors = (
             self._submission_service.list_recent_incorrect_words(user_id=user_id, limit=limit * 5, unique=False)
             if self._submission_service is not None

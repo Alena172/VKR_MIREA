@@ -1,3 +1,5 @@
+"""SQLAlchemy-модели общего и пользовательского словаря."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -57,5 +59,5 @@ class UserVocabularyModel(Base):
 
     @property
     def is_phrase(self) -> bool:
+        """Показывает, что запись хранится как пользовательская фраза без `entry_id`."""
         return self.entry_id is None
-

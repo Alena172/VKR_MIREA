@@ -1,3 +1,5 @@
+"""Основной сервис интервального повторения, review queue и агрегатов прогресса."""
+
 from __future__ import annotations
 
 import secrets
@@ -25,6 +27,7 @@ _SM2_SECOND_INTERVAL = 3
 
 
 def _sm2_next_interval(*, interval_days: int, ease_factor: float, correct_streak: int) -> int:
+    """Вычисляет следующий интервал повторения по упрощённым правилам SM-2."""
     if correct_streak == 1:
         return _SM2_INITIAL_INTERVAL
     if correct_streak == 2:
@@ -39,11 +42,14 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class WordProgressUpdate:
+    """Сигнал для пакетного обновления прогресса по слову после обучения."""
+
     vocabulary_id: int
     is_correct: bool
 
 
 def _dedupe_keep_order(values: list[str]) -> list[str]:
+    """Удаляет повторы, сохраняя первый порядок появления слов."""
     seen: set[str] = set()
     result: list[str] = []
     for v in values:
@@ -71,10 +77,12 @@ class SRSService:
         self._submission_service: SubmissionService | None = None
 
     def set_submission_service(self, submission_service: SubmissionService) -> None:
+        """Связывает SRS с сервисом сдачи упражнений для общих агрегатов."""
         self._submission_service = submission_service
         self._scoring.set_submission_service(submission_service)
 
     def _vocab(self) -> VocabularyService:
+        """Лениво поднимает vocabulary-сервис для доступа к словарю пользователя."""
         if self._vocabulary_service is None:
             from app.modules.vocabulary.repository import VocabularyRepository
             from app.modules.vocabulary.service.items import VocabularyService
@@ -82,11 +90,13 @@ class SRSService:
         return self._vocabulary_service
 
     def _ensure_user_access(self, *, user_id: int, current_user_id: int):
+        """Проверяет, что пользователь запрашивает только собственные review-данные."""
         if user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Forbidden")
         self._identity_service.get_user_or_404(user_id=user_id)
 
     def get_review_queue(self, *, user_id: int, current_user_id: int, limit: int) -> dict:
+        """Возвращает слова, которые уже готовы к повторению."""
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         due_progress = self._repo.list_due_word_progress(user_id=user_id, limit=limit * 5)
         total_due = self._repo.count_due_word_progress(user_id=user_id)
@@ -94,6 +104,7 @@ class SRSService:
         return {"user_id": user_id, "total_due": total_due, "items": items}
 
     def submit_review_queue_item(self, *, user_id: int, current_user_id: int, payload) -> WordProgressModel:
+        """Сохраняет результат повторения одного слова и обновляет интервалы SRS."""
         from app.core.db import transaction
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         vocabulary_id = payload.vocabulary_id
@@ -110,6 +121,7 @@ class SRSService:
             return self.apply_review(user_id=user_id, vocabulary_id=vocabulary_id, is_correct=payload.is_correct)
 
     def submit_review_queue_bulk(self, *, user_id: int, current_user_id: int, payload) -> dict:
+        """Массово обновляет прогресс по набору слов из review queue."""
         from app.core.db import transaction
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         if not payload.items:
@@ -132,6 +144,7 @@ class SRSService:
         return {"user_id": user_id, "updated": updated_rows}
 
     def start_review_session(self, *, user_id: int, current_user_id: int, payload) -> dict:
+        """Строит review-сессию нужного типа: SRS, random или troubled."""
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         if payload.mode == "srs":
             return self._build_srs_review_session(user_id=user_id, size=payload.size)
@@ -140,12 +153,14 @@ class SRSService:
         return self._build_random_review_session(user_id=user_id, size=payload.size)
 
     def _build_srs_review_session(self, *, user_id: int, size: int) -> dict:
+        """Собирает review-сессию только из просроченных слов."""
         due_rows = self._repo.list_due_word_progress(user_id=user_id, limit=size * 5)
         due_rows = due_rows[:size]
         items = self._build_review_session_items_from_progress(user_id=user_id, rows=due_rows)
         return {"user_id": user_id, "mode": "srs", "total_items": len(items), "items": items}
 
     def _build_random_review_session(self, *, user_id: int, size: int) -> dict:
+        """Собирает случайную review-сессию из словаря пользователя."""
         vocabulary_items = self._vocab().list_user_items(user_id=user_id)
         valid_items = [item for item in vocabulary_items if item.english_lemma]
         if not valid_items:
@@ -157,6 +172,7 @@ class SRSService:
         return {"user_id": user_id, "mode": "random", "total_items": len(items), "items": items}
 
     def _build_troubled_review_session(self, *, user_id: int, size: int) -> dict:
+        """Собирает review-сессию из самых проблемных слов пользователя."""
         troubled_rows = [
             row for row in self._repo.list_word_progress(
                 user_id=user_id, limit=size * 3, offset=0, q=None,
@@ -183,6 +199,7 @@ class SRSService:
         min_streak: int,
         min_errors: int = 3,
     ) -> dict:
+        """Возвращает прогресс по словам с фильтрами статуса, поиска и сортировки."""
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         rows = self._repo.list_word_progress(user_id=user_id, limit=10000, offset=0, q=None, sort_by=sort_by, sort_order=sort_order)
         vocab_map = {item.id: item for item in self._vocab().list_user_items(user_id=user_id)}
@@ -212,6 +229,7 @@ class SRSService:
         return {"user_id": user_id, "total": total, "limit": limit, "offset": offset, "items": items}
 
     def delete_word_progress(self, *, user_id: int, current_user_id: int, vocabulary_id: int | None = None, word: str | None = None) -> dict:
+        """Удаляет запись SRS-прогресса по слову, если её удалось однозначно найти."""
         from app.core.db import transaction
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         if vocabulary_id is None and word:
@@ -226,6 +244,7 @@ class SRSService:
         return {"user_id": user_id, "vocabulary_id": vocabulary_id, "progress_deleted": deleted, "removed_from_difficult_words": deleted}
 
     def get_review_plan(self, *, user_id: int, current_user_id: int, limit: int, horizon_hours: int) -> dict:
+        """Строит короткий план повторения на ближайшие часы."""
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         due_progress = self._repo.list_due_word_progress(user_id=user_id, limit=limit)
         upcoming_progress = self._repo.list_upcoming_word_progress(user_id=user_id, horizon=timedelta(hours=horizon_hours), limit=limit)
@@ -242,6 +261,7 @@ class SRSService:
         }
 
     def get_review_summary(self, *, user_id: int, current_user_id: int, min_streak: int) -> dict:
+        """Считает агрегированную сводку по состояниям слов в SRS."""
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         rows = self._repo.list_word_progress(user_id=user_id, limit=10000, offset=0, q=None)
         if not rows:
@@ -265,6 +285,7 @@ class SRSService:
         }
 
     def get_progress_snapshot(self, *, user_id: int | None, current_user_id: int) -> dict:
+        """Возвращает сводные метрики обучения из сервиса учебных сессий."""
         if user_id is not None and user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Forbidden")
         target = user_id or current_user_id
@@ -282,6 +303,7 @@ class SRSService:
         vocabulary_id: int,
         is_correct: bool,
     ) -> WordProgressModel | None:
+        """Применяет один результат повторения к записи SRS по слову."""
         now = datetime.utcnow()
         row = self._repo.get_or_create_word_progress(vocabulary_id, now=now)
 
@@ -315,9 +337,11 @@ class SRSService:
             )
 
     def ensure_word_progress_entry(self, *, user_id: int, vocabulary_id: int) -> bool:
+        """Гарантирует наличие строки прогресса для словарного элемента."""
         return self._repo.ensure_word_progress(vocabulary_id=vocabulary_id) is not None
 
     def update_learning_progress(self, *, user_id: int, updates: list[WordProgressUpdate]) -> list[int]:
+        """Пакетно применяет результаты обучения к нескольким словам."""
         updated_ids: list[int] = []
         for update in updates:
             progress = self.apply_review(user_id=user_id, vocabulary_id=update.vocabulary_id, is_correct=update.is_correct)
@@ -326,6 +350,7 @@ class SRSService:
         return updated_ids
 
     def get_recommendations(self, *, user_id: int, current_user_id: int, limit: int) -> dict:
+        """Собирает слова для рекомендаций из SRS, недавних ошибок и troubled-набора."""
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         snapshot = self._scoring.build_snapshot(user_id=user_id, limit=limit)
         words = snapshot.ranked_words(limit)
@@ -366,6 +391,7 @@ class SRSService:
         }
 
     def get_user_context(self, *, user_id: int, current_user_id: int) -> dict:
+        """Формирует компактный контекст пользователя для смежных AI/graph-сценариев."""
         self._ensure_user_access(user_id=user_id, current_user_id=current_user_id)
         troubled_rows = [
             row for row in self._repo.list_word_progress(
@@ -389,6 +415,7 @@ class SRSService:
         }
 
     def list_mastered_lemmas(self, *, user_id: int, min_streak: int = 2, max_errors: int = 1) -> set[str]:
+        """Возвращает множество лемм, которые можно считать устойчиво выученными."""
         rows = self._repo.list_word_progress(
             user_id=user_id, limit=10000, offset=0, q=None,
             sort_by="correct_streak", sort_order="desc",
@@ -409,6 +436,7 @@ class SRSService:
         }
 
     def _build_review_queue_items(self, *, user_id: int, rows: list[WordProgressModel]) -> list[dict]:
+        """Преобразует строки прогресса в элементы review queue API."""
         vocab_map = {item.id: item for item in self._vocab().list_user_items(user_id=user_id)}
         result = []
         for row in rows:
@@ -431,6 +459,7 @@ class SRSService:
         return result
 
     def _build_review_session_items_from_progress(self, *, user_id: int, rows: list[WordProgressModel]) -> list[dict]:
+        """Преобразует SRS-строки в карточки review-сессии."""
         vocab_map = {item.id: item for item in self._vocab().list_user_items(user_id=user_id)} if rows else {}
         items = []
         for row in rows:
@@ -456,6 +485,7 @@ class SRSService:
         return items
 
     def _build_review_session_items_from_vocab(self, *, user_id: int, vocab_items: list, progress_map: dict[int, WordProgressModel]) -> list[dict]:
+        """Строит review-элементы напрямую из словаря, дополняя их SRS-метаданными."""
         now = datetime.utcnow()
         items = []
         for vocab_item in vocab_items:
@@ -485,6 +515,7 @@ class SRSService:
         return items
 
     def _row_to_progress_dict(self, row: WordProgressModel, vocab_map: dict, user_id: int) -> dict:
+        """Преобразует одну ORM-строку прогресса в сериализуемый словарь ответа."""
         vocab_item = vocab_map.get(row.vocabulary_id)
         return {
             "user_id": user_id,
@@ -504,6 +535,7 @@ class SRSService:
 
 
 def get_srs_service(srs: SRSService = Depends()) -> SRSService:
+    """Собирает SRS-сервис с зависимостями, которые должны разделять одну DB-сессию."""
     from app.modules.training.service.submission import SubmissionService
     from app.modules.training.repository import TrainingRepository
     from app.modules.graph.repository import GraphRepository

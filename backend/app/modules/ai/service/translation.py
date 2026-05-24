@@ -1,3 +1,5 @@
+"""Сервис перевода с каскадом: глоссарий, LibreTranslate, AI и локальные эвристики."""
+
 from __future__ import annotations
 
 import json
@@ -24,6 +26,8 @@ _morph = pymorphy2.MorphAnalyzer()
 
 
 class TranslationService:
+    """Инкапсулирует всю логику EN->RU перевода и выбора fallback-провайдера."""
+
     _DIRECT_MAP = {
         "apple": "яблоко",
         "pear": "груша",
@@ -91,12 +95,15 @@ class TranslationService:
         self._libretranslate = libretranslate_client
 
     def _tokenize(self, text: str) -> list[str]:
+        """Разбивает английский текст на токены для эвристического анализа."""
         return [part for part in re.split(r"[^a-zA-Z']+", text.lower()) if part]
 
     def _normalize_english_text(self, text: str) -> str:
+        """Нормализует английский текст для поиска в глоссарии и эвристиках."""
         return re.sub(r"\s+", " ", text.strip().lower())
 
     def _normalize_token(self, token: str) -> str:
+        """Пытается грубо привести слово к базовой форме без полноценного лемматизатора."""
         irregular = {
             "children": "child",
             "men": "man",
@@ -142,6 +149,7 @@ class TranslationService:
         context: str | None,
         glossary: list[TranslateGlossaryItem],
     ) -> str | None:
+        """Ищет лучший перевод в пользовательском глоссарии с учётом контекста."""
         if not glossary:
             return None
 
@@ -192,6 +200,7 @@ class TranslationService:
         context: str | None,
         glossary: list[TranslateGlossaryItem] | None = None,
     ) -> str | None:
+        """Выбирает перевод по глоссарию и встроенным эвристическим словарям."""
         glossary_translation = self._resolve_glossary_translation(text, context, glossary or [])
         if glossary_translation:
             return glossary_translation
@@ -219,6 +228,7 @@ class TranslationService:
         return None
 
     def _looks_ambiguous(self, text: str) -> bool:
+        """Определяет, нужно ли обходить простые эвристики и форсировать AI."""
         from app.modules.vocabulary.clients.free_dictionary_client import _FORCE_AI_WORDS
         lowered = self._normalize_english_text(text)
         if lowered in self._PHRASE_MAP:
@@ -230,6 +240,7 @@ class TranslationService:
         return norm in self._AMBIGUOUS_MAP or lowered in _FORCE_AI_WORDS or norm in _FORCE_AI_WORDS
 
     def _build_remote_provider_note(self, payload: TranslateWithContextRequest) -> str:
+        """Строит компактную метку того, как именно был вызван удалённый AI-перевод."""
         uses_glossary = bool(payload.glossary)
         uses_context = bool((payload.source_context or "").strip())
         prefix = "ai_disambiguation" if (uses_glossary or uses_context or self._looks_ambiguous(payload.text)) else "ai_translation"
@@ -240,6 +251,7 @@ class TranslationService:
         text: str,
         glossary: list[TranslateGlossaryItem] | None = None,
     ) -> str | None:
+        """Пытается быстро перевести одиночное слово без сети и без тяжёлого пайплайна."""
         normalized = self._normalize_english_text(text)
         if not normalized or " " in normalized:
             return None
@@ -251,6 +263,7 @@ class TranslationService:
         context: str | None,
         glossary: list[TranslateGlossaryItem] | None = None,
     ) -> str:
+        """Локальный fallback-перевод, который не требует внешних сервисов."""
         picked = self.pick_contextual_translation(text, context, glossary)
         if picked:
             return picked
@@ -273,6 +286,7 @@ class TranslationService:
         self,
         payload: TranslateWithContextRequest,
     ) -> TranslateWithContextResponse:
+        """Оборачивает локальный fallback-перевод в стандартный формат ответа."""
         translated = self.heuristic_translate(
             payload.text,
             payload.source_context,
@@ -286,16 +300,19 @@ class TranslationService:
         )
 
     def _lemmatize_ru(self, word: str) -> str:
+        """Нормализует русское слово к начальной форме для более стабильных сравнений."""
         parsed = _morph.parse(word.strip())
         if not parsed:
             return word
         return parsed[0].normal_form
 
     def _all_normal_forms(self, word: str) -> set[str]:
+        """Возвращает все известные нормальные формы русского слова."""
         parsed = _morph.parse(word.strip())
         return {p.normal_form for p in parsed} if parsed else {word.lower()}
 
     def _is_single_word(self, text: str) -> bool:
+        """Проверяет, что входной текст состоит из одного слова."""
         return len(text.strip().split()) == 1
 
     async def _libretranslate_word(
@@ -303,6 +320,7 @@ class TranslationService:
         word: str,
         source_context: str | None = None,
     ) -> str | None:
+        """Вызывает LibreTranslate для слова, при наличии контекста пытаясь учесть смысл."""
         if self._libretranslate is None:
             return None
         if source_context and source_context.strip():
@@ -323,6 +341,7 @@ class TranslationService:
         self,
         payload: TranslateWithContextRequest,
     ) -> TranslateWithContextResponse:
+        """Переводит текст, последовательно пробуя глоссарий, LibreTranslate, AI и локальный fallback."""
         # Check user glossary first — if there's a match, skip LibreTranslate and AI entirely.
         if payload.glossary:
             glossary_hit = self._resolve_glossary_translation(payload.text, payload.source_context, payload.glossary)

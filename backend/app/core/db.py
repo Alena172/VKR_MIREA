@@ -1,3 +1,5 @@
+"""Базовая конфигурация SQLAlchemy и короткие транзакционные помощники."""
+
 from collections.abc import Generator
 from contextlib import contextmanager
 
@@ -19,7 +21,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Зависимость FastAPI: открывает сессию на время запроса, коммитит при успехе."""
+    """Открывает сессию БД на время запроса и завершает транзакцию по итогам обработки."""
     db = SessionLocal()
     try:
         yield db
@@ -33,7 +35,7 @@ def get_db() -> Generator[Session, None, None]:
 
 @contextmanager
 def transaction(db: Session):
-    """Атомарный блок: коммит при успехе, откат при ошибке."""
+    """Оборачивает несколько изменений в одну атомарную транзакцию."""
     try:
         yield
         db.commit()

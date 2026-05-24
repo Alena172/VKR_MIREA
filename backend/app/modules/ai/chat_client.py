@@ -1,3 +1,5 @@
+"""Низкоуровневый HTTP-клиент для OpenAI-совместимого AI backend."""
+
 from __future__ import annotations
 
 import logging
@@ -26,24 +28,30 @@ class AIChatClient:
 
     @property
     def model(self) -> str:
+        """Имя текущей модели, передаваемое провайдеру."""
         return self._model
 
     @property
     def base_url(self) -> str:
+        """Базовый URL AI-провайдера без завершающего `/`."""
         return self._base_url
 
     @property
     def timeout_seconds(self) -> float:
+        """Таймаут одного HTTP-запроса к AI-провайдеру."""
         return self._timeout_seconds
 
     @property
     def max_retries(self) -> int:
+        """Максимальное число повторных попыток для временных сетевых ошибок."""
         return self._max_retries
 
     def remote_enabled(self) -> bool:
+        """Показывает, достаточно ли настроек для удалённого вызова AI API."""
         return bool(self._base_url) and bool(self._model)
 
     def _get_async_client(self) -> httpx.AsyncClient:
+        """Лениво создаёт и переиспользует `httpx.AsyncClient`."""
         if self._async_client is None:
             self._async_client = httpx.AsyncClient(
                 timeout=self._timeout_seconds,
@@ -59,6 +67,7 @@ class AIChatClient:
         temperature: float = 0.2,
         max_tokens: int = 300,
     ) -> str | None:
+        """Отправляет один chat completion запрос и возвращает только текст ответа."""
         if not self.remote_enabled():
             return None
 

@@ -1,3 +1,5 @@
+"""Репозиторий identity-модуля для чтения и сохранения пользователей."""
+
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,13 +11,17 @@ from app.modules.identity.schemas import UserCreate
 
 
 class IdentityRepository:
+    """Инкапсулирует SQLAlchemy-операции над пользователями."""
+
     def __init__(self, db: Session = Depends(get_db)) -> None:
         self._db = db
 
     def get_by_id(self, user_id: int) -> UserModel | None:
+        """Возвращает пользователя по первичному ключу."""
         return self._db.get(UserModel, user_id)
 
     def get_by_email(self, email: str) -> UserModel | None:
+        """Ищет пользователя по нормализованному email."""
         query = select(UserModel).where(UserModel.email == normalize_email(email))
         return self._db.scalar(query)
 
@@ -34,6 +40,7 @@ class IdentityRepository:
         return user
 
     def update_cefr_level(self, *, user_id: int, cefr_level: str) -> UserModel | None:
+        """Обновляет уровень владения языком у существующего пользователя."""
         user = self.get_by_id(user_id)
         if user is None:
             return None

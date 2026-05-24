@@ -1,3 +1,5 @@
+"""Общие DTO и проверки доступа, используемые несколькими модулями."""
+
 from __future__ import annotations
 
 from fastapi import HTTPException
@@ -6,7 +8,7 @@ from sqlalchemy.orm import Session
 
 
 class AsyncTaskResponse(BaseModel):
-    """Единый ответ для операций, которые ставятся в фоновую очередь."""
+    """Стандартный ответ API при постановке операции в фоновую очередь."""
 
     task_id: str
     status: str = "PENDING"
@@ -14,7 +16,7 @@ class AsyncTaskResponse(BaseModel):
 
 
 class ApplicationAccess:
-    """Общие проверки доступа, которые используются разными модулями."""
+    """Централизует простые cross-module проверки доступа."""
 
     def resolve_target_user_id(
         self,
@@ -22,7 +24,7 @@ class ApplicationAccess:
         requested_user_id: int | None,
         current_user_id: int,
     ) -> int:
-        """Возвращает разрешенный user_id и запрещает доступ к чужим данным."""
+        """Возвращает целевой `user_id`, не позволяя обращаться к чужим данным."""
 
         target_user_id = requested_user_id or current_user_id
         if requested_user_id is not None and requested_user_id != current_user_id:
@@ -30,7 +32,7 @@ class ApplicationAccess:
         return target_user_id
 
     def get_user_or_404(self, *, user_id: int, db: Session):
-        """Возвращает пользователя или останавливает HTTP-запрос с 404."""
+        """Возвращает пользователя из identity-модуля или завершает запрос c `404`."""
         from app.modules.identity.repository import IdentityRepository
 
         user = IdentityRepository(db).get_by_id(user_id)

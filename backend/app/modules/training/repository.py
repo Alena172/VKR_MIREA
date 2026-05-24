@@ -1,3 +1,5 @@
+"""Репозиторий учебных сессий и ответов пользователя."""
+
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -31,6 +33,7 @@ def _apply_session_filters(
     created_from: datetime | None = None,
     created_to: datetime | None = None,
 ) -> Select:
+    """Добавляет к запросу фильтры истории сессий, которые пришли из API."""
     if user_id is not None:
         query = query.where(LearningSessionModel.user_id == user_id)
     if min_accuracy is not None:
@@ -45,6 +48,8 @@ def _apply_session_filters(
 
 
 class TrainingRepository:
+    """Хранит SQLAlchemy-запросы для истории обучения и ответов на упражнения."""
+
     def __init__(self, db: Session = Depends(get_db)) -> None:
         self._db = db
 
@@ -59,6 +64,7 @@ class TrainingRepository:
         created_from: datetime | None = None,
         created_to: datetime | None = None,
     ) -> list[LearningSessionModel]:
+        """Возвращает страницу учебных сессий пользователя."""
         query = select(LearningSessionModel)
         query = _apply_session_filters(
             query,
@@ -80,6 +86,7 @@ class TrainingRepository:
         created_from: datetime | None = None,
         created_to: datetime | None = None,
     ) -> int:
+        """Считает количество сессий, попавших под те же фильтры, что и список."""
         query = select(func.count(LearningSessionModel.id))
         query = _apply_session_filters(
             query,
@@ -92,6 +99,7 @@ class TrainingRepository:
         return int(self._db.scalar(query) or 0)
 
     def get_session_by_id(self, session_id: int, user_id: int) -> LearningSessionModel | None:
+        """Возвращает одну сессию, если она принадлежит пользователю."""
         return self._db.scalar(
             select(LearningSessionModel).where(
                 LearningSessionModel.id == session_id,
@@ -100,6 +108,7 @@ class TrainingRepository:
         )
 
     def list_answers_for_session(self, session_id: int) -> list[AnswerModel]:
+        """Возвращает все ответы, привязанные к учебной сессии."""
         return list(self._db.scalars(
             select(AnswerModel)
             .where(AnswerModel.session_id == session_id)
@@ -107,6 +116,7 @@ class TrainingRepository:
         ))
 
     def list_answers_by_session(self, session_id: int, user_id: int) -> list[AnswerModel] | None:
+        """Возвращает ответы с предварительной проверкой владения сессией."""
         session_row = self._db.scalar(
             select(LearningSessionModel).where(
                 LearningSessionModel.id == session_id,
@@ -131,6 +141,7 @@ class TrainingRepository:
         *,
         auto_commit: bool = True,
     ) -> LearningSessionModel:
+        """Создаёт учебную сессию и сохраняет все ответы одним проходом."""
         session_row = LearningSessionModel(
             user_id=user_id,
             total=total,
@@ -168,6 +179,7 @@ class TrainingRepository:
         exercise_id: int,
         is_correct: bool,
     ) -> None:
+        """Обновляет итог корректности конкретного ответа в уже сохранённой сессии."""
         self._db.execute(
             update(AnswerModel)
             .where(AnswerModel.session_id == session_id, AnswerModel.exercise_id == exercise_id)
@@ -181,6 +193,7 @@ class TrainingRepository:
         correct: int,
         accuracy: float,
     ) -> None:
+        """Пересчитывает сводную статистику сессии после дооценки ответов."""
         self._db.execute(
             update(LearningSessionModel)
             .where(LearningSessionModel.id == session_id)
@@ -210,6 +223,7 @@ class TrainingRepository:
         return [(row[0], row[1]) for row in rows]
 
     def get_progress_snapshot(self, *, user_id: int) -> tuple[int, float]:
+        """Возвращает число сессий и среднюю точность пользователя."""
         total = int(self._db.scalar(
             select(func.count(LearningSessionModel.id)).where(LearningSessionModel.user_id == user_id)
         ) or 0)

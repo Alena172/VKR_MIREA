@@ -1,3 +1,5 @@
+"""Pydantic-модели и DTO для identity-модуля."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -76,6 +78,7 @@ class UserDTO:
 
     @staticmethod
     def from_model(user: UserModel) -> UserDTO:
+        """Преобразует ORM-модель пользователя в переносимый DTO-объект."""
         from app.modules.identity.models import UserModel
 
         if not isinstance(user, UserModel):

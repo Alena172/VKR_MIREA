@@ -1,3 +1,5 @@
+"""Фасад AI-модуля, скрывающий детали клиентов, fallback-логики и сервисов генерации."""
+
 from __future__ import annotations
 
 import asyncio
@@ -24,6 +26,7 @@ class AIFacade:
     """Единая точка входа к AI для всех доменных модулей."""
 
     def __init__(self) -> None:
+        """Собирает AI-клиенты и специализированные сервисы вокруг общих настроек проекта."""
         from app.modules.vocabulary.clients.libretranslate_client import LibreTranslateClient
         settings = get_settings()
         self._chat_client = AIChatClient(
@@ -63,9 +66,11 @@ class AIFacade:
         )
 
     def is_remote_enabled(self) -> bool:
+        """Показывает, доступен ли удалённый AI-провайдер для запросов."""
         return self._chat_client.remote_enabled()
 
     def _run_sync(self, coro):
+        """Запускает async-логику из sync-кода, если текущий поток без event loop."""
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -79,6 +84,7 @@ class AIFacade:
         temperature: float = 0.2,
         max_tokens: int = 300,
     ) -> str | None:
+        """Низкоуровневый helper для единичного completion-запроса к chat client."""
         return await self._chat_client.complete(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -87,6 +93,7 @@ class AIFacade:
         )
 
     def get_status(self) -> AIStatusResponse:
+        """Возвращает текущую конфигурацию AI-слоя для диагностики и Swagger."""
         return AIStatusResponse(
             model=self._chat_client.model,
             remote_enabled=self._chat_client.remote_enabled(),
@@ -102,6 +109,7 @@ class AIFacade:
         expected_answer: str,
         user_answer: str,
     ) -> bool:
+        """Синхронная обёртка для проверки смысловой эквивалентности перевода."""
         return self._run_sync(
             self.is_translation_semantically_correct_async(
                 english_prompt=english_prompt,
@@ -117,6 +125,7 @@ class AIFacade:
         expected_answer: str,
         user_answer: str,
     ) -> bool:
+        """Проверяет, совпадает ли смысл пользовательского перевода с ожидаемым."""
         content = await self._chat_completion_async(
             system_prompt=(
                 "Ты строгий проверяющий переводов с английского на русский.\n"
@@ -163,6 +172,7 @@ class AIFacade:
         source_sentence: str | None,
         cefr_level: str | None = None,
     ) -> str | None:
+        """Синхронно генерирует краткое контекстное определение значения слова."""
         return self._run_sync(
             self._definition_service.generate_context_definition_async(
                 english_lemma=english_lemma,
@@ -180,6 +190,7 @@ class AIFacade:
         source_sentence: str | None,
         cefr_level: str | None = None,
     ) -> str | None:
+        """Асинхронно генерирует определение смысла слова по контексту."""
         return await self._definition_service.generate_context_definition_async(
             english_lemma=english_lemma,
             russian_translation=russian_translation,
@@ -194,6 +205,7 @@ class AIFacade:
         russian_translation: str,
         source_sentence: str | None,
     ) -> str | None:
+        """Пытается быстро получить определение без полного удалённого пайплайна."""
         return self._definition_service.generate_context_definition_fast(
             english_lemma=english_lemma,
             russian_translation=russian_translation,
@@ -201,21 +213,25 @@ class AIFacade:
         )
 
     def translate_with_context(self, payload: TranslateWithContextRequest) -> TranslateWithContextResponse:
+        """Синхронная точка входа в перевод с контекстом."""
         return self._run_sync(self.translate_with_context_async(payload))
 
     async def translate_with_context_async(
         self, payload: TranslateWithContextRequest
     ) -> TranslateWithContextResponse:
+        """Переводит текст с учётом контекста, уровня пользователя и глоссария."""
         return await self._translation_service.translate_with_context_async(payload)
 
     def fast_translate_single_word(self, text: str) -> str | None:
+        """Пробует получить быстрый перевод одиночного слова без тяжёлого пайплайна."""
         return self._translation_service.fast_translate_single_word(text)
 
     def is_ambiguous_word(self, text: str) -> bool:
+        """Грубо определяет, стоит ли для слова форсировать AI-дизамбигуацию."""
         return self._translation_service._looks_ambiguous(text)
 
     async def translate_phrase_async(self, phrase: str) -> str:
-        """Перевод фразы напрямую через LibreTranslate, без глоссария и AI-логики."""
+        """Переводит фразу через LibreTranslate, а при недоступности уходит в AI fallback."""
         if self._translation_service._libretranslate is not None:
             result = await self._translation_service._libretranslate.translate_word(phrase)
             if result:
@@ -237,6 +253,7 @@ class AIFacade:
         seed: ExerciseSeed,
         cefr_level: str,
     ) -> tuple[str, str] | None:
+        """Генерирует английское предложение и русский эквивалент для одного seed-слова."""
         return await self._exercise_materials.generate_sentence_pair(seed=seed, cefr_level=cefr_level)
 
     async def generate_sentence_batch_async(
@@ -244,6 +261,7 @@ class AIFacade:
         seeds: list,
         cefr_level: str,
     ) -> list:
+        """Пакетно генерирует материалы для нескольких seed-слов."""
         return await self._exercise_materials.generate_sentence_batch(seeds=seeds, cefr_level=cefr_level)
 
     async def build_sentence_for_word_async(
@@ -252,6 +270,7 @@ class AIFacade:
         seed: ExerciseSeed,
         cefr_level: str | None = None,
     ) -> str:
+        """Строит английское предложение для конкретного слова или смысла."""
         return await self._exercise_materials.build_sentence_for_word(seed=seed, cefr_level=cefr_level)
 
     async def translate_sentence_for_seed_async(
@@ -260,6 +279,7 @@ class AIFacade:
         sentence_en: str,
         seed: ExerciseSeed,
     ) -> str:
+        """Переводит сгенерированное предложение под конкретный seed слова."""
         return await self._exercise_materials.translate_sentence_for_seed(sentence_en, seed)
 
 

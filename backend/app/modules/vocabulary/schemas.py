@@ -1,3 +1,5 @@
+"""HTTP-модели и DTO vocabulary-модуля."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,6 +9,8 @@ from pydantic import BaseModel, Field
 
 
 class DictionaryEntryCreate(BaseModel):
+    """Данные для создания записи в общем словаре."""
+
     english_lemma: str = Field(min_length=1, max_length=200)
     russian_translation: str = Field(min_length=1, max_length=200)
     context_definition_ru: str | None = Field(default=None, max_length=3000)
@@ -82,17 +86,23 @@ class VocabularyFromCaptureResponse(BaseModel):
 
 
 class TranslateRequest(BaseModel):
+    """Служебный запрос перевода с явным `user_id`."""
+
     text: str = Field(min_length=1, max_length=5000)
     user_id: int | None = Field(default=None, ge=1)
     source_context: str | None = Field(default=None, max_length=10000)
 
 
 class TranslateRequestMe(BaseModel):
+    """Запрос перевода для текущего пользователя."""
+
     text: str = Field(min_length=1, max_length=5000)
     source_context: str | None = Field(default=None, max_length=10000)
 
 
 class TranslateResponse(BaseModel):
+    """Результат перевода и заметка о выбранном источнике/режиме."""
+
     translated_text: str
     note: str
 
@@ -115,6 +125,7 @@ class VocabularyItemDTO:
 
     @staticmethod
     def from_model(uv: UserVocabularyModel, entry: DictionaryEntryModel | None) -> VocabularyItemDTO:
+        """Преобразует ORM-модели словаря в единый DTO для сервисного слоя."""
         if entry is None:
             # Фраза: данные хранятся прямо в `user_vocabulary`.
             return VocabularyItemDTO(
