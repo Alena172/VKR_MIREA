@@ -1,4 +1,5 @@
-const DEFAULT_API_BASE = "http://localhost:8000/api/v1";
+const LEGACY_API_BASE = "http://localhost:8000/api/v1";
+const DEFAULT_API_BASE = "http://localhost:8080/api/v1";
 
 const STORAGE_KEYS = {
   apiBase: "vkrApiBase",
@@ -11,8 +12,9 @@ function storageGet(keys) {
 
 async function getApiContext() {
   const stored = await storageGet([STORAGE_KEYS.apiBase, STORAGE_KEYS.authToken]);
+  const storedApiBase = stored[STORAGE_KEYS.apiBase];
   return {
-    apiBase: stored[STORAGE_KEYS.apiBase] || DEFAULT_API_BASE,
+    apiBase: !storedApiBase || storedApiBase === LEGACY_API_BASE ? DEFAULT_API_BASE : storedApiBase,
     authToken: stored[STORAGE_KEYS.authToken] || null,
   };
 }

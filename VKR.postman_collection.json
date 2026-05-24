@@ -1,0 +1,1206 @@
+{
+  "info": {
+    "_postman_id": "ae13d5fb-0f1b-4b33-ab70-b3034bb154b4",
+    "name": "VKR",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "34783569",
+    "description": "Актуализированная коллекция для VKR English Learning API."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": []
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": []
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1"
+    },
+    {
+      "key": "health_url",
+      "value": "http://localhost:8000/health"
+    },
+    {
+      "key": "email",
+      "value": "postman.user@example.com"
+    },
+    {
+      "key": "password",
+      "value": "password123"
+    },
+    {
+      "key": "full_name",
+      "value": "Postman User"
+    },
+    {
+      "key": "cefr_level",
+      "value": "A2"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "item_id",
+      "value": ""
+    },
+    {
+      "key": "session_id",
+      "value": ""
+    },
+    {
+      "key": "task_id",
+      "value": ""
+    },
+    {
+      "key": "review_word",
+      "value": "market"
+    }
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{health_url}}",
+              "host": [
+                "{{health_url}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.access_token) {",
+                  "  pm.collectionVariables.set('access_token', response.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"full_name\": \"{{full_name}}\",\n  \"cefr_level\": \"{{cefr_level}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', response.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', response.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "token"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login or Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', response.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"full_name\": \"{{full_name}}\",\n  \"cefr_level\": \"{{cefr_level}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login-or-register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login-or-register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Token",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{access_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/verify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "verify"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Patch Me",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cefr_level\": \"B1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Vocabulary",
+      "item": [
+        {
+          "name": "List My Words",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (Array.isArray(response) && response.length > 0 && response[0].id) {",
+                  "  pm.collectionVariables.set('item_id', response[0].id);",
+                  "  if (response[0].english_lemma) {",
+                  "    pm.collectionVariables.set('review_word', response[0].english_lemma);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vocabulary/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vocabulary",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Word",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.id) {",
+                  "  pm.collectionVariables.set('item_id', response.id);",
+                  "}",
+                  "if (response.english_lemma) {",
+                  "  pm.collectionVariables.set('review_word', response.english_lemma);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"english_lemma\": \"market\",\n  \"russian_translation\": \"рынок\",\n  \"source_sentence\": \"I bought an apple at the market.\",\n  \"source_url\": \"https://example.com/article\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/vocabulary/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vocabulary",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Word From Capture",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.vocabulary && response.vocabulary.id) {",
+                  "  pm.collectionVariables.set('item_id', response.vocabulary.id);",
+                  "}",
+                  "if (response.vocabulary && response.vocabulary.english_lemma) {",
+                  "  pm.collectionVariables.set('review_word', response.vocabulary.english_lemma);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"selected_text\": \"market\",\n  \"source_url\": \"https://example.com/article\",\n  \"source_sentence\": \"I bought an apple at the market.\",\n  \"force_new_vocabulary_item\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/vocabulary/me/from-capture",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vocabulary",
+                "me",
+                "from-capture"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Word",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_sentence\": \"I bought fresh fruit at the market.\",\n  \"source_url\": \"https://example.com/updated\",\n  \"phrase_en\": null,\n  \"phrase_ru\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/vocabulary/me/{{item_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vocabulary",
+                "me",
+                "{{item_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Item Senses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vocabulary/me/{{item_id}}/senses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vocabulary",
+                "me",
+                "{{item_id}}",
+                "senses"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Item Sense",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_id\": null,\n  \"russian_translation\": \"рынок\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/vocabulary/me/{{item_id}}/sense",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vocabulary",
+                "me",
+                "{{item_id}}",
+                "sense"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Word",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vocabulary/me/{{item_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vocabulary",
+                "me",
+                "{{item_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Translate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"market\",\n  \"source_context\": \"I bought an apple at the market.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/translate/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "translate",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Training",
+      "item": [
+        {
+          "name": "Generate Exercises",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"size\": 3,\n  \"mode\": \"sentence_translation_full\",\n  \"vocabulary_ids\": [],\n  \"fast_start\": false,\n  \"incremental\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/exercises/me/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "exercises",
+                "me",
+                "generate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.session && response.session.id) {",
+                  "  pm.collectionVariables.set('session_id', response.session.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": [\n    {\n      \"exercise_id\": 1,\n      \"exercise_type\": \"sentence_translation_full\",\n      \"target_word\": \"market\",\n      \"vocabulary_id\": {{item_id}},\n      \"prompt\": \"Translate sentence into Russian: I bought an apple at the market.\",\n      \"expected_answer\": \"Я купил яблоко на рынке.\",\n      \"user_answer\": \"Я купил яблоко на рынке.\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/sessions/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sessions",
+                "submit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List My Sessions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.items && response.items.length > 0 && response.items[0].id) {",
+                  "  pm.collectionVariables.set('session_id', response.items[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sessions/me?limit=10&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sessions",
+                "me"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sessions/me/{{session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sessions",
+                "me",
+                "{{session_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Session Answers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sessions/me/{{session_id}}/answers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sessions",
+                "me",
+                "{{session_id}}",
+                "answers"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Review",
+      "item": [
+        {
+          "name": "Get Review Queue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/context/me/review-queue?limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "review-queue"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Review Queue Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"word\": \"{{review_word}}\",\n  \"vocabulary_id\": {{item_id}},\n  \"is_correct\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/context/me/review-queue/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "review-queue",
+                "submit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Review Queue Bulk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"word\": \"{{review_word}}\",\n      \"vocabulary_id\": {{item_id}},\n      \"is_correct\": true\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/context/me/review-queue/submit-bulk",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "review-queue",
+                "submit-bulk"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start Review Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"srs\",\n  \"size\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/context/me/review-session/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "review-session",
+                "start"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Word Progress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/context/me/word-progress?limit=20&offset=0&status=all&sort_by=next_review_at&sort_order=asc&min_streak=4&min_errors=3",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "word-progress"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "status",
+                  "value": "all"
+                },
+                {
+                  "key": "sort_by",
+                  "value": "next_review_at"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "asc"
+                },
+                {
+                  "key": "min_streak",
+                  "value": "4"
+                },
+                {
+                  "key": "min_errors",
+                  "value": "3"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Word Progress",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/context/me/word-progress/{{review_word}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "word-progress",
+                "{{review_word}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Review Plan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/context/me/review-plan?limit=10&horizon_hours=24",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "review-plan"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "horizon_hours",
+                  "value": "24"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Progress Snapshot",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/context/me/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "progress"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Review Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/context/me/review-summary?min_streak=4",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "context",
+                "me",
+                "review-summary"
+              ],
+              "query": [
+                {
+                  "key": "min_streak",
+                  "value": "4"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Graph",
+      "item": [
+        {
+          "name": "Get My Interests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/learning-graph/me/interests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "learning-graph",
+                "me",
+                "interests"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert My Interests",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"interests\": [\n    {\n      \"interest\": \"technology\",\n      \"weight\": 1.5\n    },\n    {\n      \"interest\": \"travel\",\n      \"weight\": 1.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/learning-graph/me/interests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "learning-graph",
+                "me",
+                "interests"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Interest Words",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/learning-graph/me/interest-words?limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "learning-graph",
+                "me",
+                "interest-words"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "Get Task Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tasks",
+                "{{task_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

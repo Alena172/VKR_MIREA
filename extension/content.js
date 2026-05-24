@@ -1,7 +1,8 @@
 if (!globalThis.__VKR_STUDYING_CONTENT_LOADED__) {
 globalThis.__VKR_STUDYING_CONTENT_LOADED__ = true;
 
-const DEFAULT_API_BASE = "http://localhost:8000/api/v1";
+const LEGACY_API_BASE = "http://localhost:8000/api/v1";
+const DEFAULT_API_BASE = "http://localhost:8080/api/v1";
 
 const STORAGE_KEYS = {
   apiBase: "vkrApiBase",
@@ -374,7 +375,8 @@ async function handleSelectionGesture() {
 async function loadSettings() {
   const stored = await storageGet(Object.values(STORAGE_KEYS));
   studyingEnabled = Boolean(stored[STORAGE_KEYS.studyingEnabled]);
-  currentApiBase = stored[STORAGE_KEYS.apiBase] || DEFAULT_API_BASE;
+  const storedApiBase = stored[STORAGE_KEYS.apiBase];
+  currentApiBase = !storedApiBase || storedApiBase === LEGACY_API_BASE ? DEFAULT_API_BASE : storedApiBase;
   currentToken = stored[STORAGE_KEYS.authToken] || null;
 }
 
@@ -410,7 +412,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     currentToken = changes[STORAGE_KEYS.authToken].newValue || null;
   }
   if (changes[STORAGE_KEYS.apiBase]) {
-    currentApiBase = changes[STORAGE_KEYS.apiBase].newValue || DEFAULT_API_BASE;
+    const nextApiBase = changes[STORAGE_KEYS.apiBase].newValue;
+    currentApiBase = !nextApiBase || nextApiBase === LEGACY_API_BASE ? DEFAULT_API_BASE : nextApiBase;
   }
 });
 

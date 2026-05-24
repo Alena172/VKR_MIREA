@@ -1,4 +1,5 @@
-const DEFAULT_API_BASE = "http://localhost:8000/api/v1";
+const LEGACY_API_BASE = "http://localhost:8000/api/v1";
+const DEFAULT_API_BASE = "http://localhost:8080/api/v1";
 
 const STORAGE_KEYS = {
   apiBase: "vkrApiBase",
@@ -146,7 +147,8 @@ async function syncIdentity() {
 
 async function loadState() {
   const stored = await storageGet(Object.values(STORAGE_KEYS));
-  currentApiBase = stored[STORAGE_KEYS.apiBase] || DEFAULT_API_BASE;
+  const storedApiBase = stored[STORAGE_KEYS.apiBase];
+  currentApiBase = !storedApiBase || storedApiBase === LEGACY_API_BASE ? DEFAULT_API_BASE : storedApiBase;
   currentToken = stored[STORAGE_KEYS.authToken] || null;
 
   const savedEmail = stored[STORAGE_KEYS.email] || "";
@@ -249,7 +251,7 @@ function switchTab(tab) {
 
 document.getElementById("openAppLink").addEventListener("click", (e) => {
   e.preventDefault();
-  chrome.tabs.create({ url: "http://localhost:5173/" });
+  chrome.tabs.create({ url: "http://localhost:8080/" });
 });
 
 elements.tabLoginBtn.addEventListener("click", () => switchTab("login"));
